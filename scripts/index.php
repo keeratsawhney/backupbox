@@ -159,7 +159,10 @@
 	</script>
 
 	<?php display(false); ?>
-	<h1 style="margin-bottom: 1em; letter-spacing: 3px;">LITTLE BACKUP BOX</h1>
+	<header class="lbb-hero">
+		<h1>Little Backup Box</h1>
+		<p class="lbb-hero-sub"><?php echo L::main_source . " &rarr; " . L::main_target; ?></p>
+	</header>
 	<div style="clear: both;"></div>
 
 	<form class="text-center" style="margin-top: 1em;" method="POST">

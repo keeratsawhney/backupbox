@@ -24,6 +24,7 @@
 
 <link rel="stylesheet" href="css/bootstrap.min.css">
 <link rel="stylesheet" href="css/lbb.css">
+<link rel="stylesheet" href="css/lbb-modern.css">
 
 <link rel="icon" href="favicon.ico" type="image/x-icon"/>
 <link rel="apple-touch-icon" href="/img/icons/favicon-180.png"/>
