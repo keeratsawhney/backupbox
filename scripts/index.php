@@ -159,17 +159,19 @@
 	</script>
 
 	<?php display(false); ?>
-	<header class="lbb-hero">
-		<h1>Little Backup Box</h1>
-		<p class="lbb-hero-sub"><?php echo L::main_source . " &rarr; " . L::main_target; ?></p>
-	</header>
 	<div style="clear: both;"></div>
+
+	<?php
+		include "${WORKING_DIR}/sub-dashboard.php";
+		render_dashboard($constants, $config, $WORKING_DIR);
+	?>
 
 	<form class="text-center" style="margin-top: 1em;" method="POST">
 
 		<input type="hidden" name="form_sent" value="1">
 
-		<div class="card">
+		<details class="card lbb-backup-panel" id="backup">
+			<summary class="lbb-panel-summary"><?php echo L::main_source . " &rarr; " . L::main_target; ?></summary>
 			<div class="row" style="width:100%; float: left; display: block;">
 				<div class="column" style="display: block;">
 					<?php
@@ -261,7 +263,7 @@
 			<div class='backupsection'>
 				<button name="stopbackup" class="danger"><?php echo L::main_stopbackup_button; ?>
 			</div>
-		</div>
+		</details>
 
 		<div class="card" style="margin-top: 3em;">
 
