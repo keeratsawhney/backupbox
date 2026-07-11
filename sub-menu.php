@@ -1,0 +1,110 @@
+<?php
+/*
+# Author: Stefan Saam, github@saams.de
+
+#######################################################################
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#######################################################################*/
+
+
+// sub expects from calling script:
+// - included language
+// - $config
+// - $WORKING_DIR
+
+    $HTTP_HOST	= $_SERVER['SERVER_PORT']==80?$_SERVER['HTTP_HOST'] . ":80":$_SERVER['HTTP_HOST'];
+
+	if (isset($_SERVER['HTTPS'])) {
+		$PROTOCOL	= "https";
+	} else {
+		$PROTOCOL	= "http";
+	}
+
+	if ($config["conf_THEME"]=="dark") {
+		$nav_theme_class 	= "navbar-dark bg-dark";
+	} else {
+		$nav_theme_class	= "navbar-light bg-light";
+	}
+	$scriptname=basename($_SERVER["SCRIPT_FILENAME"]);
+	if ($scriptname == 'frame.php' and isset($_GET['page'])) {
+		$scriptname	= $_GET['page'];
+	}
+
+	exec('which comitup', $comitup_path, $return_code);
+	$comitup_installed	= $return_code == 0;
+	$comitup_hotspot	= trim(shell_exec("sudo python3 $WORKING_DIR/lib_comitup.py --hotspot_active")) == 'active';
+?>
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="display:none">
+	<symbol id="icon-power" viewBox="0 0 24 24" fill="none">
+		<path d="M 17.8 3.0 A 9 9 0 1 1 6.2 3.0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+		<line x1="12" y1="1.8" x2="12" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+	</symbol>
+</svg>
+
+<nav class="navbar navbar-expand-sm <?php echo $nav_theme_class; ?>">
+	<div class="container-fluid">
+
+		<a class="lbb-brand" href="/index.php">
+			<img src="/img/little-backup-box-color.png" alt="Little Backup Box logo">
+			<span class="hidden-mobile">Little Backup Box</span>
+		</a>
+
+		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+
+		<div class="collapse navbar-collapse" id="navbarSupportedContent">
+			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="index.php"?" active":""; ?>" href="/index.php"><?php echo L::mainmenue_main; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="view.php"?" active":""; ?>" href="/view.php"><?php echo L::mainmenue_view; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="files"?" active":""; ?>" href="/frame.php?page=files"><?php echo L::mainmenue_filebrowser; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="tools.php"?" active":""; ?>" href="/tools.php"><?php echo L::mainmenue_tools; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="sysinfo"?" active":""; ?>" href="/frame.php?page=sysinfo"><?php echo L::mainmenue_sysinfo; ?></a></li>
+				<?php
+					if ($comitup_installed) {
+						?>
+							<li class="nav-item<?php echo $scriptname=="comitup"?" active":""; ?>"><a class="nav-link<?php echo $comitup_hotspot?'':' disabled'; ?>" href="/frame.php?page=comitup">comitup</a></li>
+						<?php
+					}
+				?>
+			</ul>
+
+			<ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
+				<?php
+					if (trim(shell_exec("python3 $WORKING_DIR/lib_git.py --update-available")) == 'True') {
+						?>
+							<li class="nav-item"><a class="nav-link lbb-update" href="/cmd.php?CMD=update"><nobr><?php echo L::mainmenue_update; ?></nobr></a></li>
+						<?php
+					}
+				?>
+				<li class="nav-item"><a class="nav-link<?php echo in_array($scriptname, ["setup.php", "rclone_gui"])?" active":""; ?>" href="/setup.php"><?php echo L::mainmenue_config; ?></a></li>
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdownPower" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+						<svg width="1em" height="1em" style="vertical-align: middle;">
+							<use href="#icon-power"/>
+						</svg>
+					</a>
+					<ul class="dropdown-menu" aria-labelledby="navbarDropdownPower">
+						<li><a class="dropdown-item" href="shutdown.php?reboot=true"><?php echo L::main_reboot_button; ?></a></li>
+						<li><a class="dropdown-item" href="shutdown.php?shutdown=true"><?php echo L::main_shutdown_button; ?></a></li>
+						<li><a class="dropdown-item" href="<?php echo "{$PROTOCOL}://logout@{$HTTP_HOST}"; ?>"><?php echo L::main_logout_button; ?></a></li>
+					</ul>
+				</li>
+			</ul>
+		</div>
+
+	</div>
+</nav>
+

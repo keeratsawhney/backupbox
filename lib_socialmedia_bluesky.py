@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+
+# Author: Stefan Saam, github@saams.de
+
+#######################################################################
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#######################################################################
+
+from pathlib import Path
+import re
+
+from lib_socialmedia_parent import services
+
+# import lib_debug
+# xx	= lib_debug.debug()
+
+class bluesky(services):
+
+	def __init__(
+		self,
+		service,
+		BS_API_BASE_URL,   # e.g. "https://bsky.social" or custom PDS base URL
+		BS_IDENTIFIER,     # handle or DID, e.g. "alice.bsky.social"
+		BS_APP_PASSWORD,    # app password from settings (NOT your normal password)
+		check_only=False,
+		upload_times=[]
+	):
+		super().__init__(service=service, check_only=check_only, upload_times=upload_times)
+
+		self.API_BASE_URL	= (BS_API_BASE_URL or "").strip()
+		self.IDENTIFIER		= (BS_IDENTIFIER or "").strip()
+		self.APP_PASSWORD	= (BS_APP_PASSWORD or "").strip()
+
+		self.post_maxlength	= 300
+		self.newPostsOnTop					= True
+
+		self.rate_limit_count				= 1666 # 5000 points / 3 points per create
+		self.rate_limit_seconds				= 3600
+		self.rate_limits_variable_seconds	= 2.0
+
+		if check_only or not self.configured():
+			self.bluesky = None
+			return
+
+		from atproto import Client, models
+		self.models	= models
+
+		try:
+			# Create a client bound to the given service URL (PDS).
+			self.bluesky	= Client(base_url=self.API_BASE_URL)
+
+			# Login using identifier (handle / DID) and an app password.
+			self.keep_posting_rate()
+			self.bluesky.login(self.IDENTIFIER, self.APP_PASSWORD)
+		except Exception as e:
+			self.bluesky	= None
+			self.ok			= False
+			self.add_message(f'login: {type(e).__name__}, {e}')
+
+	def configured(self):
+		return (bool(self.API_BASE_URL and self.IDENTIFIER and self.APP_PASSWORD))
+
+	def detect_link_facets(self, text):
+		# Detect URLs in text and return a list of RichtextFacet objects for Bluesky.
+		if not text:
+			return None
+
+		# Match http(s) URLs; stop at whitespace, closing brackets, angle brackets, quotes
+		url_pattern = re.compile(r'https?://[^\s\)\]\}>,;!?\"\'\u00AB\u00BB\u201C\u201D]+')
+
+		facets = []
+		for match in url_pattern.finditer(text):
+			url = match.group(0)
+
+			# Strip common trailing punctuation that is unlikely part of the URL
+			while url and url[-1] in '.,;:!?)]}':
+				url = url[:-1]
+
+			# Byte offsets (AT Protocol requires UTF-8 byte positions)
+			byte_start = len(text[:match.start()].encode('utf-8'))
+			byte_end   = byte_start + len(url.encode('utf-8'))
+
+			facets.append(
+				self.models.AppBskyRichtextFacet.Main(
+					index=self.models.AppBskyRichtextFacet.ByteSlice(
+						byte_start=byte_start,
+						byte_end=byte_end,
+					),
+					features=[
+						self.models.AppBskyRichtextFacet.Link(uri=url)
+					],
+				)
+			)
+
+		return facets if facets else None
+
+	def __publish(self, msgtype, Comment='', FilePath=None):
+		super().publish()
+
+		if FilePath is not None:
+			FilePath = Path(FilePath)
+
+		try:
+			def send_text(text):
+				self.keep_posting_rate()
+				self.bluesky.post(
+					text	= CommentPart,
+					facets	= self.detect_link_facets(CommentPart)
+				)
+
+			if msgtype.main == 'text':
+				Comment	= self.cleanComment(Comment)
+
+				if msgtype.sub == 'md':
+					Comment		= self.md_to_plain(md=Comment)
+					msgtype.sub	= 'txt'
+
+				if msgtype.sub == 'html':
+					Comment	= self.html_to_plain(html=Comment)
+					msgtype.sub	= 'txt'
+
+				CommentParts	= self.split_text(Comment, self.post_maxlength)
+				for CommentPart in reversed(CommentParts):
+					send_text(CommentPart)
+
+			elif msgtype.main in ['photo']: # in case of future support of other media types
+
+				CommentParts	= self.split_text(Comment, self.post_maxlength)
+				for index, CommentPart in enumerate(reversed(CommentParts)):
+
+					if index == (len(CommentParts) - 1): # send media last
+
+						if msgtype.main == 'photo':
+							if FilePath is None:
+								raise ValueError('FilePath is required for photo')
+
+							# Upload the image as a blob.
+							with FilePath.open('rb') as f:
+								blob = self.bluesky.upload_blob(f)
+
+							# Optional alt-text support (uncomment to use):
+							# alt_text = 'Alt text'
+							# image_obj = self.models.AppBskyEmbedImages.Image(alt=alt_text, image=blob.blob)
+
+							image_obj = self.models.AppBskyEmbedImages.Image(alt='', image=blob.blob)
+
+							embed = self.models.AppBskyEmbedImages.Main(images=[image_obj])
+
+							# Create the post with the image embedded.
+							self.keep_posting_rate()
+							self.bluesky.post(
+								text	= CommentPart,
+								embed	= embed,
+								facets	= self.detect_link_facets(CommentPart)
+							)
+
+						# elif msgtype.main in ['audio', 'video']:
+						# 	# As of now, the public Bluesky API client does not provide stable
+						# 	# posting for audio/video in regular feed posts. Mark as unsupported.
+						# 	self.ok = False
+						# 	self.add_message(f'unsupported msgtype {msgtype.main}{"" if msgtype.sub is None else f" ({msgtype.sub})"}')
+					else:
+						send_text(CommentPart)
+			else:
+				self.ok = False
+				self.add_message(f'unsupported msgtype {msgtype.main}{"" if msgtype.sub is None else f" ({msgtype.sub})"}')
+
+		except Exception as e:
+			self.ok = False
+			name = f" {getattr(FilePath, 'name', '')}" if FilePath else ''
+			self.add_message(f'{msgtype.main}{"" if msgtype.sub is None else f" ({msgtype.sub})"}{name}: {type(e).__name__}, {e}')
+
+		if self.ok is None:
+			self.ok = True
+			name = f" {getattr(FilePath, 'name', '')}" if FilePath else ''
+			self.add_message(f'{msgtype.main}{"" if msgtype.sub is None else f" ({msgtype.sub})"}{name}: o.k.')
+
+	def publish(self, msgtype, Comment='', FilePath=None):
+
+		if self.bluesky:
+			self.__publish(msgtype, Comment=Comment, FilePath=FilePath)
+		else:
+			self.ok = False
+			self.add_message("not configured")

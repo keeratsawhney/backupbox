@@ -1,0 +1,160 @@
+#!/usr/bin/env python
+
+# Author: Stefan Saam, github@saams.de
+
+#######################################################################
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#######################################################################
+
+import lib_display
+import lib_language
+import lib_log
+import lib_network
+import lib_setup
+import lib_system
+
+import os
+import subprocess
+import sys
+import time
+
+# import lib_debug
+# xx	= lib_debug.debug()
+
+class vpn(object):
+
+	def __init__(self,VPNMode):
+		#VPNMode:['OpenVPN','WireGuard']
+
+		self.VPNMode	= VPNMode
+
+		self.__VPN_Connection = None
+
+		self.__WORKING_DIR = os.path.dirname(__file__)
+
+		self.__setup	= lib_setup.setup()
+		self.__conf_VPN_TYPE_RSYNC	= self.__setup.get_val('conf_VPN_TYPE_RSYNC')
+		self.__conf_VPN_TYPE_CLOUD	= self.__setup.get_val('conf_VPN_TYPE_CLOUD')
+		self.__conf_VPN_TIMEOUT		= self.__setup.get_val('conf_VPN_TIMEOUT')
+		self.__VPN_Dir				= self.__setup.get_val(f"const_VPN_DIR_{VPNMode}")
+		self.__VPN_FileName			= self.__setup.get_val(f"const_VPN_FILENAME_{VPNMode}")
+
+		self.__display				= lib_display.display()
+		self.__log					= lib_log.log()
+		self.__lan					= lib_language.language()
+
+		self.IP_pre_VPN				= lib_network.get_IPs()
+
+	def __del__(self):
+		print(f"DESTRUCTED: VPN {self.VPNMode}")
+
+	def check_status(self):
+		Status	= False
+
+		if self.VPNMode in ['OpenVPN', 'WireGuard']:
+
+			if self.VPNMode == 'OpenVPN':
+				Command	= ['/usr/bin/ip', 'tuntap', 'show']
+				try:
+					Status	= (
+						(subprocess.check_output(Command) != '') and
+						(self.IP_pre_VPN != lib_network.get_IPs())
+					)
+				except:
+					Status	= False
+
+			elif self.VPNMode == "WireGuard":
+				Command	= ['/usr/bin/wg','show',self.__VPN_FileName.split('.')[0]]
+				try:
+					wg_show	= subprocess.check_output(Command).decode()
+					Status = (
+						(self.__VPN_FileName.split('.')[0] in wg_show) and
+						('latest handshake' in wg_show) and
+						(self.IP_pre_VPN != lib_network.get_IPs())
+					)
+				except:
+					Status	= False
+
+		if Status:
+			connected	= True
+			message		= self.VPNMode
+		else:
+			connected	= False
+			message		= '-'
+
+		return(
+			{
+				'connected':	connected,
+				'message':		message
+			}
+		)
+
+	def start(self):
+		connected	= False
+		if (self.VPNMode in ['OpenVPN','WireGuard']) and (os.path.isfile(f"{self.__VPN_Dir}/{self.__VPN_FileName}")):
+
+			self.__display.message([f":{self.__lan.l('box_backup_vpn_connecting')}"])
+
+			if self.VPNMode == 'OpenVPN':
+				Command	= ['/usr/bin/bash', '-c', f'/usr/sbin/openvpn --config {self.__VPN_Dir}/{self.__VPN_FileName}']
+				self.__log.message(' '.join(Command),3)
+				try:
+					self.__VPN_Connection	= subprocess.Popen(Command,stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+				except:
+					pass
+			elif self.VPNMode == 'WireGuard':
+				Command	= ['/usr/bin/wg-quick','up',f"{self.__VPN_Dir}/{self.__VPN_FileName}"]
+				self.__log.message(' '.join(Command),3)
+				try:
+					subprocess.run(Command)
+				except:
+					pass
+
+			VPN_TimeoutTime	= lib_system.get_uptime_sec() + self.__conf_VPN_TIMEOUT
+
+			while (not connected) and (lib_system.get_uptime_sec() < VPN_TimeoutTime):
+				connected	= self.check_status()['connected']
+				time.sleep(1)
+
+			if connected:
+				self.__display.message([f":{self.__lan.l('box_backup_vpn_connecting_success')}"])
+			else:
+				self.stop()
+				self.__display.message([f":{self.__lan.l('box_backup_vpn_connecting_failed')}"])
+
+		return(connected)
+
+	def stop(self):
+		self.__display.message([f":{self.__lan.l('box_backup_vpn_disconnecting')}", self.VPNMode])
+		if self.VPNMode == 'OpenVPN':
+			if self.__VPN_Connection:
+					self.__VPN_Connection.kill()
+		elif self.VPNMode == 'WireGuard':
+			subprocess.run(['/usr/bin/wg-quick','down',self.__VPN_FileName.split('.')[0]])
+
+
+
+if __name__ == "__main__":
+	try:
+		Action	= sys.argv[1]
+	except:
+		Action	= ''
+
+	if Action in ['OpenVPN', 'WireGuard']:
+		vpn(Action).start()
+	elif Action == 'stop':
+		vpn('OpenVPN').stop()
+		vpn('WireGuard').stop()
+
+

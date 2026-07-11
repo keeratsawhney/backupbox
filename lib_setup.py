@@ -1,0 +1,437 @@
+#!/usr/bin/env python
+
+# Author: Stefan Saam, github@saams.de
+
+#######################################################################
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#######################################################################
+
+# Provides the standard-setup,the types of constants and routines to handle the setup
+
+import base64
+import os
+import subprocess
+import sys
+
+from configobj import ConfigObj
+
+# import lib_debug
+# xx	= lib_debug.debug()
+
+class setup(object):
+
+	def __init__(self,rewrite_configfile=False):
+
+		WORKING_DIR	= os.path.dirname(__file__)
+
+		self.config_file_path 			= f'{WORKING_DIR}/config.cfg'
+		self.constants_file_path 		= f'{WORKING_DIR}/constants.sh'
+		self.standard_config_file_path	= f'{WORKING_DIR}/config-standards.cfg'
+
+		self.__mount_user		= "www-data"
+		self.__mount_group		= "www-data"
+		self.__uid		= int(subprocess.check_output(['/usr/bin/id','-u',f"{self.__mount_user}"]).decode().strip())
+		self.__gid		= int(subprocess.check_output(['/usr/bin/id','-g',f"{self.__mount_group}"]).decode().strip())
+
+		# constants
+		constants=self.__get_constants_types()
+		self.constants	= self.__get_constants(constants)
+
+		# config
+		self.config	= self.__get_config_standard()
+
+		# write to standards file
+		if rewrite_configfile:
+			self.rewrite_configfile(standards=True)
+
+		self.__get_config_configured()
+
+		self.__update_config()
+
+		self.setup	= self.config | self.constants
+
+		if rewrite_configfile:
+			self.rewrite_configfile(standards=False)
+			self.rewrite_buttons_private_config_file()
+
+
+	def get_val(self, setup_var):
+		if setup_var in self.setup:
+			return (self.setup[setup_var]['value'])
+		else:
+			return('Error: Unknown VARIABLE {}'.format(setup_var))
+
+	def set_val(self, config_var, value):
+		self.config[config_var]	= {'value': value, 'type': self.config[config_var]['type']}
+		self.setup	= self.config | self.constants
+
+	def __norm_value(self, value, val_type):
+		if val_type == 'int':
+			return(int(value) if value else 0)
+
+		elif val_type == 'int16':
+				return(int(value,16) if value else 0)
+
+		elif val_type == 'float':
+			return(float(value))
+
+		elif val_type == 'bool':
+			return(
+				(value == True) or
+				(value == 1) or
+				(value == '1') or
+				str(value).lower() == 'true'
+			)
+
+		else:
+			return(str(value))
+
+	def rewrite_configfile(self, standards=False):
+		file_path	= self.standard_config_file_path if standards else self.config_file_path
+
+		with open(file_path,'w') as f:
+			for ConfigVar in self.config:
+
+				if self.config[ConfigVar]['type'] == 'str':
+					Separator = "'"
+				else:
+					Separator = ''
+
+				if self.config[ConfigVar]['type'] == 'int16':
+					Separator = "'"
+					if not isinstance(self.config[ConfigVar]['value'], str):
+						self.config[ConfigVar]['value']	= hex(self.config[ConfigVar]['value'])
+
+				f.write(f"{ConfigVar}={Separator}{self.config[ConfigVar]['value']}{Separator}\n")
+
+		os.chown(file_path, self.__uid, self.__gid)
+
+	def rewrite_buttons_private_config_file(self):
+		FilePath	= os.path.join(self.constants['const_MEDIA_DIR']['value'],self.constants['const_BUTTONS_PRIVATE_CONFIG_FILE']['value'])
+
+		if not os.path.isfile(FilePath):
+			print('create')
+			with open(FilePath,'w') as f:
+				f.writelines([
+						'# Individual button configuration.\n',
+						'# You can define as many buttons as you have.\n',
+						'#\n',
+						'# Pattern:\n',
+						'# GPIO-PIN=function,GPIO-PIN=function,GPIO-PIN=function:Your comment\n',
+						'# Please mind to use the GPIO.BCM notation, not the PIN-numbers!!!\n',
+						'#\n',
+						'# Possible functions are:\n',
+						'# - up\n',
+						'# - down\n',
+						'# - left\n',
+						'# - right\n',
+						'#\n',
+						'# Example:\n',
+						'# 5=up,6=down,17=left,27=right,16=right:My individual buttons\n',
+					])
+
+		os.chown(FilePath, self.__uid, self.__gid)
+
+	def __update_config(self):
+		# conf_WIFI_PASSWORD
+		if self.config['conf_WIFI_PASSWORD']['value'] == '.':
+			conf_PASSWORD	= base64.b64decode(self.config['conf_PASSWORD']['value']).decode('utf-8')
+			if (8 <= len(conf_PASSWORD) <= 63) and all(32 <= ord(c) <= 126 for c in conf_PASSWORD):
+				self.config['conf_WIFI_PASSWORD']['value']	= self.config['conf_PASSWORD']['value']
+			else:
+				self.config['conf_WIFI_PASSWORD']['value']	= ''
+
+		# migrate all passwords to base64
+		def looks_like_base64(s: str) -> bool:
+
+			if len(s) % 4 != 0:
+				return(False)
+
+			# decodeable?
+			try:
+				decoded	= base64.b64decode(s, validate=True)
+			except:
+				return(False)
+
+			# decoded string contains UTF-8 characters only?
+			try:
+				decoded_str = decoded.decode('utf-8')
+			except:
+				# non utf-8 characters, probably no valid decryption
+				return(False)
+
+			# no base64 if there are non pribtable characters
+			if not all(0x20 <= ord(c) <= 0x7E for c in decoded_str):
+				return(False)
+
+			reencoded	= base64.b64encode(decoded).decode('utf-8').rstrip('=')
+			s_stripped	= s.rstrip('=')
+
+			return(reencoded == s_stripped)
+
+		for PWD in self.constants['const_PASSWORDS_LIST']['value'].split(';'):
+			if not looks_like_base64(self.config[PWD]['value']):
+				self.config[PWD]['value']	= base64.b64encode(bytes(self.config[PWD]['value'], 'utf-8')).decode('utf-8')
+
+		# conf_DISP
+		match self.config['conf_DISP']['value'].lower():
+			case 'true':
+				self.config['conf_DISP']['value']	= 'display'
+			case 'false':
+				self.config['conf_DISP']['value']	= 'screen'
+
+	def __get_config_configured(self):
+		if os.path.isfile(self.config_file_path):
+
+			config_file = ConfigObj(self.config_file_path)
+
+			for conf_var in config_file:
+
+				conf_val	= config_file[conf_var]
+
+				#migrate variables to new definitions
+				if conf_var == 'conf_MAIL_conf_PASSWORD':
+					conf_var	= 'conf_MAIL_PASSWORD'
+
+				if conf_var == 'conf_conf_DISP_IP_REPEAT':
+					conf_var	= 'conf_DISP_IP_REPEAT'
+
+				if conf_var == 'conf_NOTIFY':
+					conf_var	= 'conf_MAIL_NOTIFICATIONS'
+
+				#migrate values to new definitions
+				if conf_var == 'conf_BACKUP_DEFAULT_SOURCE':
+					conf_val = 'usb' if conf_val == 'storage' else conf_val
+
+				if conf_var == 'conf_BACKUP_DEFAULT_TARGET':
+					conf_val = 'usb' if conf_val == 'external' else conf_val
+
+				if conf_var == 'conf_BACKUP_DEFAULT_SOURCE2':
+					conf_val = 'usb' if conf_val == 'storage' else conf_val
+
+				if conf_var == 'conf_BACKUP_DEFAULT_TARGET2':
+					conf_val = 'usb' if conf_val == 'external' else conf_val
+					conf_val = 'cloud_rsync' if conf_val == 'rsyncserver' else conf_val
+
+				if conf_var == 'conf_MAIL_FROM':
+					conf_val = config_file['conf_MAIL_USER'] if conf_val == '' else conf_val
+
+				# set type
+				if conf_var in self.config:
+					conf_type	= self.config[conf_var]['type']
+				else:
+					conf_type	= 'str'
+
+				# set value
+				self.config[conf_var]	= {'value': self.__norm_value(conf_val, conf_type), 'type': conf_type}
+			return()
+
+	def __get_config_standard(self):
+		return(
+				{
+					'conf_SOFTWARE_DATE_INSTALLED':						{'value': '', 'type': 'str'},
+					'conf_SOFTWARE_DATE_AVAILABLE':						{'value': '', 'type': 'str'},
+					'conf_LANGUAGE':									{'value': '', 'type': 'str'},
+					'conf_TIME_ZONE':									{'value': 'Europe/London', 'type': 'str'},
+					'conf_BACKUP_DEFAULT_SOURCE':						{'value': 'none', 'type': 'str'},
+					'conf_BACKUP_DEFAULT_TARGET':						{'value': 'none', 'type': 'str'},
+					'conf_BACKUP_DEFAULT_SOURCE2':						{'value': 'none', 'type': 'str'},
+					'conf_BACKUP_DEFAULT_TARGET2':						{'value': 'none', 'type': 'str'},
+					'conf_BACKUP_DEFAULT2_MOVE_FILES':					{'value': False, 'type': 'bool'},
+					'conf_BACKUP_CAMERA_FOLDER_MASK':					{'value': '*:DCIM', 'type': 'str'},
+					'conf_BACKUP_CLOUDS_TARGET_BASEDIR':				{'value': '', 'type': 'str'},
+					'conf_BACKUP_CLOUDS_TARGET_FILES_STAY_IN_PLACE':	{'value': '', 'type': 'str'},
+					'conf_BACKUP_SYNC_METHOD_CLOUDS':					{'value': 'rsync', 'type': 'str'},
+					'conf_BACKUP_RENAME_FILES':							{'value': False, 'type': 'bool'},
+					'conf_BACKUP_CHECKSUM':								{'value': False, 'type': 'bool'},
+					'conf_BACKUP_GENERATE_THUMBNAILS':					{'value': True, 'type': 'bool'},
+					'conf_BACKUP_UPDATE_EXIF':							{'value': False, 'type': 'bool'},
+					'conf_BACKUP_TARGET_SIZE_MIN':						{'value': 0, 'type': 'int'},
+					'conf_BACKUP_MOVE_FILES':							{'value': False, 'type': 'bool'},
+					'conf_POWER_OFF':									{'value': False, 'type': 'bool'},
+					'conf_VIEW_CONVERT_HEIC':							{'value': True, 'type': 'bool'},
+					'conf_VIEW_WRITE_RATING_EXIF':						{'value': False, 'type': 'bool'},
+					'conf_DISP':										{'value': '0', 'type': 'str'}, 					# ['display', 'screen', '0']
+					'conf_DISP_CONNECTION':								{'value': 'I2C', 'type': 'str'},
+					'conf_DISP_DRIVER':									{'value': 'SSD1306', 'type': 'str'},
+					'conf_DISP_I2C_ADDRESS':							{'value': '0x3c', 'type': 'int16'},
+					'conf_DISP_SPI_PORT':								{'value': 0, 'type': 'int'},
+					'conf_DISP_RESOLUTION_X':							{'value': 128, 'type': 'int'},
+					'conf_DISP_RESOLUTION_Y':							{'value': 64, 'type': 'int'},
+					'conf_DISP_OFFSET_X':								{'value': 0, 'type': 'int'},
+					'conf_DISP_OFFSET_Y':								{'value': 0, 'type': 'int'},
+					'conf_DISP_ROTATE':									{'value': 0, 'type': 'int'},
+					'conf_DISP_CONTRAST':								{'value': 255, 'type': 'int'},
+					'conf_DISP_COLOR_BGR':								{'value': False, 'type': 'bool'},
+					'conf_DISP_COLOR_INVERSE':							{'value': False, 'type': 'bool'},
+					'conf_DISP_COLOR_MODEL':							{'value': '1', 'type': 'str'},
+					'conf_DISP_COLOR_TEXT':								{'value': 'grey', 'type': 'str'},
+					'conf_DISP_COLOR_HIGH':								{'value': 'white', 'type': 'str'},
+					'conf_DISP_COLOR_ALERT':							{'value': 'orange', 'type': 'str'},
+					'conf_DISP_COLOR_BACKGROUND':						{'value': 'black', 'type': 'str'},
+					'conf_DISP_FONT_SIZE':								{'value': 12, 'type': 'int'},
+					'conf_DISP_FRAME_TIME':								{'value': 1, 'type': 'float'},
+					'conf_DISP_FRAME_TIME_IP':							{'value': 3.0, 'type': 'float'},
+					'conf_DISP_IP_REPEAT':								{'value': True, 'type': 'bool'},
+					'conf_DISP_SHOW_STATUSBAR':							{'value': True, 'type': 'bool'},
+					'conf_DISP_BACKLIGHT_PIN':							{'value': 23, 'type': 'int'},
+					'conf_DISP_BACKLIGHT_ENABLED':						{'value': True, 'type': 'bool'},
+					'conf_MENU_ENABLED':								{'value': True, 'type': 'bool'},
+					'conf_MENU_BUTTON_COMBINATION':						{'value': '1', 'type': 'str'},
+					'conf_MENU_BUTTON_ROTATE':							{'value': 2, 'type': 'int'},
+					'conf_MENU_BUTTON_BOUNCETIME':						{'value': 15, 'type': 'int'},
+					'conf_MENU_BUTTON_EDGE_DETECTION':					{'value': 'RISING', 'type': 'str'},
+					'conf_MENU_BUTTON_RESISTOR_PULL':					{'value': 'DOWN', 'type': 'str'},
+					'conf_VIRTUAL_KEYBOARD_ENABLED':					{'value': True, 'type': 'bool'},
+					'conf_SCREEN_DRIVER':								{'value': 'piscreen', 'type': 'str'},
+					'conf_SCREEN_SPEED':								{'value': 16000000, 'type': 'int'},
+					'conf_SCREEN_ROTATE':								{'value': 0, 'type': 'int'},
+					'conf_TOUCH_MATRIX_X':								{'value': '1.201761 0.000000 -0.105209', 'type': 'str'},
+					'conf_TOUCH_MATRIX_Y':								{'value': '0.000000 -1.265842 1.126739', 'type': 'str'},
+					'conf_FAN_PWM_TEMP_C':								{'value': 50, 'type': 'int'},
+					'conf_FAN_PWM_GPIO':								{'value': 18, 'type': 'int'},
+					'conf_POPUP_MESSAGES':								{'value': True, 'type': 'bool'},
+					'conf_THEME':										{'value': 'dark', 'type': 'str'},
+					'conf_BACKGROUND_IMAGE':							{'value': '', 'type': 'str'},
+					'conf_LOGLEVEL':									{'value': 1, 'type': 'int'},
+					'conf_LOG_SYNC':									{'value': True, 'type': 'bool'},
+					'conf_POWER_OFF_IDLE_TIME':							{'value': 0, 'type': 'int'},
+					'conf_MAIL_IP':										{'value': False, 'type': 'bool'},
+					'conf_MAIL_NOTIFICATIONS':							{'value': False, 'type': 'bool'},
+					'conf_MAIL_TIMEOUT_SEC':							{'value': 60, 'type': 'int'},
+					'conf_MAIL_HTML':									{'value': True, 'type': 'bool'},
+					'conf_SMTP_SERVER':									{'value': '', 'type': 'str'},
+					'conf_SMTP_PORT':									{'value': '465', 'type': 'str'},
+					'conf_MAIL_SECURITY':								{'value': 'STARTTLS', 'type': 'str'},
+					'conf_MAIL_USER':									{'value': '', 'type': 'str'},
+					'conf_MAIL_PASSWORD':								{'value': '', 'type': 'str'},
+					'conf_MAIL_FROM':									{'value': '', 'type': 'str'},
+					'conf_MAIL_TO':										{'value': '', 'type': 'str'},
+					'conf_RSYNC_SERVER':								{'value': '', 'type': 'str'},
+					'conf_RSYNC_PORT':									{'value': '873', 'type': 'str'},
+					'conf_RSYNC_USER':									{'value': '', 'type': 'str'},
+					'conf_RSYNC_PASSWORD':								{'value': '', 'type': 'str'},
+					'conf_RSYNC_SERVER_MODULE':							{'value': 'little-backup-box', 'type': 'str'},
+					'conf_WIFI_COUNTRY':								{'value': 'GB', 'type': 'str'},
+					'conf_WIFI_PASSWORD_TYPE':							{'value': 'static', 'type': 'str'}, # use password from 'static' or 'dynamic' (for wifi by qr only)
+					'conf_WIFI_PASSWORD':								{'value': '.', 'type': 'str'}, # '.' is recogniced as marker of a new variable
+					'conf_VPN_TYPE_RSYNC':								{'value': 'none', 'type': 'str'},
+					'conf_VPN_TYPE_CLOUD':								{'value': 'none', 'type': 'str'},
+					'conf_VPN_TIMEOUT':									{'value': 20, 'type': 'int'},
+					'conf_PASSWORD':									{'value': '', 'type': 'str'},
+					'conf_DIPLAY_IMAGES_KEEP':							{'value': False, 'type': 'bool'},
+					'conf_SOCIAL_PUBLISH_DATE':							{'value': True, 'type': 'bool'},
+					'conf_SOCIAL_PUBLISH_FILENAME':						{'value': False, 'type': 'bool'},
+					'conf_SOCIAL_TELEGRAM_TOKEN':						{'value': '', 'type': 'str'},
+					'conf_SOCIAL_TELEGRAM_CHAT_ID':						{'value': 0, 'type': 'int'},
+					'conf_SOCIAL_TELEGRAM_CHAT_IDENTIFIER':				{'value': '', 'type': 'str'},
+					'conf_SOCIAL_MASTODON_BASE_URL':					{'value': '', 'type': 'str'},
+					'conf_SOCIAL_MASTODON_TOKEN':						{'value': '', 'type': 'str'},
+					'conf_SOCIAL_BLUESKY_API_BASE_URL':					{'value': 'https://bsky.social', 'type': 'str'},
+					'conf_SOCIAL_BLUESKY_IDENTIFIER':					{'value': '', 'type': 'str'},
+					'conf_SOCIAL_BLUESKY_APP_PASSWORD':					{'value': '', 'type': 'str'},
+					'conf_SOCIAL_MATRIX_HOMESERVER':					{'value': '', 'type': 'str'},
+					'conf_SOCIAL_MATRIX_TOKEN':							{'value': '', 'type': 'str'},
+					'conf_SOCIAL_MATRIX_ROOM_ID':						{'value': '', 'type': 'str'},
+					'conf_SOCIAL_MATRIX_ROOM_IDENTIFIER':				{'value': '', 'type': 'str'}
+				}
+		)
+
+	def __get_constants(self,constants):
+		if os.path.isfile(self.constants_file_path):
+			constants_file = ConfigObj(self.constants_file_path)
+			for const_var in constants_file:
+				if const_var in constants:
+					const_type	= constants[const_var]['type']
+				else:
+					const_type	= 'str'
+
+				constants[const_var]	= {'value': self.__norm_value(constants_file[const_var], const_type), 'type': const_type}
+
+			return(constants)
+
+	def __get_constants_types(self):
+		return(
+				{
+					'const_MEDIA_DIR':								{'type': 'str'},
+					'const_MOUNTPOINT_USB_TARGET':					{'type': 'str'},
+					'const_MOUNTPOINT_USB_SOURCE':					{'type': 'str'},
+					'const_MOUNTPOINT_TECH_USB_TARGET':				{'type': 'str'},
+					'const_MOUNTPOINT_TECH_USB_SOURCE':				{'type': 'str'},
+					'const_MOUNTPOINT_NVME_TARGET':					{'type': 'str'},
+					'const_MOUNTPOINT_NVME_SOURCE':					{'type': 'str'},
+					'const_MOUNTPOINT_TECH_NVME_TARGET':			{'type': 'str'},
+					'const_MOUNTPOINT_TECH_NVME_SOURCE':			{'type': 'str'},
+					'const_MOUNTPOINT_CLOUD_TARGET':				{'type': 'str'},
+					'const_MOUNTPOINT_CLOUD_SOURCE':				{'type': 'str'},
+					'const_MOUNT_LOCAL_TIMEOUT':					{'type': 'int'},
+					'const_MOUNT_CLOUD_TIMEOUT':					{'type': 'int'},
+					'const_INTERNAL_BACKUP_DIR':					{'type': 'str'},
+					'const_LBB_FTP_BACKUP_SUB_DIR':					{'type': 'str'},
+					'const_BACKGROUND_IMAGES_DIR':					{'type': 'str'},
+					'const_WEB_ROOT_LBB':							{'type': 'str'},
+					'const_LOGFILE':								{'type': 'str'},
+					'const_DISPLAY_LINES_LIMIT':					{'type': 'int'},
+					'const_DISPLAY_CONTENT_PATH':					{'type': 'str'},
+					'const_DISPLAY_CONTENT_OLD_FILE':				{'type': 'str'},
+					'const_DISPLAY_STATUSBAR_TOGGLE_SEC':			{'type': 'float'},
+					'const_DISPLAY_IMAGE_EXPORT_FILE':				{'type': 'str'},
+					'const_DISPLAY_IMAGE_KEEP_PATH':				{'type': 'str'},
+					'const_IP_SENT_MARKERFILE':						{'type': 'str'},
+					'const_MENU_FRAME_TIME':						{'type': 'float'},
+					'const_MENU_TIMEOUT_SEC':						{'type': 'float'},
+					'const_RCLONE_CONFIG_FILE':						{'type': 'str'},
+					'const_BUTTONS_CONFIG_FILE':					{'type': 'str'},
+					'const_BUTTONS_PRIVATE_CONFIG_FILE':			{'type': 'str'},
+					'const_STORAGE_EXT_MASK':						{'type': 'str'},
+					'const_STORAGE_NVME_MASK':						{'type': 'str'},
+					'const_CMD_RUNNER_LOCKFILE':					{'type': 'str'},
+					'const_IMAGE_DATABASE_FILENAME':				{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_WEB_IMAGES':		{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_HEIC':				{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_RAW':				{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_TIF':				{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_VIDEO':				{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_AUDIO':				{'type': 'str'},
+					'const_FILE_EXTENSIONS_LIST_TEXT':				{'type': 'str'},
+					'const_VIEW_GRID_COLUMNS':						{'type': 'int'},
+					'const_VIEW_MAGNIFYING_GLASS_ZOOM':				{'type': 'int'},
+					'const_VIEW_BANNED_PATHS':						{'type': 'str'},
+					'const_VIEW_RATING_STANDARD_VALUE':				{'type': 'str'},
+					'const_MAIL_TIMEOUT':							{'type': 'int'},
+					'const_VPN_DIR_OpenVPN':						{'type': 'str'},
+					'const_VPN_DIR_WireGuard':						{'type': 'str'},
+					'const_VPN_FILENAME_OpenVPN':					{'type': 'str'},
+					'const_VPN_FILENAME_WireGuard':					{'type': 'str'},
+					'const_SYNC_TIME_OVERHEATING_THRESHOLD_SEC':	{'type': 'int'},
+					'const_SYNC_TIME_OVERHEATING_WAIT_SEC':			{'type': 'int'},
+					'const_BACKUP_MAX_TRIES':						{'type': 'int'},
+					'const_SOFTWARE_BRANCH':						{'type': 'str'},
+					'const_FONT_PATH':								{'type': 'str'},
+					'const_IDLETIME_LOCKFILE':						{'type': 'str'},
+					'const_TASKS_PATH':								{'type': 'str'},
+					'const_METADATA_DATE_CREATE_SOURCES':				{'type': 'str'},
+					'const_METADATA_DATE_CREATE_SOURCES_HR':				{'type': 'str'},
+					'const_METADATA_DATE_MODIFY_SOURCES':			{'type': 'str'}
+				}
+		)
+
+
+if __name__ == "__main__":
+	# write config files
+	setup	= setup(rewrite_configfile=True)
+
+
+
+

@@ -1,0 +1,93 @@
+<?php
+/*
+# Author: Stefan Saam, github@saams.de
+
+#######################################################################
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#######################################################################*/
+
+	$WORKING_DIR=dirname(__FILE__);
+	$config = parse_ini_file("$WORKING_DIR/config.cfg", false);
+	$config_standard = parse_ini_file("$WORKING_DIR/config-standards.cfg", false);
+	$constants = parse_ini_file("constants.sh", false);
+
+	$theme = $config["conf_THEME"];
+	$background = $config["conf_BACKGROUND_IMAGE"] == ""?"":"background='" . $constants["const_MEDIA_DIR"] .'/' . $constants["const_BACKGROUND_IMAGES_DIR"] . "/" . $config["conf_BACKGROUND_IMAGE"] . "'";
+
+	include("sub-i18n-loader.php");
+	include("sub-popup.php");
+
+	$HTTP_HOST	= $_SERVER['SERVER_PORT']==80?$_SERVER['HTTP_HOST'] . ":80":$_SERVER['HTTP_HOST'];
+
+	if (isset($_SERVER['HTTPS'])) {
+		$PROTOCOL	= "https://";
+	} else {
+		$PROTOCOL	= "http://";
+	}
+
+	$framed_pages	= array(
+		'comitup'		=> '/comitup/',
+		'sysinfo'		=> '/sysinfo.php',
+		'files'			=> '/files',
+		'rclone_gui'	=> '/rclone/'
+	);
+
+	$frame_index	= '';
+	if (isset($_GET['page'])) {
+		$frame_index	= $_GET['page'];
+	}
+
+	if (! isset($framed_pages[$frame_index])) {
+		header("Location: " . $PROTOCOL . $HTTP_HOST);
+		exit();
+	}
+?>
+
+<html lang="<?php echo $config["conf_LANGUAGE"]; ?>" data-theme="<?php echo $theme; ?>">
+
+<head>
+	<?php include "${WORKING_DIR}/sub-standards-header-loader.php"; ?>
+	<script type="text/javascript" src="js/display.js"></script>
+	<script type="text/javascript" src="js/logmonitor.js"></script>
+	<?php
+		if ($frame_index == "sysinfo") {echo '<script src="js/refresh_iframe.js"></script>';}
+	?>
+</head>
+
+<body <?php echo $background; ?> onload="refreshLogMonitor();refreshDisplay();">
+	<?php include "${WORKING_DIR}/sub-standards-body-loader.php"; ?>
+	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
+	<?php
+		include "${WORKING_DIR}/sub-display.php";
+		display();
+	?>
+
+ 		<div style="width: 100vw; height: 60vh; margin-left: calc(-50vw + 50%); border: none;">
+ 			<iframe id="pageframe" src="<?php echo $framed_pages[$frame_index]; ?>" style="width: 100%; height: 100%; border: none;"></iframe>
+		</div>
+
+		<?php
+			if ($frame_index == "sysinfo") {
+				echo "<script>startIframeRefresh('pageframe', '$framed_pages[$frame_index]', 10000);</script>";
+			}
+		?>
+
+		<?php include "sub-logmonitor.php";
+			logmonitor($sourcefile=$constants['const_LOGFILE'], $title=L::log_logmonitor, $allow_logfile_operations=true);
+		?>
+
+		<?php include "sub-footer.php"; ?>
+</body>
+
+</html>
