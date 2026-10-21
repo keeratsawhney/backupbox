@@ -1002,6 +1002,8 @@
     "clear_log_confirm": "¿Borrar el registro?",
     "power_warning": "Problema de alimentación: subtensión detectada. Las unidades USB pueden desconectarse durante las copias. Usa la fuente oficial de 27 W.",
     "files": "Archivos",
-    "empty_folder": "Esta carpeta está vacía."
+    "empty_folder": "Esta carpeta está vacía.",
+    "no_drive": "No hay ninguna unidad conectada.",
+    "open_drive": "Toca una unidad arriba para abrirla."
   }
 }

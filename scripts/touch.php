@@ -139,6 +139,7 @@
 						</div>
 						<div class="progress" id="progress"><div class="progress-bar" id="progress-bar"></div></div>
 						<div class="flow" id="flow"></div>
+						<div class="status-files" id="status-files" hidden></div>
 						<div class="status-lines" id="status-lines"></div>
 					</div>
 					<img class="oled" id="oled" alt="" hidden>

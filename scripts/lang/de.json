@@ -1002,6 +1002,8 @@
     "clear_log_confirm": "Protokoll leeren?",
     "power_warning": "Stromversorgung: Unterspannung erkannt. USB-Laufwerke können sich während Backups trennen. Verwende das offizielle 27-W-Netzteil.",
     "files": "Dateien",
-    "empty_folder": "Dieser Ordner ist leer."
+    "empty_folder": "Dieser Ordner ist leer.",
+    "no_drive": "Kein Laufwerk angeschlossen.",
+    "open_drive": "Tippe oben auf ein Laufwerk, um es zu öffnen."
   }
 }

@@ -237,6 +237,17 @@
 		return(array('undervoltage' => (bool)($flags & 0x1), 'undervoltage_since_boot' => (bool)($flags & 0x10000)));
 	}
 
+	function touch_copying($constants) {
+		# names of the files being copied (written by lib_backup.progressmonitor while copying)
+		$file	= $constants['const_WEB_ROOT_LBB'] . '/tmp/backup-files.json';
+		clearstatcache(true, $file);
+		if (!is_file($file) or time() - (int)@filemtime($file) > 60) {
+			return(null);
+		}
+		$data	= @json_decode((string)@file_get_contents($file), true);
+		return(is_array($data) ? $data : null);
+	}
+
 	function touch_cpu_temp() {
 		$temp	= @file_get_contents('/sys/class/thermal/thermal_zone0/temp');
 		return($temp === false ? null : round((int)$temp / 1000, 1));
@@ -379,10 +390,14 @@
 		}
 
 		# no target: the attached drives to choose from
+		$source_mountpoints	= array(
+			$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_USB_SOURCE'],
+			$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_NVME_SOURCE'],
+		);
 		$candidates	= array();
 		if (!$target) {
 			foreach ($drives as $drive) {
-				if (empty($drive['mountpoint'])) {
+				if (empty($drive['mountpoint']) or in_array($drive['mountpoint'], $source_mountpoints, true)) {
 					$candidates[]	= array('path' => $drive['path'], 'name' => $drive['name'], 'size' => $drive['size'], 'kind' => $drive['kind']);
 				}
 			}
@@ -559,9 +574,14 @@
 				'storages'	=> $storages,
 				'flow'		=> touch_flow($config, $constants, $storages, $running),
 				'power'		=> touch_power($constants),
+				'copying'	=> $running ? touch_copying($constants) : null,
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),
 			));
+
+		case 'copying':
+			# polled twice a second while a backup runs: only reads the file list written by the backup
+			touch_respond(array('ok' => true, 'copying' => touch_copying($constants)));
 
 		case 'services':
 			$services	= touch_get_services($config, $constants, $WORKING_DIR);
@@ -648,17 +668,33 @@
 
 		case 'files':
 			# file browser of the touch UI: folders and files of a mounted drive, hidden and technical files left out
-			$drives	= array();
+			# every attached drive: mounted ones (target, source) can be browsed, the others are mounted on request
+			$attached	= touch_attached_drives();
+			$drives		= array();
 			foreach (array('target_usb', 'target_nvme', 'source_usb', 'source_nvme') as $media_key) {
-				if (touch_medium_path($constants, $media_key) !== false) {
-					$drives[]	= array('id' => $media_key, 'label' => touch_text(lbb_dashboard_medium_label($media_key)));
+				$mountpoint	= touch_medium_path($constants, $media_key);
+				if ($mountpoint !== false) {
+					$name	= '';
+					foreach ($attached as $drive) {
+						if ($drive['mountpoint'] === $mountpoint) {
+							$name	= $drive['name'];
+						}
+					}
+					$drives[]	= array('id' => $media_key, 'label' => touch_text(lbb_dashboard_medium_label($media_key)), 'name' => $name, 'mounted' => true);
 				}
 			}
-			if (!$drives) {
-				touch_respond(array('ok' => true, 'drives' => array(), 'medium' => null, 'path' => '', 'entries' => array()));
+			foreach ($attached as $drive) {
+				if (empty($drive['mountpoint'])) {
+					$drives[]	= array('id' => 'device:' . $drive['path'], 'label' => '', 'name' => $drive['name'], 'size' => $drive['size'], 'path' => $drive['path'], 'mounted' => false);
+				}
 			}
 
-			$key	= isset($_GET['medium']) && in_array($_GET['medium'], array_column($drives, 'id'), true) ? (string)$_GET['medium'] : $drives[0]['id'];
+			$mounted	= array_values(array_filter($drives, function($drive) {return($drive['mounted']);}));
+			if (!$mounted) {
+				touch_respond(array('ok' => true, 'drives' => $drives, 'medium' => null, 'path' => '', 'entries' => array()));
+			}
+
+			$key	= isset($_GET['medium']) && in_array($_GET['medium'], array_column($mounted, 'id'), true) ? (string)$_GET['medium'] : $mounted[0]['id'];
 			$root	= realpath(touch_medium_path($constants, $key));
 			$sub	= trim(isset($_GET['path']) ? (string)$_GET['path'] : '', '/');
 			$dir	= realpath($root . '/' . $sub);
@@ -709,6 +745,33 @@
 				'entries'	=> array_slice($entries, 0, 3000),
 				'truncated'	=> count($entries) > 3000,
 			));
+
+		case 'open_drive':
+			# file browser: mount an attached drive to look into it.
+			# The chosen backup drive becomes the target, any other drive the source (replacing the mounted source).
+			if (touch_backup_running()) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$path	= isset($_POST['path']) ? (string)$_POST['path'] : '';
+			$drive	= null;
+			foreach (touch_attached_drives() as $attached) {
+				if ($attached['path'] === $path and empty($attached['mountpoint'])) {
+					$drive	= $attached;
+				}
+			}
+			if (!$drive) {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			$chosen	= touch_target_choice($constants);
+			$role	= ($chosen and $chosen['id'] === ($drive['uuid'] ?: $drive['path'])) ? 'target' : 'source';
+			if (touch_medium_path($constants, $role . '_' . $drive['kind']) !== false) {
+				shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName " . escapeshellarg($drive['kind']) . " --Role $role > /dev/null 2>&1");
+			}
+			shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action mount --StorageName " . escapeshellarg($drive['kind']) . " --Role $role --DeviceIdentifierPresetThis " . escapeshellarg($drive['path']) . " --WaitForDevice False > /dev/null 2>&1");
+			if (touch_medium_path($constants, $role . '_' . $drive['kind']) === false) {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			touch_respond(array('ok' => true, 'medium' => $role . '_' . $drive['kind']));
 
 		case 'thumb':
 			$key	= isset($_GET['medium']) ? (string)$_GET['medium'] : '';
@@ -831,12 +894,19 @@
 			$path	= isset($_POST['path']) ? (string)$_POST['path'] : '';
 			$drive	= null;
 			foreach (touch_attached_drives() as $attached) {
-				if ($attached['path'] === $path and empty($attached['mountpoint'])) {
+				if ($attached['path'] === $path) {
 					$drive	= $attached;
 				}
 			}
 			if (!$drive) {
 				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			if (!empty($drive['mountpoint'])) {
+				# opened as source in the file browser: becomes the target now
+				if ($drive['mountpoint'] !== touch_medium_path($constants, 'source_' . $drive['kind'])) {
+					touch_fail(touch_text(L::touch_mount_failed));
+				}
+				shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName " . escapeshellarg($drive['kind']) . " --Role source > /dev/null 2>&1");
 			}
 			touch_target_choice($constants, array('id' => $drive['uuid'] ?: $drive['path'], 'kind' => $drive['kind'], 'name' => $drive['name']));
 			touch_mount_target($WORKING_DIR, $drive);

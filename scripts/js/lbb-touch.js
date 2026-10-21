@@ -211,6 +211,18 @@
 		$('power-warning').hidden = !(power.undervoltage || power.undervoltage_since_boot);
 		$('power-warning').textContent = T.power_warning;
 
+		// names of the files being copied, live while a backup runs
+		renderCopying(data.running ? data.copying : null);
+		if (data.running && !state.copyingTimer) {
+			state.copyingTimer = setInterval(() => {
+				if (document.hidden || !state.running) return;
+				api('copying').then((result) => renderCopying(state.running ? result.copying : null)).catch(() => {});
+			}, 500);
+		} else if (!data.running && state.copyingTimer) {
+			clearInterval(state.copyingTimer);
+			state.copyingTimer = null;
+		}
+
 		renderFlow(data.flow, data.running);
 
 		// drives plugged in or removed: the possible sources and targets change (e.g. NVMe becomes available)
@@ -296,6 +308,18 @@
 			$('default-label').textContent = T.start;
 			$('default-sub').textContent = flow.sources[0].name + ' → ' + target.name;
 		}
+	}
+
+	function renderCopying(copying) {
+		// current file and the ones just before it
+		const node = $('status-files');
+		node.hidden = !copying || !copying.current;
+		if (node.hidden) return;
+		const recent = copying.recent.filter((name) => name !== copying.current).slice(-3).reverse();
+		node.replaceChildren(
+			el('div', { class: 'copying-current' }, [icon('file'), el('span', { text: copying.current })]),
+			...recent.map((name) => el('div', { class: 'copying-done', text: name })),
+		);
 	}
 
 	function storageChip(storage, role) {
@@ -619,19 +643,26 @@
 		state.files.medium = data.medium || '';
 		state.files.path = data.path;
 
+		// every attached drive; tapping one that is not mounted mounts it (target or source)
 		const drives = $('files-drives');
 		drives.replaceChildren();
 		data.drives.forEach((drive) => {
-			const button = el('button', { class: 'btn' + (drive.id === data.medium ? ' selected' : ''), text: drive.label });
-			button.addEventListener('click', () => {
+			const text = drive.mounted ? (drive.name ? drive.name + ' · ' : '') + drive.label : drive.name + ' · ' + formatBytes(drive.size);
+			const button = el('button', { class: 'btn' + (drive.id === data.medium ? ' selected' : '') + (drive.mounted ? '' : ' unmounted'), text: text });
+			button.addEventListener('click', () => busy(button, async () => {
+				if (!drive.mounted) {
+					const result = await api('open_drive', { path: drive.path }, 'POST');
+					drive.id = result.medium;
+				}
 				state.files.medium = drive.id;
 				state.files.path = '';
-				loadFiles();
-			});
+				await loadFiles();
+			}));
 			drives.append(button);
 		});
 
-		const label = (data.drives.find((x) => x.id === data.medium) || {}).label || '';
+		const current = data.drives.find((x) => x.id === data.medium) || {};
+		const label = current.name || current.label || '';
 		$('files-crumb').textContent = data.path ? label + ' / ' + data.path.split('/').join(' / ') : label;
 		$('files-up').disabled = !data.path;
 
@@ -639,7 +670,11 @@
 		list.replaceChildren();
 		list.scrollTop = 0;
 		if (!data.drives.length) {
-			list.append(el('div', { class: 'empty' }, [icon('folder'), el('span', { text: T.connect_target })]));
+			list.append(el('div', { class: 'empty' }, [icon('folder'), el('span', { text: T.no_drive })]));
+			return;
+		}
+		if (!data.medium) {
+			list.append(el('div', { class: 'empty' }, [icon('folder'), el('span', { text: T.open_drive })]));
 			return;
 		}
 		if (!data.entries.length) {

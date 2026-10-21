@@ -24,6 +24,7 @@ ps -ef | grep "${WORKING_DIR}/backup.py" | grep -v grep | awk '{print $2}' | xar
 ps -ef | grep "${WORKING_DIR}/backup-autorun.py" | grep -v grep | awk '{print $2}' | xargs -r kill
 python3 ${WORKING_DIR}/lib_system.py --set_led -LED PWR -LED_TRIGGER none -LED_BRIGHTNESS 1
 python3 ${WORKING_DIR}/lib_clean.py --clean display_content tasks
+rm -f "${WORKING_DIR}/tmp/backup-files.json" # names of the files being copied (web UI)
 python3 ${WORKING_DIR}/lib_proftpd.py --Action setDefaultRoot --DefaultRoot "${const_MEDIA_DIR}"
 
 python3 ${WORKING_DIR}/lib_display.py "$(python3 ${WORKING_DIR}/lib_language.py box_backup_break1)" "$(python3 ${WORKING_DIR}/lib_language.py box_backup_break2)"

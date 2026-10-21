@@ -1002,6 +1002,8 @@
     "clear_log_confirm": "Vider le journal ?",
     "power_warning": "Problème d'alimentation : sous-tension détectée. Les disques USB peuvent se déconnecter pendant les sauvegardes. Utilisez l'alimentation officielle 27 W.",
     "files": "Fichiers",
-    "empty_folder": "Ce dossier est vide."
+    "empty_folder": "Ce dossier est vide.",
+    "no_drive": "Aucun disque connecté.",
+    "open_drive": "Touchez un disque ci-dessus pour l'ouvrir."
   }
 }
