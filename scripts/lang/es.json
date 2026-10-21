@@ -990,6 +990,12 @@
     "none_configured": "no configurado",
     "no_network": "sin red",
     "mount_failed": "Almacenamiento no encontrado o no se pudo montar.",
-    "umount_failed": "No se pudo desmontar el almacenamiento."
+    "umount_failed": "No se pudo desmontar el almacenamiento.",
+    "video_unsupported": "Este formato de vídeo no se puede reproducir en el navegador. Descárgalo desde Archivos.",
+    "mount_target": "Montar destino",
+    "connect_target": "Conecta la unidad de copia",
+    "insert_source": "Inserta una tarjeta o unidad USB",
+    "mounting": "montando…",
+    "check_files": "Comprobar últimos archivos"
   }
 }

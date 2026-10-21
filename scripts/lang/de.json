@@ -990,6 +990,12 @@
     "none_configured": "nicht eingerichtet",
     "no_network": "kein Netzwerk",
     "mount_failed": "Speicher nicht gefunden oder konnte nicht eingehängt werden.",
-    "umount_failed": "Speicher konnte nicht ausgehängt werden."
+    "umount_failed": "Speicher konnte nicht ausgehängt werden.",
+    "video_unsupported": "Dieses Videoformat kann im Browser nicht abgespielt werden. Lade es über Dateien herunter.",
+    "mount_target": "Ziel einhängen",
+    "connect_target": "Backup-Laufwerk anschließen",
+    "insert_source": "Karte oder USB-Laufwerk einstecken",
+    "mounting": "wird eingehängt…",
+    "check_files": "Neueste Dateien prüfen"
   }
 }

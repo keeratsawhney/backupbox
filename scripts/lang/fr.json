@@ -990,6 +990,12 @@
     "none_configured": "non configuré",
     "no_network": "pas de réseau",
     "mount_failed": "Stockage introuvable ou impossible à monter.",
-    "umount_failed": "Impossible de démonter le stockage."
+    "umount_failed": "Impossible de démonter le stockage.",
+    "video_unsupported": "Ce format vidéo ne peut pas être lu dans le navigateur. Téléchargez-le via Fichiers.",
+    "mount_target": "Monter la cible",
+    "connect_target": "Branchez le disque de sauvegarde",
+    "insert_source": "Insérez une carte ou une clé USB",
+    "mounting": "montage…",
+    "check_files": "Vérifier les derniers fichiers"
   }
 }

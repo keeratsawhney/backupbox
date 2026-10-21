@@ -171,12 +171,15 @@
 		$('progress-bar').style.width = progress !== null && progress !== undefined ? progress + '%' : '';
 
 		$('status-card').classList.toggle('alert', !!display.alert);
+		$('status-card').classList.toggle('running', data.running);
 
+		// live copy of the hardware display, else a picture of the current message (logo, IP QR code)
 		const oled = $('oled');
-		if (data.oled) {
-			if (oled.dataset.url !== data.oled.url) {
-				oled.dataset.url = data.oled.url;
-				oled.src = data.oled.url;
+		const picture = data.oled ? data.oled.url : display.image;
+		if (picture) {
+			if (oled.dataset.url !== picture) {
+				oled.dataset.url = picture;
+				oled.src = picture;
 			}
 			oled.hidden = false;
 		} else {
@@ -201,26 +204,99 @@
 			$('temp').classList.toggle('hot', data.temp >= 75);
 		}
 
+		renderFlow(data.flow, data.running);
+
+		// drives plugged in or removed: the possible sources and targets change (e.g. NVMe becomes available)
+		const drives = data.flow ? JSON.stringify([data.flow.target.state, data.flow.target.id, data.flow.sources.length]) : '';
+		if (state.drives !== undefined && drives !== state.drives) {
+			loadServices(true).then(() => { if (state.page === 'backup') renderWizard(); }).catch(() => {});
+		}
+		state.drives = drives;
+		// idle: target and source are shown in the flow; while copying the free space matters
+		$('storage-strip').hidden = !data.running && !!data.flow;
 		renderStorageStrip(data.storages || []);
+
+		// backup just finished: offer to look at the newest files on the target
+		if (state.wasRunning && !data.running) state.finished = true;
+		if (data.running) state.finished = false;
+		state.wasRunning = data.running;
+		$('btn-check').hidden = !state.finished;
 	}
 
 	function storageLabel(id) {
 		return (T.storages && T.storages[id]) || id;
 	}
 
+	function renderFlow(flow, running) {
+		// guided home screen of a portable box: backup drive ready? card inserted?
+		const node = $('flow');
+		node.hidden = running || !flow;
+		if (node.hidden) return;
+
+		const target = flow.target;
+		let targetText;
+		if (target.state === 'ready') {
+			targetText = (target.name ? target.name + ' · ' : '') + formatBytes(target.free) + ' ' + T.free;
+		} else if (target.state === 'attached') {
+			targetText = target.name + ' · ' + T.mounting;
+		} else {
+			targetText = T.connect_target;
+		}
+
+		const sourceText = flow.sources.length
+			? flow.sources.map((x) => x.name + ' · ' + formatBytes(x.size)).join(', ')
+			: T.insert_source;
+
+		const row = (ok, waiting, label, text, kind) => el('div', { class: 'flow-row' + (ok ? ' ok' : '') + (waiting ? ' waiting' : '') }, [
+			el('span', { class: 'flow-mark' }, ok ? icon('check') : icon(kind)),
+			el('span', { class: 'flow-text' }, [el('small', { text: label }), el('b', { text: text })]),
+		]);
+
+		const targetRow = row(target.state === 'ready', target.state === 'attached', storageLabel(target.id), targetText, target.id.split('_')[0]);
+		if (target.state !== 'ready') {
+			// mounting happens automatically; tapping retries, e.g. after the drive was plugged in again
+			targetRow.classList.add('flow-action');
+			targetRow.setAttribute('role', 'button');
+			targetRow.addEventListener('click', () => {
+				if (targetRow.classList.contains('loading')) return;
+				targetRow.classList.add('loading');
+				api('mount', { storage: target.id.split('_')[0], role: 'target' }, 'POST')
+					.then((result) => {
+						if (!result.storages.some((x) => x.id === target.id)) toast(T.mount_failed, true);
+						refreshStatusSoon();
+					})
+					.catch((e) => toast(e.message, true))
+					.finally(() => targetRow.classList.remove('loading'));
+			});
+		}
+		node.replaceChildren(targetRow, row(flow.sources.length > 0, flow.sources.length === 0, T.source, sourceText, 'usb'));
+	}
+
+	function storageChip(storage, role) {
+		const used = storage.total ? (storage.total - storage.free) / storage.total : 0;
+		const meter = el('i', { class: used > 0.9 ? 'full' : '' });
+		meter.style.width = Math.round(used * 100) + '%';
+		return el('div', { class: 'chip chip-' + role }, [
+			el('b', { text: storageLabel(storage.id) }),
+			storage.name ? el('small', { text: storage.name }) : null,
+			el('div', { class: 'meter' }, meter),
+			el('span', { text: formatBytes(storage.free) + ' ' + T.free }),
+		]);
+	}
+
+	let stripSignature = '';
 	function renderStorageStrip(storages) {
+		// shown while a backup runs: target first, then source, then internal storage.
+		// Only redrawn on changes.
+		const signature = JSON.stringify(storages.map((x) => [x.id, x.name, Math.round((x.free || 0) / 1e8)]));
+		if (signature === stripSignature) return;
+		stripSignature = signature;
+
 		const strip = $('storage-strip');
 		strip.replaceChildren();
-		storages.forEach((storage) => {
-			const used = storage.total ? (storage.total - storage.free) / storage.total : 0;
-			const meter = el('i', { class: used > 0.9 ? 'full' : '' });
-			meter.style.width = Math.round(used * 100) + '%';
-			strip.append(el('div', { class: 'chip' }, [
-				el('b', { text: storageLabel(storage.id) }),
-				el('div', { class: 'meter' }, meter),
-				el('span', { text: formatBytes(storage.free) + ' ' + T.free }),
-			]));
-		});
+		storages.filter((x) => x.id.endsWith('_target')).forEach((x) => strip.append(storageChip(x, 'target')));
+		storages.filter((x) => x.id.endsWith('_source')).forEach((x) => strip.append(storageChip(x, 'source')));
+		storages.filter((x) => x.id === 'internal').forEach((x) => strip.append(storageChip(x, 'internal')));
 	}
 
 	let statusTimer = null;
@@ -374,7 +450,8 @@
 	async function loadPhotos(offset) {
 		const grid = $('photo-grid');
 		try {
-			const data = await api('recent', { limit: PHOTOS_PER_PAGE, offset: Math.max(0, offset), medium: state.photos.medium });
+			const data = await api('recent', { limit: PHOTOS_PER_PAGE, offset: Math.max(0, offset), medium: state.photos.medium, refresh: state.photos.refresh ? 1 : '' });
+			state.photos.refresh = false;
 			state.photos.offset = data.offset;
 			state.photos.total = data.total;
 			state.photos.items = data.items;
@@ -390,9 +467,12 @@
 			grid.append(el('div', { class: 'empty' }, [icon('photos'), el('span', { text: T.no_photos })]));
 		}
 		p.items.forEach((item, index) => {
-			const preview = item.thumb
-				? el('img', { src: item.thumb, alt: item.name, loading: 'lazy', draggable: 'false' })
-				: el('span', { class: 'nothumb' }, [el('b', { text: item.ext }), el('span', { text: item.name })]);
+			let preview = typeTile(item);
+			if (item.thumb) {
+				// a preview that can not be made (unknown format) falls back to the file type
+				preview = el('img', { src: item.thumb, alt: item.name, loading: 'lazy', draggable: 'false' });
+				preview.addEventListener('error', () => preview.replaceWith(typeTile(item)), { once: true });
+			}
 			grid.append(el('button', { class: 'photo', onclick: () => openViewer(index) }, [
 				preview,
 				item.video ? el('span', { class: 'badge' }, icon('play')) : (item.rating > 0 ? el('span', { class: 'badge', text: '★'.repeat(item.rating) }) : null),
@@ -407,7 +487,7 @@
 	}
 
 	function renderMedia(data) {
-		// which storage the photos come from; buttons to switch when several hold backups
+		// a tab for every mounted drive (targets, sources, internal storage); "+ Source" mounts an attached source
 		const row = $('photo-media');
 		row.replaceChildren();
 		const media = data.media.length ? data.media : [{ id: data.medium, label: data.medium_label, count: data.total }];
@@ -419,6 +499,23 @@
 			});
 			row.append(button);
 		});
+		if (data.can_mount_source) {
+			const button = el('button', { class: 'btn', text: '+ ' + T.source });
+			button.addEventListener('click', () => busy(button, async () => {
+				const result = await api('mount', { storage: 'usb', role: 'source' }, 'POST');
+				if (!result.storages.some((x) => x.id === 'usb_source')) {
+					toast(T.mount_failed, true);
+					return;
+				}
+				state.photos.medium = 'source_usb';
+				await loadPhotos(0);
+			}));
+			row.append(button);
+		}
+	}
+
+	function typeTile(item) {
+		return el('span', { class: 'nothumb' }, [el('b', { text: item.ext }), el('span', { text: item.name })]);
 	}
 
 	function openViewer(index) {
@@ -426,13 +523,52 @@
 		const item = p.items[index];
 		if (!item) return;
 		p.viewer = index;
+		const caption = item.name + (item.date ? '  ·  ' + item.date : '');
 		const img = $('viewer-img');
-		img.hidden = !item.thumb;
-		if (item.thumb) img.src = item.thumb;
-		$('viewer-caption').textContent = item.name + (item.date ? '  ·  ' + item.date : '');
+		const video = $('viewer-video');
+		stopVideo();
+		if (item.video && item.file) {
+			// play right away; fall back to the low resolution copy, then explain
+			img.hidden = true;
+			video.hidden = false;
+			$('viewer').classList.add('playing');
+			video.poster = item.thumb || '';
+			let fallback = item.preview;
+			video.onerror = () => {
+				if (fallback) {
+					video.src = fallback;
+					fallback = null;
+					video.play().catch(() => {});
+				} else {
+					video.hidden = true;
+					$('viewer').classList.remove('playing');
+					img.hidden = !item.thumb;
+					$('viewer-caption').textContent = caption + '  ·  ' + T.video_unsupported;
+				}
+			};
+			video.src = item.file;
+			video.play().catch(() => {});
+		} else {
+			img.hidden = !item.thumb;
+			if (item.thumb) {
+				img.onerror = () => { img.hidden = true; };
+				img.src = item.thumb;
+			}
+		}
+		$('viewer-caption').textContent = caption;
 		$('viewer').hidden = false;
 		$('viewer-prev').disabled = p.offset + index <= 0;
 		$('viewer-next').disabled = p.offset + index >= p.total - 1;
+	}
+
+	function stopVideo() {
+		const video = $('viewer-video');
+		video.onerror = null;
+		video.pause();
+		video.removeAttribute('src');
+		video.load();
+		video.hidden = true;
+		$('viewer').classList.remove('playing');
 	}
 
 	async function stepViewer(delta) {
@@ -601,6 +737,7 @@
 		});
 		$('new-backup-label').textContent = T.new_backup;
 		$('stop-label').textContent = T.stop;
+		$('check-label').textContent = T.check_files;
 		$('wizard-start-label').textContent = T.start;
 		$('log-refresh-label').textContent = T.refresh;
 		$('h-storage').textContent = T.storage;
@@ -626,6 +763,15 @@
 			await startBackup(s.defaults.source, s.defaults.target, options);
 		}));
 
+		$('btn-check').addEventListener('click', () => {
+			// newest files of the backup drive, listed again so the files just copied are included
+			state.finished = false;
+			$('btn-check').hidden = true;
+			state.photos.medium = '';
+			state.photos.refresh = true;
+			showPage('photos');
+		});
+
 		$('btn-stop').addEventListener('click', (event) => busy(event.currentTarget, async () => {
 			if (!(await confirmDialog(T.stop_confirm, '', T.stop, 'btn-danger'))) return;
 			const result = await api('stop', {}, 'POST');
@@ -645,7 +791,10 @@
 
 		$('photos-prev').addEventListener('click', () => loadPhotos(state.photos.offset - PHOTOS_PER_PAGE));
 		$('photos-next').addEventListener('click', () => loadPhotos(state.photos.offset + PHOTOS_PER_PAGE));
-		$('viewer-close').addEventListener('click', () => { $('viewer').hidden = true; });
+		$('viewer-close').addEventListener('click', () => {
+			stopVideo();
+			$('viewer').hidden = true;
+		});
 		$('viewer-prev').addEventListener('click', () => stepViewer(-1));
 		$('viewer-next').addEventListener('click', () => stepViewer(1));
 

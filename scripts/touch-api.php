@@ -52,8 +52,8 @@
 	}
 
 	function touch_backup_running() {
-		exec("pgrep -f " . escapeshellarg("backup\\.py --SourceName"), $pids, $return_code);
-		return($return_code == 0);
+		global $constants;
+		return(lbb_dashboard_backup_running($constants));
 	}
 
 	function touch_display_lines($constants) {
@@ -90,7 +90,7 @@
 				$format	= $matches[2];
 				$line	= trim($matches[3]);
 			}
-			$entries[]	= array('format' => $format, 'text' => $line, 'pgbar' => str_starts_with($line, 'PGBAR='));
+			$entries[]	= array('format' => $format, 'text' => $line, 'pgbar' => str_starts_with($line, 'PGBAR='), 'image' => str_starts_with($line, 'IMAGE='));
 		}
 
 		# display.py appends lines of older messages (always as "s=b") to the shown file:
@@ -102,7 +102,7 @@
 			}
 		}
 		foreach ($entries as $index => $entry) {
-			if ($entry['pgbar']) {
+			if ($entry['pgbar'] or $entry['image']) {
 				$cut	= max($cut, $index);
 				break;
 			}
@@ -114,11 +114,18 @@
 		$lines		= array();
 		$progress	= null;
 		$alert		= false;
+		$image		= null;
 		foreach ($entries as $entry) {
 			if (str_contains($entry['format'], 'a')) {
 				$alert	= true;
 			}
-			if ($entry['pgbar']) {
+			if ($entry['image']) {
+				# only pictures inside the web root can be shown in the browser
+				$path	= trim(substr($entry['text'], 6));
+				if ($image === null and str_starts_with($path, $constants['const_WEB_ROOT_LBB'] . '/') and is_file($path)) {
+					$image	= substr($path, strlen($constants['const_WEB_ROOT_LBB'])) . '?t=' . @filemtime($path);
+				}
+			} elseif ($entry['pgbar']) {
 				$progress	= (float)preg_replace('/[^0-9\.]/', '', '0' . substr($entry['text'], 6));
 				$progress	= max(0, min(100, $progress));
 			} elseif ($entry['text'] !== '') {
@@ -130,6 +137,7 @@
 			'lines'		=> array_slice($lines, 0, 8),
 			'progress'	=> $progress,
 			'alert'		=> $alert,
+			'image'		=> $image,
 			'time'		=> $file !== '' ? @filemtime($file) : null,
 		));
 	}
@@ -147,6 +155,26 @@
 			'width'		=> (int)$config['conf_DISP_RESOLUTION_X'],
 			'height'	=> (int)$config['conf_DISP_RESOLUTION_Y'],
 		));
+	}
+
+	function touch_drive_name($device) {
+		# name of the physical drive, so users can tell source and target apart:
+		# the file system label, else the drive model (read from sysfs, cheap enough to poll)
+		if (!str_starts_with($device, '/dev/')) {
+			# cloud mounts ("remote:") and internal storage
+			return(rtrim($device, ':'));
+		}
+
+		foreach (glob('/dev/disk/by-label/*') ?: array() as $link) {
+			if (realpath($link) === realpath($device)) {
+				# udev escapes special characters, e.g. "\x20" for a space
+				return(preg_replace_callback('/\\\\x([0-9a-fA-F]{2})/', function($m) {return(chr(hexdec($m[1])));}, basename($link)));
+			}
+		}
+
+		$disk	= preg_match('#^/dev/(nvme\d+n\d+|mmcblk\d+)#', $device, $matches) ? $matches[1] : preg_replace('#^/dev/([a-z]+)\d*$#', '$1', $device);
+		$model	= trim((string)@file_get_contents("/sys/block/$disk/device/model"));
+		return($model !== '' ? $model : basename($device));
 	}
 
 	function touch_storages($constants) {
@@ -176,6 +204,7 @@
 				'id'		=> $id,
 				'path'		=> $path,
 				'device'	=> $device,
+				'name'		=> touch_drive_name($device),
 				'total'		=> $total === false ? null : $total,
 				'free'		=> $free === false ? null : $free,
 			);
@@ -210,6 +239,232 @@
 		}
 	}
 
+	function touch_parse_drives($blockdevices) {
+		# partitions of attached drives (lsblk -J output), without the system disk and
+		# without tiny boot/EFI partitions that many USB drives carry next to the data partition
+		$drives	= array();
+		foreach ($blockdevices as $disk) {
+			if (!preg_match('#^/dev/(sd[a-z]+|nvme\\d+n\\d+)$#', (string)$disk['path'])) {
+				continue;
+			}
+			$partitions	= isset($disk['children']) ? $disk['children'] : array($disk);
+			$system		= false;
+			foreach ($partitions as $partition) {
+				if (in_array($partition['mountpoint'], array('/', '/boot', '/boot/firmware', '[SWAP]'), true)) {
+					$system	= true;
+				}
+			}
+			if ($system) {
+				continue;
+			}
+			foreach ($partitions as $partition) {
+				$size	= (int)$partition['size'];
+				if (empty($partition['fstype']) or $partition['fstype'] == 'swap') {
+					continue;
+				}
+				if (strtoupper((string)$partition['label']) == 'EFI' or ($partition['fstype'] == 'vfat' and $size < 300 * 1024 * 1024)) {
+					continue;
+				}
+				$drives[]	= array(
+					'path'			=> $partition['path'],
+					'kind'			=> str_starts_with($disk['path'], '/dev/nvme') ? 'nvme' : 'usb',
+					'name'			=> trim((string)($partition['label'] ?: ($disk['model'] ?: basename($partition['path'])))),
+					'size'			=> $size,
+					'mountpoint'	=> $partition['mountpoint'],
+				);
+			}
+		}
+		return($drives);
+	}
+
+	function touch_attached_drives() {
+		$json	= json_decode((string)shell_exec('lsblk -J -b -o NAME,PATH,SIZE,FSTYPE,LABEL,MOUNTPOINT,TYPE,MODEL 2>/dev/null'), true);
+		return(touch_parse_drives(is_array($json) && isset($json['blockdevices']) ? $json['blockdevices'] : array()));
+	}
+
+	function touch_flow($config, $constants, $storages, $running) {
+		# what the home screen guides through: target ready? source inserted?
+		$default	= in_array($config['conf_BACKUP_DEFAULT_TARGET'], array('usb', 'nvme'), true) ? $config['conf_BACKUP_DEFAULT_TARGET'] : 'nvme';
+		$drives		= touch_attached_drives();
+		$mounted	= array();
+		foreach ($storages as $storage) {
+			$mounted[$storage['id']]	= $storage;
+		}
+
+		# target: mounted, or attached and waiting to be mounted (done automatically, see below)
+		$target	= null;
+		foreach (array('nvme_target', 'usb_target') as $id) {
+			if (isset($mounted[$id])) {
+				$target	= array('state' => 'ready', 'id' => $id, 'name' => $mounted[$id]['name'], 'free' => $mounted[$id]['free'], 'total' => $mounted[$id]['total']);
+				break;
+			}
+		}
+		$target_device	= $target ? $mounted[$target['id']]['device'] : '';
+		if (!$target) {
+			foreach ($drives as $drive) {
+				if ($drive['kind'] == $default and empty($drive['mountpoint'])) {
+					$target	= array('state' => 'attached', 'id' => $default . '_target', 'name' => $drive['name'], 'free' => null, 'total' => $drive['size']);
+					break;
+				}
+			}
+		}
+		if (!$target) {
+			$target	= array('state' => 'missing', 'id' => $default . '_target', 'name' => '', 'free' => null, 'total' => null);
+		}
+
+		# sources: attached USB drives / cards that are not the target
+		$sources	= array();
+		foreach ($drives as $drive) {
+			if ($drive['kind'] != 'usb' or $drive['path'] === $target_device or ($target['state'] == 'attached' and $drive['kind'] == $default and $drive['name'] === $target['name'])) {
+				continue;
+			}
+			$sources[]	= array('name' => $drive['name'], 'size' => $drive['size'], 'mounted' => !empty($drive['mountpoint']));
+		}
+
+		# mount an attached target right away (throttled, never during a backup)
+		if ($target['state'] == 'attached' and !$running) {
+			$stamp	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-automount.stamp';
+			if (time() - (int)@filemtime($stamp) > 30) {
+				@touch($stamp);
+				include_once('sub-dashboard.php');
+				lbb_dashboard_automount($constants, lbb_dashboard_media($constants));
+			}
+		}
+
+		return(array('target' => $target, 'sources' => $sources));
+	}
+
+	function touch_media_extensions($constants) {
+		# file types shown in the photo views (same lists as backups and view.php)
+		$extensions	= array();
+		foreach (array('WEB_IMAGES', 'HEIC', 'RAW', 'TIF', 'VIDEO') as $list) {
+			$extensions	= array_merge($extensions, explode(';', $constants['const_FILE_EXTENSIONS_LIST_' . $list]));
+		}
+		return(array_values(array_unique(array_filter(array_map('strtolower', $extensions)))));
+	}
+
+	function touch_is_video($ext, $constants) {
+		$videos	= array_merge(explode(';', $constants['const_FILE_EXTENSIONS_LIST_VIDEO']), array('mov', 'mts', 'm4v', 'mkv', '3gp'));
+		return(in_array(strtolower($ext), $videos, true));
+	}
+
+	function touch_medium_path($constants, $key) {
+		# mount path of a mounted medium, false otherwise (cheap: no database access)
+		$mountpoints	= array(
+			'target_usb'	=> $constants['const_MOUNTPOINT_USB_TARGET'],
+			'source_usb'	=> $constants['const_MOUNTPOINT_USB_SOURCE'],
+			'target_nvme'	=> $constants['const_MOUNTPOINT_NVME_TARGET'],
+			'source_nvme'	=> $constants['const_MOUNTPOINT_NVME_SOURCE'],
+		);
+		if ($key == 'internal') {
+			return($constants['const_MEDIA_DIR'] . '/' . $constants['const_INTERNAL_BACKUP_DIR']);
+		}
+		if (!isset($mountpoints[$key])) {
+			return(false);
+		}
+		$path	= $constants['const_MEDIA_DIR'] . '/' . $mountpoints[$key];
+		return(str_contains((string)@file_get_contents('/proc/mounts'), ' ' . $path . ' ') ? $path : false);
+	}
+
+	function touch_media_files($constants, $key, $path, $refresh = false) {
+		# photos and videos on a drive, newest first, read from the file system (just copied files show at once).
+		# Cached briefly per mounted file system: paging through a big drive should not list it again and again.
+		$stat	= @stat($path);
+		$id		= $stat ? $stat['dev'] . '-' . $stat['ino'] : '';
+		$cache	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-files-' . preg_replace('/[^a-z_]/', '', $key) . '.json';
+		$cached	= $refresh ? null : @json_decode((string)@file_get_contents($cache), true);
+		if (is_array($cached) and $cached['id'] === $id and time() - $cached['time'] < 15) {
+			return($cached['files']);
+		}
+
+		$names	= array();
+		foreach (touch_media_extensions($constants) as $ext) {
+			$names[]	= '-iname ' . escapeshellarg('*.' . $ext);
+		}
+		$banned	= array();
+		foreach (explode(';', $constants['const_VIEW_BANNED_PATHS']) as $pattern) {
+			if ($pattern !== '') {
+				$banned[]	= '-not -ipath ' . escapeshellarg($pattern);
+			}
+		}
+
+		$lines	= array();
+		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' ' . implode(' ', $banned) . " -printf '%T@\\t%P\\n' 2>/dev/null", $lines);
+
+		$files	= array();
+		foreach ($lines as $line) {
+			$parts	= explode("\t", $line, 2);
+			if (count($parts) == 2) {
+				$files[]	= array('path' => $parts[1], 'time' => (int)$parts[0]);
+			}
+		}
+		usort($files, function($a, $b) {return($b['time'] <=> $a['time']);});
+
+		@file_put_contents($cache, json_encode(array('id' => $id, 'time' => time(), 'files' => $files)));
+		return($files);
+	}
+
+	function touch_media_item($constants, $medium, $storage_path, $relative, $extra) {
+		$file	= $storage_path . '/' . $relative;
+		$name	= basename($relative);
+		$ext	= strtoupper(pathinfo($name, PATHINFO_EXTENSION));
+		$tims	= dirname($file) . '/tims/' . $name . '.JPG';
+
+		$item	= array_merge(array(
+			'name'		=> $name,
+			'ext'		=> $ext,
+			'date'		=> '',
+			'rating'	=> 0,
+			'video'		=> touch_is_video($ext, $constants),
+			# thumbnail made during backup, else a preview made on demand
+			'thumb'		=> file_exists($tims) ? lbb_dashboard_url_path($tims) : 'touch-api.php?action=thumb&medium=' . rawurlencode($medium) . '&path=' . rawurlencode($relative),
+		), $extra);
+
+		if ($item['video']) {
+			$item['file']	= lbb_dashboard_url_path($file);
+			# GoPro low resolution copy (GH010001.MP4 -> GL010001.LRV), plays where the original codec (H.265) does not
+			$preview	= dirname($file) . '/' . substr_replace(pathinfo($file, PATHINFO_FILENAME), 'L', 1, 1) . '.LRV';
+			$item['preview']	= file_exists($preview) ? lbb_dashboard_url_path($preview) : null;
+		}
+
+		return($item);
+	}
+
+	function touch_make_thumb($source, $thumb, $video, $raw) {
+		# preview for a file without thumbnail: a video frame, the preview image embedded by the camera,
+		# or the scaled picture. Never written to the drive, only into the cache on the system disk.
+		$s		= escapeshellarg($source);
+		$t		= escapeshellarg($thumb);
+		$tmp	= $thumb . '.tmp';
+		$magick	= is_executable('/usr/bin/magick') ? '/usr/bin/magick' : '/usr/bin/convert';
+
+		if ($video) {
+			foreach (array('1', '0') as $second) {
+				exec("timeout 30 ffmpeg -nostdin -loglevel error -ss $second -i $s -frames:v 1 -vf scale=480:-2 -y -f image2 $t 2>/dev/null");
+				if (@filesize($thumb) > 0) {
+					return;
+				}
+			}
+			return;
+		}
+
+		if (!$raw) {
+			exec("timeout 30 $magick -define jpeg:size=960x960 " . escapeshellarg($source . '[0]') . " -auto-orient -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
+			if (@filesize($thumb) > 0) {
+				return;
+			}
+		}
+
+		foreach (array('PreviewImage', 'JpgFromRaw', 'ThumbnailImage') as $tag) {
+			exec("timeout 20 exiftool -b -$tag $s > " . escapeshellarg($tmp) . " 2>/dev/null");
+			if (@filesize($tmp) > 0) {
+				exec("timeout 30 $magick " . escapeshellarg($tmp) . " -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
+				break;
+			}
+		}
+		@unlink($tmp);
+	}
+
 	$action	= isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
 	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -223,12 +478,15 @@
 
 		case 'status':
 			$display	= touch_display_lines($constants);
+			$running	= touch_backup_running();
+			$storages	= touch_storages($constants);
 			touch_respond(array(
 				'ok'		=> true,
-				'running'	=> touch_backup_running(),
+				'running'	=> $running,
 				'display'	=> $display,
 				'oled'		=> touch_oled($config, $constants),
-				'storages'	=> touch_storages($constants),
+				'storages'	=> $storages,
+				'flow'		=> touch_flow($config, $constants, $storages, $running),
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),
 			));
@@ -267,42 +525,87 @@
 			$limit		= isset($_GET['limit']) ? max(1, min(48, (int)$_GET['limit'])) : 12;
 			$offset		= isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
 			$medium		= isset($_GET['medium']) && $_GET['medium'] !== '' ? (string)$_GET['medium'] : null;
-			$gallery	= lbb_dashboard_gallery($constants, $limit, $offset, $medium);
+			$refresh	= !empty($_GET['refresh']);
 
-			$items	= array();
-			foreach ($gallery['items'] as $item) {
-				$ext	= strtoupper((string)$item['File_Type_Extension']);
-				$thumb	= $gallery['storage_path'] . '/' . $item['Directory'] . '/tims/' . $item['File_Name'] . '.JPG';
-				$items[]	= array(
-					'id'		=> (int)$item['ID'],
-					'name'		=> $item['File_Name'],
-					'ext'		=> $ext,
-					'date'		=> substr((string)$item['Create_Date'], 0, 16),
-					'rating'	=> (int)$item['LbbRating'],
-					'video'		=> in_array($ext, array('MP4', 'MOV', 'AVI', 'MTS', 'M4V', 'MKV', '3GP', 'LRV')),
-					# no placeholder picture for files without thumbnail, the UI shows the file type
-					'thumb'		=> file_exists($thumb) ? lbb_dashboard_url_path($thumb) : null,
-				);
+			$media	= lbb_dashboard_media($constants);
+			if ($offset == 0 and lbb_dashboard_automount($constants, $media)) {
+				$media	= lbb_dashboard_media($constants);
 			}
 
-			# media the user can switch to: mounted ones with an image database
-			$media	= array();
-			foreach ($gallery['media'] as $key => $info) {
-				if ($info['has_db'] or $key == $gallery['medium']) {
-					$media[]	= array('id' => $key, 'label' => touch_text(lbb_dashboard_medium_label($key)), 'count' => $info['count']);
+			# mounted drives: default backup target first, then targets, sources, internal storage
+			$order	= array_unique(array_merge(array('target_' . lbb_dashboard_automount_storages()[0]), array('target_nvme', 'target_usb', 'source_usb', 'source_nvme', 'internal')));
+			$available	= array();
+			foreach ($order as $media_key) {
+				if (isset($media[$media_key]) and $media[$media_key]['mounted']) {
+					$available[$media_key]	= touch_media_files($constants, $media_key, $media[$media_key]['path'], $refresh and ($medium === null or $medium == $media_key));
 				}
 			}
 
+			# shown drive: the one asked for, else the first with files, else the first drive
+			$key	= ($medium !== null and isset($available[$medium])) ? $medium : null;
+			foreach ($available as $media_key => $files) {
+				if ($key === null and count($files) > 0) {
+					$key	= $media_key;
+				}
+			}
+			$key	= $key === null ? array_key_first($available) : $key;
+
+			$items	= array();
+			foreach (array_slice($available[$key], $offset, $limit) as $file) {
+				$items[]	= touch_media_item($constants, $key, $media[$key]['path'], $file['path'], array('date' => date('Y-m-d H:i', $file['time'])));
+			}
+
+			$tabs			= array();
+			$source_mounted	= false;
+			foreach ($available as $media_key => $files) {
+				$source_mounted	= $source_mounted || str_starts_with($media_key, 'source_');
+				$tabs[]	= array('id' => $media_key, 'label' => touch_text(lbb_dashboard_medium_label($media_key)), 'count' => count($files));
+			}
+
 			touch_respond(array(
-				'ok'			=> true,
-				'medium'		=> $gallery['medium'],
-				'medium_label'	=> touch_text(lbb_dashboard_medium_label($gallery['medium'])),
-				'media'			=> $media,
-				'total'			=> $gallery['total'],
-				'has_db'		=> $gallery['has_db'],
-				'offset'		=> $offset,
-				'items'			=> $items,
+				'ok'				=> true,
+				'medium'			=> $key,
+				'medium_label'		=> touch_text(lbb_dashboard_medium_label($key)),
+				'media'				=> $tabs,
+				'can_mount_source'	=> !$source_mounted && !touch_backup_running(),
+				'total'				=> count($available[$key]),
+				'offset'			=> $offset,
+				'items'				=> $items,
 			));
+
+		case 'thumb':
+			$key	= isset($_GET['medium']) ? (string)$_GET['medium'] : '';
+			$root	= touch_medium_path($constants, $key);
+			$root	= $root === false ? false : realpath($root);
+			$file	= $root === false ? false : realpath($root . '/' . (isset($_GET['path']) ? (string)$_GET['path'] : ''));
+			if ($file === false or !str_starts_with($file, $root . '/') or !is_file($file)) {
+				touch_fail('not found', 404);
+			}
+			$ext	= strtolower(pathinfo($file, PATHINFO_EXTENSION));
+			if (!in_array($ext, touch_media_extensions($constants), true)) {
+				touch_fail('not a media file', 404);
+			}
+
+			$stat	= stat($file);
+			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
+			@mkdir($dir, 0755, true);
+			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime']) . '.jpg';
+			if (!is_file($thumb)) {
+				touch_make_thumb($file, $thumb, touch_is_video($ext, $constants), in_array($ext, explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']), true));
+			}
+			if (!is_file($thumb) or filesize($thumb) == 0) {
+				@unlink($thumb);
+				touch_fail('no preview', 404);
+			}
+
+			while (ob_get_level()) {
+				ob_end_clean();
+			}
+			header('Content-Type: image/jpeg');
+			header('Cache-Control: max-age=604800');
+			header('Content-Length: ' . filesize($thumb));
+			readfile($thumb);
+			exit();
 
 		case 'log':
 			$lines	= isset($_GET['lines']) ? max(10, min(1000, (int)$_GET['lines'])) : 200;

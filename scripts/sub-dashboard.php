@@ -49,18 +49,35 @@
 		return $media;
 	}
 
+	function lbb_dashboard_backup_running($constants) {
+		# backup.py process (started by the web UI, the display menu or autorun); read from /proc, no external tools needed
+		# compare whole arguments: a shell command line that only mentions backup.py is one argument
+		foreach (glob('/proc/[0-9]*/cmdline') ?: array() as $cmdline_file) {
+			$args	= explode("\0", (string)@file_get_contents($cmdline_file));
+			foreach ($args as $index => $arg) {
+				if (basename($arg) === 'backup.py' and in_array('--SourceName', array_slice($args, $index + 1), true)) {
+					return true;
+				}
+			}
+		}
+
+		# fallback: backup.py keeps task files while working; trust them only while its messages are fresh
+		$tasks	= glob($constants['const_TASKS_PATH'] . '/*.txt') ?: array();
+		$recent	= max((int)@filemtime($constants['const_DISPLAY_CONTENT_OLD_FILE']), (int)@filemtime($constants['const_DISPLAY_CONTENT_PATH']));
+		return count($tasks) > 0 && time() - $recent < 60;
+	}
+
 	function lbb_dashboard_automount($constants, $media) {
 		# Backups unmount all storage when they finish. Mount an attached NVMe SSD / USB drive again,
 		# so its photos are shown instead of the internal storage. Returns true if anything was mounted.
 		# never interfere with a running backup, it manages the mounts itself
-		exec("pgrep -f " . escapeshellarg("backup\\.py --SourceName"), $pids, $return_code);
-		if ($return_code == 0) {
+		if (lbb_dashboard_backup_running($constants)) {
 			return false;
 		}
 
 		$WORKING_DIR	= dirname(__FILE__);
 		$mounted_any	= false;
-		foreach (lbb_dashboard_storage_order() as $storage) {
+		foreach (lbb_dashboard_automount_storages() as $storage) {
 			if ($media['target_' . $storage]['mounted'] or $media['source_' . $storage]['mounted']) {
 				continue;
 			}
@@ -76,6 +93,14 @@
 		}
 
 		return $mounted_any;
+	}
+
+	function lbb_dashboard_automount_storages() {
+		# Only the drive type backups go to: with a USB target and a camera card attached,
+		# mounting "a USB drive" as target could pick the card. An NVMe SSD is never a camera card.
+		$config	= @parse_ini_file(dirname(__FILE__) . '/config.cfg', false) ?: array();
+		$default	= isset($config['conf_BACKUP_DEFAULT_TARGET']) ? $config['conf_BACKUP_DEFAULT_TARGET'] : '';
+		return in_array($default, array('usb', 'nvme'), true) ? array($default) : array('nvme');
 	}
 
 	function lbb_dashboard_storage_order() {
@@ -231,8 +256,12 @@
 							<div class="lbb-thumb">
 								<?php if (file_exists($thumb)) { ?>
 									<img loading="lazy" src="<?php echo lbb_dashboard_url_path($thumb); ?>" alt="<?php echo htmlspecialchars($item['File_Name']); ?>">
-								<?php } else { ?>
-									<span class="lbb-nothumb"><?php echo htmlspecialchars($ext); ?></span>
+								<?php } else {
+									# no thumbnail from the backup: preview made on demand, else the file type
+									$preview	= '/touch-api.php?action=thumb&medium=' . rawurlencode($gallery['medium']) . '&path=' . rawurlencode(ltrim($item['Directory'] . '/' . $item['File_Name'], '/'));
+									?>
+									<img loading="lazy" src="<?php echo htmlspecialchars($preview); ?>" alt="<?php echo htmlspecialchars($item['File_Name']); ?>" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
+									<span class="lbb-nothumb" hidden><?php echo htmlspecialchars($ext); ?></span>
 								<?php } ?>
 								<?php if ($is_video) { ?>
 									<span class="lbb-badge-play"><svg width="16" height="16"><use href="#lbbic-play"></use></svg></span>

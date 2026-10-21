@@ -990,6 +990,12 @@
     "none_configured": "not configured",
     "no_network": "no network",
     "mount_failed": "Storage not found or could not be mounted.",
-    "umount_failed": "Storage could not be unmounted."
+    "umount_failed": "Storage could not be unmounted.",
+    "video_unsupported": "This video format can't be played in the browser. Download it via Files.",
+    "mount_target": "Mount target",
+    "connect_target": "Connect the backup drive",
+    "insert_source": "Insert a card or USB drive",
+    "mounting": "mounting…",
+    "check_files": "Check latest files"
   }
 }

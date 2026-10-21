@@ -559,6 +559,12 @@
 		}
 	}
 
+	function lbb_view_preview_fallback($medium, $IMAGE) {
+		# missing thumbnail: try a preview made on demand (touch-api.php), only then the placeholder picture
+		$preview	= '/touch-api.php?action=thumb&medium=' . rawurlencode($medium) . '&path=' . rawurlencode(ltrim($IMAGE['Directory'] . '/' . $IMAGE['File_Name'], '/'));
+		return htmlspecialchars("if (!this.dataset.preview) {this.dataset.preview = 1; this.src = '$preview';} else {this.onerror = null; this.src = '/img/unknown.JPG';}", ENT_QUOTES);
+	}
+
 	#auto-set filter_medium: mount an attached NVMe/USB drive (backups unmount it) and prefer media with files
 	if ($filter_medium == "-") {
 		include_once("sub-dashboard.php");
@@ -1202,7 +1208,7 @@
 											}
 										?>
 										<a href="<?php echo $GET_PARAMETER . '&view_mode=single&ID=' . ($IMAGE['ID']); ?>">
-											<img style="max-width: 100%; border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" <?php echo empty($IMAGE['Comment'])?"title='" . $IMAGE['File_Name'] . "'":"title='" . $IMAGE['File_Name'] . PHP_EOL . $IMAGE['Comment'] . "'"; ?> src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="this.src='/img/unknown.JPG';">
+											<img style="max-width: 100%; border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" <?php echo empty($IMAGE['Comment'])?"title='" . $IMAGE['File_Name'] . "'":"title='" . $IMAGE['File_Name'] . PHP_EOL . $IMAGE['Comment'] . "'"; ?> src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="<?php echo lbb_view_preview_fallback($filter_medium, $IMAGE); ?>">
 										</a>
 									</div>
 
@@ -1341,7 +1347,7 @@
 												</audio>
 											</div>
 
-											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>">
+											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="<?php echo lbb_view_preview_fallback($filter_medium, $IMAGE); ?>">
 
 											<audio width="100%" class="rating<?php echo $IMAGE['LbbRating']; ?>" controls <?php if ($slideshow_timer == '-') {echo "autoplay";}?>>
 												<source src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME); ?>" type="audio/<?php echo $IMAGE_FILENAME_PARTS['extension']; ?>">">
@@ -1360,7 +1366,7 @@
 												<img class="slideshow-content" src="<?php echo urlencode_keep_slashes($FILENAME_DISPLAY); ?>">
 											</div>
 
-											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>">
+											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="<?php echo lbb_view_preview_fallback($filter_medium, $IMAGE); ?>">
 
 										</div>
 

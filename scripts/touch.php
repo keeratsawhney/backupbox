@@ -134,6 +134,7 @@
 							<span class="status-percent" id="status-percent"></span>
 						</div>
 						<div class="progress" id="progress"><div class="progress-bar" id="progress-bar"></div></div>
+						<div class="flow" id="flow"></div>
 						<div class="status-lines" id="status-lines"></div>
 					</div>
 					<img class="oled" id="oled" alt="" hidden>
@@ -141,6 +142,7 @@
 				<div class="actions" id="home-actions">
 					<button class="btn btn-primary btn-big" id="btn-default-backup" hidden><svg><use href="#i-play"/></svg><span class="btn-text"><span id="default-label"></span><small id="default-sub"></small></span></button>
 					<button class="btn btn-big" id="btn-new-backup"><svg><use href="#i-plus"/></svg><span class="btn-text" id="new-backup-label"></span></button>
+					<button class="btn btn-big" id="btn-check" hidden><svg><use href="#i-photos"/></svg><span class="btn-text" id="check-label"></span></button>
 					<button class="btn btn-danger btn-big" id="btn-stop" hidden><svg><use href="#i-stop"/></svg><span class="btn-text" id="stop-label"></span></button>
 				</div>
 				<div class="storage-strip" id="storage-strip"></div>
@@ -210,6 +212,7 @@
 	<!-- photo viewer -->
 	<div class="viewer" id="viewer" hidden>
 		<img id="viewer-img" alt="">
+		<video id="viewer-video" controls playsinline preload="metadata" hidden></video>
 		<div class="viewer-caption" id="viewer-caption"></div>
 		<button class="btn btn-icon viewer-close" id="viewer-close"><svg><use href="#i-close"/></svg></button>
 		<button class="btn btn-icon viewer-prev" id="viewer-prev"><svg><use href="#i-left"/></svg></button>
