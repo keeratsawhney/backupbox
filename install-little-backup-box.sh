@@ -348,7 +348,7 @@ sudo setfacl -R \
 	"${const_MEDIA_DIR}"
 
 # move background images in place
-mv "${INSTALLER_DIR}/scripts/img/backgrounds/"* "${const_MEDIA_DIR}/${const_BACKGROUND_IMAGES_DIR}/lbb/"
+sudo mv "${INSTALLER_DIR}/scripts/img/backgrounds/"* "${const_MEDIA_DIR}/${const_BACKGROUND_IMAGES_DIR}/lbb/"
 
 # add user www-data to sudoers
 sudo usermod -aG sudo ${USER_WWW_DATA}
@@ -501,34 +501,20 @@ sudo a2enmod xml2enc
 #enable conf php<VERSION>-fpm
 sudo a2enconf php${PHP_VERSION}-fpm
 
-#configure php-fpm to disable private mount namespace
-echo "[Unit]
-Description=The PHP ${PHP_VERSION} FastCGI Process Manager
-Documentation=man:php-fpm${PHP_VERSION}(8)
-After=network.target
-
-[Service]
-Type=notify
-ExecStart=/usr/sbin/php-fpm${PHP_VERSION} --nodaemonize --fpm-config /etc/php/${PHP_VERSION}/fpm/php-fpm.conf
-ExecStartPost=-/usr/lib/php/php-fpm-socket-helper install /run/php/php-fpm.sock /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf 82
-ExecStopPost=-/usr/lib/php/php-fpm-socket-helper remove /run/php/php-fpm.sock /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf 82
-ExecReload=/bin/kill -USR2 $MAINPID
-
-# Disable private mount namespace
-PrivateTmp=false
-RuntimeDirectory=php-fpm
-RuntimeDirectoryMode=0755
-
-[Install]
-WantedBy=multi-user.target" | tee /etc/systemd/system/multi-user.target.wants/php${PHP_VERSION}-fpm.service
+#configure php-fpm to disable private mount namespace (drives mounted later must be visible to the web UI)
+# as a drop-in: the unit file of the php package stays untouched
+sudo mkdir -p "/etc/systemd/system/php${PHP_VERSION}-fpm.service.d"
+echo "[Service]
+PrivateTmp=false" | sudo tee "/etc/systemd/system/php${PHP_VERSION}-fpm.service.d/little-backup-box.conf" > /dev/null
 
 #start php-fpm service
 sudo systemctl daemon-reload
 
 #openssl
 sudo openssl req -x509 -nodes -days 3650 -subj '/C=OW/ST=MilkyWay/L=Earth/O=little-backup-box/CN=10.42.0.1' -newkey rsa:2048 -keyout /etc/ssl/private/little-backup-box.key -out /etc/ssl/certs/little-backup-box.crt
-sudo cat /etc/ssl/private/little-backup-box.key | sudo tee /etc/ssl/private/little-backup-box.pem
-sudo cat /etc/ssl/certs/little-backup-box.crt | sudo tee -a /etc/ssl/private/little-backup-box.pem
+# (not printed: the key must not end up in install logs)
+sudo cat /etc/ssl/private/little-backup-box.key | sudo tee /etc/ssl/private/little-backup-box.pem > /dev/null
+sudo cat /etc/ssl/certs/little-backup-box.crt | sudo tee -a /etc/ssl/private/little-backup-box.pem > /dev/null
 
 sudo chown root:ssl-cert /etc/ssl/private/little-backup-box.key
 sudo chmod 640 /etc/ssl/private/little-backup-box.key
