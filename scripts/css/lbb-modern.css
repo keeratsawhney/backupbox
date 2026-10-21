@@ -1069,3 +1069,58 @@ html.lbb-v-open, html.lbb-v-open body { overflow: hidden; }
 	.lbb-v-name { margin-bottom: 0.5rem; }
 	.lbb-v-details { margin-bottom: 0.7rem; }
 }
+
+/* ============================================================
+   Phones (found on a real phone)
+   ============================================================ */
+
+/* lbb.css makes the page twice as high as the screen: empty space below the last card */
+html, body { height: auto !important; min-height: 100%; }
+
+/* backup buttons: full width without the margin of the classless style, same edges for source and target */
+.lbb-backup-panel button { margin: 0.4rem 0; }
+.lbb-backup-panel .backup-buttons > br { display: none; }
+.lbb-backup-panel button[name="stopbackup"] { display: block; margin: 0.4rem auto 0; }
+
+/* settings: the save bar at the bottom of the screen is always in reach, the one at the top only repeated it */
+.lbb-savebar:not(.lbb-savebar-sticky) { display: none; }
+
+/* address and QR code card */
+.lbb-info { text-align: center; }
+.lbb-info img { display: inline-block; margin: 0.25rem; }
+
+/* narrow screens and the menu button header: the header scrolls away instead of covering the page */
+@media (max-width: 991.98px) {
+	.navbar { position: relative; top: 0; margin-bottom: 1rem; padding: 0.4rem 0.6rem; }
+}
+.navbar.lbb-nav-menu { position: relative; top: 0; }
+
+@media (max-width: 575.98px) {
+	body { padding: 0.6rem 0.6rem 3rem; }
+	.lbb-pagehead { margin-bottom: 0.6rem; }
+	.lbb-savebar-sticky { padding: 0.5rem; bottom: 0.4rem; }
+	.lbb-savebar-sticky button { flex: 1 1 auto; }
+}
+/* bootstrap's .row pulls the columns out of the card by its gutter */
+.lbb-backup-panel .row { margin: 0 !important; --bs-gutter-x: 0; }
+
+/* backup page: source and target as two compact pickers */
+.lbb-backup-panel .row { align-items: flex-start; }
+details.lbb-picker {
+	margin: 0;
+	padding: 0 0.9rem;
+	background: var(--m-surface-2);
+}
+details.lbb-picker > summary {
+	justify-content: flex-start;
+	gap: 0.6rem;
+	padding: 0.8rem 0.1rem;
+}
+details.lbb-picker > summary::before { order: 3; margin-left: auto; transform: rotate(45deg); }
+details.lbb-picker[open] > summary::before { transform: rotate(-135deg); }
+.lbb-picker-title { color: var(--m-muted); font-weight: 600; font-size: 0.9rem; }
+.lbb-picker-value { color: var(--m-heading); font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.lbb-picker:not(.chosen) .lbb-picker-value { color: var(--m-muted); font-weight: 500; }
+.lbb-picker-list { padding: 0 0 0.6rem; }
+.lbb-picker-list label, .lbb-picker-list button { margin: 0.3rem 0 !important; padding: 0.55rem 0.9rem !important; }
+.lbb-picker-list > div { margin: 0 !important; }

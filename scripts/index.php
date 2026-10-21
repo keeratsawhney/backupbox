@@ -175,7 +175,8 @@
 			<div class="row" style="width:100%; float: left; display: block;">
 				<div class="column" style="display: block;">
 					<?php
-						print("<h3>" . l::main_source . "</h3>" . l::main_source_select);
+						// collapsed to the chosen source; opening it lists all sources
+						print("<details class='lbb-picker' id='picker-source'><summary><span class='lbb-picker-title'>" . l::main_source . "</span><span class='lbb-picker-value' id='picker-source-value'>" . l::main_source_select . "</span></summary><div class='lbb-picker-list'>");
 						foreach($SourceServices as $ButtonClass => $Group) {
 							print("<div class='radio-$ButtonClass'>");
 								foreach($Group as $Storage) {
@@ -209,11 +210,13 @@
 								}
 							print("</div>");
 						}
+						print("</div></details>");
 					?>
 				</div>
 				<div class="column" style="display: block;">
 					<?php
-						print("<h3>" . l::main_target . "</h3>" . l::main_target_execute);
+						// a target button starts the backup
+						print("<details class='lbb-picker' id='picker-target'><summary><span class='lbb-picker-title'>" . l::main_target . "</span><span class='lbb-picker-value'>" . L::touch_start . "</span></summary><div class='lbb-picker-list'>");
 						foreach($TargetServices as $ButtonClass => $Group) {
 							print("<div class='backup-buttons'>");
 							foreach($Group as $Storage) {
@@ -256,6 +259,7 @@
 							}
 							print("</div>");
 						}
+						print("</div></details>");
 					?>
 				</div>
 			</div>
@@ -264,6 +268,29 @@
 				<button name="stopbackup" class="danger"><?php echo L::main_stopbackup_button; ?></button>
 			</div>
 		</div>
+
+		<script>
+			// source picker: shows the chosen source; choosing one closes it and opens the targets
+			(function () {
+				const source = document.getElementById('picker-source');
+				const target = document.getElementById('picker-target');
+				const value = document.getElementById('picker-source-value');
+				function show() {
+					const checked = source.querySelector('input[type=radio]:checked');
+					const label = checked && source.querySelector('label[for="' + checked.id + '"]');
+					if (label) {
+						value.textContent = label.textContent;
+						source.classList.add('chosen');
+					}
+				}
+				source.querySelectorAll('input[type=radio]').forEach((radio) => radio.addEventListener('change', () => {
+					show();
+					source.open = false;
+					target.open = true;
+				}));
+				show();
+			})();
+		</script>
 
 		<div class="card" style="margin-top: 3em;">
 
