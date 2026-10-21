@@ -21,6 +21,7 @@
 // sub expects from calling script:
 // - included language
 // - $config
+// - $constants
 // - $WORKING_DIR
 
     $HTTP_HOST	= $_SERVER['SERVER_PORT']==80?$_SERVER['HTTP_HOST'] . ":80":$_SERVER['HTTP_HOST'];
@@ -78,6 +79,13 @@
 							<li class="nav-item<?php echo $scriptname=="comitup"?" active":""; ?>"><a class="nav-link<?php echo $comitup_hotspot?'':' disabled'; ?>" href="/frame.php?page=comitup">comitup</a></li>
 						<?php
 					}
+
+					if (is_file($constants['const_NETWORK_PORTAL_PAGE_LINK_FILE']) && filesize($constants['const_NETWORK_PORTAL_PAGE_LINK_FILE']) > 0) {
+						?>
+							<li class="nav-item"><a class="nav-link<?php echo $scriptname=="captive_portal"?" active":""; ?>" href="/frame.php?page=captive_portal"><?php echo L::mainmenue_captive_portal; ?></a></li>
+						<?php
+					}
+
 				?>
 			</ul>
 
