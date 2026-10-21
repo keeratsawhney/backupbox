@@ -292,17 +292,22 @@ function exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT) {
 
 	if ($CMD !== '') {
 
+		// updates install from this repository as the box's regular user (the first user account, not necessarily "pi")
+		$UPDATE_REPO	= 'keeratsawhney/backupbox';
+		$UPDATE_USER	= function_exists('posix_getpwuid') ? (posix_getpwuid(1000)['name'] ?? 'pi') : trim(shell_exec("getent passwd 1000 | cut -d: -f1") ?? '');
+		$UPDATE_USER	= $UPDATE_USER === '' ? 'pi' : $UPDATE_USER;
+
 		switch($CMD) {
 			case 'update':
 				$COMMAND_LINE	= "sudo python3 $WORKING_DIR/lib_display.py ':" . L::box_cmd_update_start1 . "' ':" . L::box_cmd_update_start2 . "'";
-				$COMMAND_LINE	.= ";sudo -u pi curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/main/install-little-backup-box.sh -o ~pi/install-little-backup-box.sh";
-				$COMMAND_LINE	.= ";sudo -u pi bash ~pi/install-little-backup-box.sh main";
+				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER curl -sSL https://raw.githubusercontent.com/$UPDATE_REPO/main/install-little-backup-box.sh -o ~$UPDATE_USER/install-little-backup-box.sh";
+				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER bash ~$UPDATE_USER/install-little-backup-box.sh main";
 				break;
 
 			case 'update_development':
 				$COMMAND_LINE	= "sudo python3 $WORKING_DIR/lib_display.py ':" . L::box_cmd_update_start1 . "' ':" . L::box_cmd_update_start2 . "'";
-				$COMMAND_LINE	.= ";sudo -u pi curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/development/install-little-backup-box.sh -o ~pi/install-little-backup-box.sh";
-				$COMMAND_LINE	.= ";sudo -u pi bash ~pi/install-little-backup-box.sh development";
+				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER curl -sSL https://raw.githubusercontent.com/$UPDATE_REPO/development/install-little-backup-box.sh -o ~$UPDATE_USER/install-little-backup-box.sh";
+				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER bash ~$UPDATE_USER/install-little-backup-box.sh development";
 				break;
 
 			case 'update_libraw':
