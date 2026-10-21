@@ -1012,7 +1012,9 @@
     "files": "Fichiers",
     "empty_folder": "Ce dossier est vide.",
     "no_drive": "Aucun disque connecté.",
-    "open_drive": "Touchez un disque ci-dessus pour l'ouvrir."
+    "open_drive": "Touchez un disque ci-dessus pour l'ouvrir.",
+    "latest_files": "Derniers fichiers",
+    "app_view": "Vue appli"
   },
   "gallery": {
     "title": "Galerie",

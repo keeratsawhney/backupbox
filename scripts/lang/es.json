@@ -1012,7 +1012,9 @@
     "files": "Archivos",
     "empty_folder": "Esta carpeta está vacía.",
     "no_drive": "No hay ninguna unidad conectada.",
-    "open_drive": "Toca una unidad arriba para abrirla."
+    "open_drive": "Toca una unidad arriba para abrirla.",
+    "latest_files": "Últimos archivos",
+    "app_view": "Vista app"
   },
   "gallery": {
     "title": "Galería",

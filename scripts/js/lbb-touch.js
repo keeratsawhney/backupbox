@@ -6,7 +6,8 @@
 
 	const T = window.LBB_TOUCH.strings;
 	const API = 'touch-api.php';
-	const PHOTOS_PER_PAGE = 8;
+	// the box's small screens show one page without scrolling, phones and tablets a scrolling grid
+	const PHOTOS_PER_PAGE = window.matchMedia('(min-height: 600px)').matches ? 24 : 8;
 	const STATUS_INTERVAL_MS = 2000;
 
 	const $ = (id) => document.getElementById(id);
@@ -110,6 +111,7 @@
 			$('modal').hidden = false;
 
 			const close = (result) => {
+				closeOverlay();
 				$('modal').hidden = true;
 				$('modal-ok').onclick = null;
 				$('modal-cancel').onclick = null;
@@ -117,8 +119,45 @@
 			};
 			$('modal-ok').onclick = () => close(true);
 			$('modal-cancel').onclick = () => close(false);
+			openOverlay(() => close(false));
 		});
 	}
+
+	// ---------- back button (phones, web views) ----------
+	// tabs are history entries; an open viewer or dialog is one more, so "back" closes it first
+
+	let overlayClose = null;
+	let ignorePop = false;
+
+	function openOverlay(close) {
+		if (overlayClose) return;
+		overlayClose = close;
+		history.pushState({ overlay: true }, '', location.hash);
+	}
+
+	function closeOverlay() {
+		if (!overlayClose) return;
+		overlayClose = null;
+		if (history.state && history.state.overlay) {
+			ignorePop = true;
+			history.back();
+		}
+	}
+
+	window.addEventListener('popstate', () => {
+		if (ignorePop) {
+			ignorePop = false;
+			return;
+		}
+		if (overlayClose) {
+			const close = overlayClose;
+			overlayClose = null;
+			close();
+			return;
+		}
+		const page = location.hash.slice(1) || 'home';
+		if (page !== state.page) showPage(page);
+	});
 
 	// buttons must not fire twice while a request is running (resistive screens bounce)
 	async function busy(button, task) {
@@ -137,12 +176,17 @@
 
 	// ---------- navigation ----------
 
-	function showPage(page) {
+	function showPage(page, push) {
 		if (!$('page-' + page)) page = 'home';
+		const changed = page !== state.page;
 		state.page = page;
 		document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.page === page));
 		document.querySelectorAll('.page').forEach((node) => node.classList.toggle('active', node.id === 'page-' + page));
-		if (location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
+		if (location.hash !== '#' + page) {
+			if (push && changed) history.pushState(null, '', '#' + page);
+			else history.replaceState(null, '', '#' + page);
+		}
+		if (page === 'home') loadHomeRecent();
 
 		if (page === 'backup') loadServices().then(renderWizard);
 		if (page === 'photos') loadPhotos(state.photos.offset);
@@ -236,7 +280,10 @@
 		renderStorageStrip(data.storages || []);
 
 		// backup just finished: offer to look at the newest files on the target
-		if (state.wasRunning && !data.running) state.finished = true;
+		if (state.wasRunning && !data.running) {
+			state.finished = true;
+			loadHomeRecent();
+		}
 		if (data.running) state.finished = false;
 		state.wasRunning = data.running;
 		$('btn-check').hidden = !state.finished;
@@ -555,6 +602,7 @@
 		const item = list[index];
 		if (!item) return;
 		p.viewer = index;
+		if ($('viewer').hidden) openOverlay(hideViewer);
 		$('viewer-download').hidden = !item.url;
 		if (item.url) {
 			$('viewer-download').href = item.url;
@@ -611,6 +659,46 @@
 		video.load();
 		video.hidden = true;
 		$('viewer').classList.remove('playing');
+	}
+
+	function hideViewer() {
+		stopVideo();
+		$('viewer').hidden = true;
+		state.viewerFiles = null;
+	}
+
+	// ---------- newest files on the home page (phones, tablets: screens with room for them) ----------
+
+	const roomForRecent = window.matchMedia('(min-height: 600px)');
+	let homeRecentTimer;
+
+	async function loadHomeRecent() {
+		clearTimeout(homeRecentTimer);
+		if (state.page !== 'home' || !roomForRecent.matches) return;
+		homeRecentTimer = setTimeout(loadHomeRecent, 20000);
+		if (document.hidden || !$('viewer').hidden) return;
+		let data;
+		try {
+			data = await api('recent', { limit: 15 });
+		} catch (e) {
+			return;
+		}
+		const items = data.items || [];
+		$('home-recent').hidden = !items.length;
+		$('home-recent-title').textContent = T.latest_files + (data.medium_label ? ' · ' + data.medium_label : '');
+		const grid = $('home-recent-grid');
+		grid.replaceChildren();
+		items.forEach((item, index) => {
+			let preview = typeTile(item);
+			if (item.thumb) {
+				preview = el('img', { src: item.thumb, alt: item.name, loading: 'lazy', draggable: 'false' });
+				preview.addEventListener('error', () => preview.replaceWith(typeTile(item)), { once: true });
+			}
+			grid.append(el('button', { class: 'photo', onclick: () => {
+				state.viewerFiles = items;
+				openViewer(index);
+			} }, [preview, item.video ? el('span', { class: 'badge' }, icon('play')) : null]));
+		});
 	}
 
 	async function stepViewer(delta) {
@@ -859,12 +947,13 @@
 			tab.querySelector('span').textContent = tabLabels[tab.dataset.page];
 			tab.addEventListener('click', () => {
 				if (tab.dataset.page === 'backup' && state.page === 'backup') resetWizard();
-				showPage(tab.dataset.page);
+				showPage(tab.dataset.page, true);
 			});
 		});
 		$('new-backup-label').textContent = T.new_backup;
 		$('stop-label').textContent = T.stop;
 		$('check-label').textContent = T.check_files;
+		$('home-recent-all').textContent = T.photos + ' →';
 		$('wizard-start-label').textContent = T.start;
 		$('log-refresh-label').textContent = T.refresh;
 		$('log-clear-label').textContent = T.clear_log;
@@ -880,7 +969,7 @@
 	function initEvents() {
 		$('btn-new-backup').addEventListener('click', () => {
 			resetWizard();
-			showPage('backup');
+			showPage('backup', true);
 		});
 
 		$('btn-default-backup').addEventListener('click', (event) => busy(event.currentTarget, async () => {
@@ -896,7 +985,7 @@
 			$('btn-check').hidden = true;
 			state.photos.medium = '';
 			state.photos.refresh = true;
-			showPage('photos');
+			showPage('photos', true);
 		});
 
 		$('btn-stop').addEventListener('click', (event) => busy(event.currentTarget, async () => {
@@ -916,12 +1005,17 @@
 		$('wizard-start').addEventListener('click', (event) => busy(event.currentTarget, () =>
 			startBackup(state.wizard.source, state.wizard.target, state.wizard.options)));
 
+		$('home-recent-all').addEventListener('click', () => {
+			state.photos.medium = '';
+			showPage('photos', true);
+		});
+		roomForRecent.addEventListener('change', loadHomeRecent);
+
 		$('photos-prev').addEventListener('click', () => loadPhotos(state.photos.offset - PHOTOS_PER_PAGE));
 		$('photos-next').addEventListener('click', () => loadPhotos(state.photos.offset + PHOTOS_PER_PAGE));
 		$('viewer-close').addEventListener('click', () => {
-			stopVideo();
-			$('viewer').hidden = true;
-			state.viewerFiles = null;
+			hideViewer();
+			closeOverlay();
 		});
 		$('files-up').addEventListener('click', () => {
 			state.files.path = state.files.path.split('/').slice(0, -1).join('/');
