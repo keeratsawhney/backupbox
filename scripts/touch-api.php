@@ -300,6 +300,7 @@
 					'name'			=> trim((string)($partition['label'] ?: ($disk['model'] ?: basename($partition['path'])))),
 					'size'			=> $size,
 					'mountpoint'	=> $partition['mountpoint'],
+					'fstype'		=> $partition['fstype'],
 				);
 			}
 		}
@@ -397,7 +398,7 @@
 		$candidates	= array();
 		if (!$target) {
 			foreach ($drives as $drive) {
-				if (empty($drive['mountpoint']) or in_array($drive['mountpoint'], $source_mountpoints, true)) {
+				if (empty($drive['mountpoint']) or in_array($drive['mountpoint'], $source_mountpoints, true) or str_starts_with($drive['mountpoint'], touch_browse_dir($constants) . '/')) {
 					$candidates[]	= array('path' => $drive['path'], 'name' => $drive['name'], 'size' => $drive['size'], 'kind' => $drive['kind']);
 				}
 			}
@@ -432,8 +433,34 @@
 		return(in_array(strtolower($ext), $videos, true));
 	}
 
+	function touch_browse_dir($constants) {
+		# drives opened in the file browser are mounted read only below this folder, without a backup role
+		return($constants['const_MEDIA_DIR'] . '/browse');
+	}
+
+	function touch_browse_key($drive) {
+		return('browse:' . preg_replace('/[^A-Za-z0-9_-]/', '', $drive['uuid'] ?: basename($drive['path'])));
+	}
+
+	function touch_browse_mount($constants, $drive) {
+		$mountpoint	= touch_browse_dir($constants) . '/' . substr(touch_browse_key($drive), 7);
+		# FAT/exFAT/NTFS have no owners: make the files readable for the web server
+		$options	= in_array($drive['fstype'], array('vfat', 'exfat', 'ntfs', 'ntfs3'), true) ? 'ro,uid=33,gid=33' : 'ro';
+		shell_exec('sudo mkdir -p ' . escapeshellarg($mountpoint) . ' && sudo mount -o ' . $options . ' ' . escapeshellarg($drive['path']) . ' ' . escapeshellarg($mountpoint) . ' > /dev/null 2>&1');
+	}
+
+	function touch_browse_umount($constants, $mountpoint) {
+		if (str_starts_with($mountpoint, touch_browse_dir($constants) . '/')) {
+			shell_exec('sudo umount ' . escapeshellarg($mountpoint) . ' > /dev/null 2>&1; sudo rmdir ' . escapeshellarg($mountpoint) . ' > /dev/null 2>&1');
+		}
+	}
+
 	function touch_medium_path($constants, $key) {
 		# mount path of a mounted medium, false otherwise (cheap: no database access)
+		if (str_starts_with($key, 'browse:')) {
+			$path	= touch_browse_dir($constants) . '/' . preg_replace('/[^A-Za-z0-9_-]/', '', substr($key, 7));
+			return(str_contains((string)@file_get_contents('/proc/mounts'), ' ' . $path . ' ') ? $path : false);
+		}
 		$mountpoints	= array(
 			'target_usb'	=> $constants['const_MOUNTPOINT_USB_TARGET'],
 			'source_usb'	=> $constants['const_MOUNTPOINT_USB_SOURCE'],
@@ -684,7 +711,10 @@
 				}
 			}
 			foreach ($attached as $drive) {
-				if (empty($drive['mountpoint'])) {
+				# opened in the file browser (read only, no backup role): checked against the mounts themselves
+				if (touch_medium_path($constants, touch_browse_key($drive)) !== false) {
+					$drives[]	= array('id' => touch_browse_key($drive), 'label' => '', 'name' => $drive['name'], 'size' => $drive['size'], 'mounted' => true);
+				} elseif (empty($drive['mountpoint'])) {
 					$drives[]	= array('id' => 'device:' . $drive['path'], 'label' => '', 'name' => $drive['name'], 'size' => $drive['size'], 'path' => $drive['path'], 'mounted' => false);
 				}
 			}
@@ -747,8 +777,8 @@
 			));
 
 		case 'open_drive':
-			# file browser: mount an attached drive to look into it.
-			# The chosen backup drive becomes the target, any other drive the source (replacing the mounted source).
+			# file browser: open an attached drive. It is mounted read only without a backup role;
+			# only the drive chosen as backup drive on the home screen is mounted as target.
 			if (touch_backup_running()) {
 				touch_fail(touch_text(L::touch_running));
 			}
@@ -763,15 +793,17 @@
 				touch_fail(touch_text(L::touch_mount_failed));
 			}
 			$chosen	= touch_target_choice($constants);
-			$role	= ($chosen and $chosen['id'] === ($drive['uuid'] ?: $drive['path'])) ? 'target' : 'source';
-			if (touch_medium_path($constants, $role . '_' . $drive['kind']) !== false) {
-				shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName " . escapeshellarg($drive['kind']) . " --Role $role > /dev/null 2>&1");
+			if ($chosen and $chosen['id'] === ($drive['uuid'] ?: $drive['path'])) {
+				touch_mount_target($WORKING_DIR, $drive);
+				$medium	= 'target_' . $drive['kind'];
+			} else {
+				touch_browse_mount($constants, $drive);
+				$medium	= touch_browse_key($drive);
 			}
-			shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action mount --StorageName " . escapeshellarg($drive['kind']) . " --Role $role --DeviceIdentifierPresetThis " . escapeshellarg($drive['path']) . " --WaitForDevice False > /dev/null 2>&1");
-			if (touch_medium_path($constants, $role . '_' . $drive['kind']) === false) {
+			if (touch_medium_path($constants, $medium) === false) {
 				touch_fail(touch_text(L::touch_mount_failed));
 			}
-			touch_respond(array('ok' => true, 'medium' => $role . '_' . $drive['kind']));
+			touch_respond(array('ok' => true, 'medium' => $medium));
 
 		case 'thumb':
 			$key	= isset($_GET['medium']) ? (string)$_GET['medium'] : '';
@@ -902,11 +934,14 @@
 				touch_fail(touch_text(L::touch_mount_failed));
 			}
 			if (!empty($drive['mountpoint'])) {
-				# opened as source in the file browser: becomes the target now
-				if ($drive['mountpoint'] !== touch_medium_path($constants, 'source_' . $drive['kind'])) {
+				# mounted as source or opened in the file browser: becomes the target now
+				if (str_starts_with($drive['mountpoint'], touch_browse_dir($constants) . '/')) {
+					touch_browse_umount($constants, $drive['mountpoint']);
+				} elseif ($drive['mountpoint'] === touch_medium_path($constants, 'source_' . $drive['kind'])) {
+					shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName " . escapeshellarg($drive['kind']) . " --Role source > /dev/null 2>&1");
+				} else {
 					touch_fail(touch_text(L::touch_mount_failed));
 				}
-				shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName " . escapeshellarg($drive['kind']) . " --Role source > /dev/null 2>&1");
 			}
 			touch_target_choice($constants, array('id' => $drive['uuid'] ?: $drive['path'], 'kind' => $drive['kind'], 'name' => $drive['name']));
 			touch_mount_target($WORKING_DIR, $drive);
@@ -994,7 +1029,8 @@
 				$chosen	= touch_target_choice($constants);
 				$found	= null;
 				foreach ($drives as $drive) {
-					if ($drive['kind'] !== $Storage or !empty($drive['mountpoint']) or ($Role == 'source' and in_array($drive['disk'], $target_disks, true))) {
+					$browsed	= !empty($drive['mountpoint']) && str_starts_with($drive['mountpoint'], touch_browse_dir($constants) . '/');
+					if ($drive['kind'] !== $Storage or (!empty($drive['mountpoint']) and !$browsed) or ($Role == 'source' and in_array($drive['disk'], $target_disks, true))) {
 						continue;
 					}
 					# a target: the drive chosen on the home screen first
@@ -1005,6 +1041,10 @@
 				if ($found === null) {
 					# nothing to mount: the UI reports it
 					touch_respond(array('ok' => true, 'storages' => touch_storages($constants)));
+				}
+				if (!empty($found['mountpoint'])) {
+					# opened in the file browser: give it to the backup role
+					touch_browse_umount($constants, $found['mountpoint']);
 				}
 				$preset	= ' --DeviceIdentifierPresetThis ' . escapeshellarg($found['path']) . ' --WaitForDevice False';
 			}

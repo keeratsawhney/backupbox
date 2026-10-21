@@ -25,6 +25,13 @@ ps -ef | grep "${WORKING_DIR}/backup-autorun.py" | grep -v grep | awk '{print $2
 python3 ${WORKING_DIR}/lib_system.py --set_led -LED PWR -LED_TRIGGER none -LED_BRIGHTNESS 1
 python3 ${WORKING_DIR}/lib_clean.py --clean display_content tasks
 rm -f "${WORKING_DIR}/tmp/backup-files.json" # names of the files being copied (web UI)
+
+# drives opened (read only) in the file browser of the touch UI: free them for the backup
+for BrowseMount in "${const_MEDIA_DIR}/browse/"*; do
+	[ -d "${BrowseMount}" ] || continue
+	umount "${BrowseMount}" 2>/dev/null
+	rmdir "${BrowseMount}" 2>/dev/null
+done
 python3 ${WORKING_DIR}/lib_proftpd.py --Action setDefaultRoot --DefaultRoot "${const_MEDIA_DIR}"
 
 python3 ${WORKING_DIR}/lib_display.py "$(python3 ${WORKING_DIR}/lib_language.py box_backup_break1)" "$(python3 ${WORKING_DIR}/lib_language.py box_backup_break2)"

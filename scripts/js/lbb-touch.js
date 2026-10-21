@@ -643,11 +643,12 @@
 		state.files.medium = data.medium || '';
 		state.files.path = data.path;
 
-		// every attached drive; tapping one that is not mounted mounts it (target or source)
+		// every attached drive; tapping one that is not mounted opens it (read only, no backup role;
+		// the backup drive chosen on the home screen is opened as target)
 		const drives = $('files-drives');
 		drives.replaceChildren();
 		data.drives.forEach((drive) => {
-			const text = drive.mounted ? (drive.name ? drive.name + ' · ' : '') + drive.label : drive.name + ' · ' + formatBytes(drive.size);
+			const text = [drive.name, drive.label || formatBytes(drive.size)].filter(Boolean).join(' · ');
 			const button = el('button', { class: 'btn' + (drive.id === data.medium ? ' selected' : '') + (drive.mounted ? '' : ' unmounted'), text: text });
 			button.addEventListener('click', () => busy(button, async () => {
 				if (!drive.mounted) {
