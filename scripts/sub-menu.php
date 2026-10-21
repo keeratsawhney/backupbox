@@ -90,6 +90,14 @@
 					}
 				?>
 				<li class="nav-item"><a class="nav-link<?php echo in_array($scriptname, ["setup.php", "rclone_gui"])?" active":""; ?>" href="/setup.php"><?php echo L::mainmenue_config; ?></a></li>
+				<?php
+					// way back to the touch UI on the box's own screen
+					if (in_array($_SERVER['REMOTE_ADDR'] ?? '', array('127.0.0.1', '::1'), true)) {
+						?>
+							<li class="nav-item"><a class="nav-link" href="/touch.php"><?php echo L::touch_home; ?></a></li>
+						<?php
+					}
+				?>
 				<li class="nav-item dropdown">
 					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdownPower" role="button" data-bs-toggle="dropdown" aria-expanded="false">
 						<svg width="1em" height="1em" style="vertical-align: middle;">

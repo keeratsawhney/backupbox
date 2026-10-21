@@ -32,7 +32,7 @@
 		return str_replace('%2F', '/', rawurlencode($path));
 	}
 
-	function lbb_dashboard_gallery($constants, $limit = 12) {
+	function lbb_dashboard_gallery($constants, $limit = 12, $offset = 0) {
 		list($medium, $storage_path)	= lbb_dashboard_detect_medium($constants);
 		$database_file	= $storage_path . '/' . $constants['const_IMAGE_DATABASE_FILENAME'];
 
@@ -49,9 +49,10 @@
 
 				$statement	= $db->prepare(
 					'SELECT ID, Directory, File_Name, LbbRating, Create_Date, Comment, File_Type_Extension
-					 FROM EXIF_DATA ORDER BY Create_Date DESC LIMIT :limit;'
+					 FROM EXIF_DATA ORDER BY Create_Date DESC, ID DESC LIMIT :limit OFFSET :offset;'
 				);
 				$statement->bindValue(':limit', (int)$limit, SQLITE3_INTEGER);
+				$statement->bindValue(':offset', max(0, (int)$offset), SQLITE3_INTEGER);
 				$result	= $statement->execute();
 				while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
 					$items[]	= $row;

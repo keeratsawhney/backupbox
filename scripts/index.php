@@ -1,3 +1,10 @@
+<?php
+	// the browser on the box's own touchscreen opens http://localhost:8080/ - show the touch UI there
+	if (in_array($_SERVER['REMOTE_ADDR'] ?? '', array('127.0.0.1', '::1'), true) and parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) === '/') {
+		header('Location: /touch.php');
+		exit();
+	}
+?>
 <!doctype html>
 
 <!--

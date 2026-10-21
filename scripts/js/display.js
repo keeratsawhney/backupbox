@@ -10,6 +10,11 @@ let DisplayInterval = 'undefined';
 function refreshDisplay() {
 	var display = document.getElementById("display");
 
+	// no hardware display configured (e.g. touchscreen mode): nothing to refresh
+	if (!display) {
+		return;
+	}
+
 	// Get the original src without query parameters
 	let originalSrc = display.src.split('?')[0];
 
