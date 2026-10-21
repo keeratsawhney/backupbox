@@ -161,6 +161,7 @@
 
 			<!-- PHOTOS -->
 			<section class="page" id="page-photos">
+				<div class="photo-media" id="photo-media"></div>
 				<div class="photo-grid" id="photo-grid"></div>
 				<div class="pager">
 					<button class="btn btn-icon" id="photos-prev"><svg><use href="#i-left"/></svg></button>

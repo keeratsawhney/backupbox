@@ -266,28 +266,42 @@
 		case 'recent':
 			$limit		= isset($_GET['limit']) ? max(1, min(48, (int)$_GET['limit'])) : 12;
 			$offset		= isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
-			$gallery	= lbb_dashboard_gallery($constants, $limit, $offset);
+			$medium		= isset($_GET['medium']) && $_GET['medium'] !== '' ? (string)$_GET['medium'] : null;
+			$gallery	= lbb_dashboard_gallery($constants, $limit, $offset, $medium);
 
 			$items	= array();
 			foreach ($gallery['items'] as $item) {
 				$ext	= strtoupper((string)$item['File_Type_Extension']);
+				$thumb	= $gallery['storage_path'] . '/' . $item['Directory'] . '/tims/' . $item['File_Name'] . '.JPG';
 				$items[]	= array(
 					'id'		=> (int)$item['ID'],
 					'name'		=> $item['File_Name'],
+					'ext'		=> $ext,
 					'date'		=> substr((string)$item['Create_Date'], 0, 16),
 					'rating'	=> (int)$item['LbbRating'],
 					'video'		=> in_array($ext, array('MP4', 'MOV', 'AVI', 'MTS', 'M4V', 'MKV', '3GP', 'LRV')),
-					'thumb'		=> lbb_dashboard_url_path($gallery['storage_path'] . '/' . $item['Directory'] . '/tims/' . $item['File_Name'] . '.JPG'),
+					# no placeholder picture for files without thumbnail, the UI shows the file type
+					'thumb'		=> file_exists($thumb) ? lbb_dashboard_url_path($thumb) : null,
 				);
 			}
 
+			# media the user can switch to: mounted ones with an image database
+			$media	= array();
+			foreach ($gallery['media'] as $key => $info) {
+				if ($info['has_db'] or $key == $gallery['medium']) {
+					$media[]	= array('id' => $key, 'label' => touch_text(lbb_dashboard_medium_label($key)), 'count' => $info['count']);
+				}
+			}
+
 			touch_respond(array(
-				'ok'		=> true,
-				'medium'	=> $gallery['medium'],
-				'total'		=> $gallery['total'],
-				'has_db'	=> $gallery['has_db'],
-				'offset'	=> $offset,
-				'items'		=> $items,
+				'ok'			=> true,
+				'medium'		=> $gallery['medium'],
+				'medium_label'	=> touch_text(lbb_dashboard_medium_label($gallery['medium'])),
+				'media'			=> $media,
+				'total'			=> $gallery['total'],
+				'has_db'		=> $gallery['has_db'],
+				'offset'		=> $offset,
+				'items'			=> $items,
 			));
 
 		case 'log':

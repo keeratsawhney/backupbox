@@ -559,17 +559,14 @@
 		}
 	}
 
-	#auto-set filter_medium
+	#auto-set filter_medium: mount an attached NVMe/USB drive (backups unmount it) and prefer media with files
 	if ($filter_medium == "-") {
-		$mounted_devices_array	= array();
-		exec("df -h", $mounted_devices_array);
-
-		$mounted_devices	= implode("|",$mounted_devices_array);
-		if (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_USB_TARGET'])) {$filter_medium="target_usb";}
-		elseif (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_USB_SOURCE'])) {$filter_medium="source_usb";}
-		elseif (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_NVME_TARGET'])) {$filter_medium="target_nvme";}
-		elseif (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_NVME_SOURCE'])) {$filter_medium="source_nvme";}
-		else {$filter_medium="internal";}
+		include_once("sub-dashboard.php");
+		$media	= lbb_dashboard_media($constants);
+		if (lbb_dashboard_automount($constants, $media)) {
+			$media	= lbb_dashboard_media($constants);
+		}
+		list($filter_medium, $medium_path)	= lbb_dashboard_detect_medium($constants, $media);
 	}
 
 	#generate WHEREs for filter options

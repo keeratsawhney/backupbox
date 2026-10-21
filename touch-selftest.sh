@@ -62,7 +62,7 @@ if not d.get("ok"): print("ERROR " + str(d.get("error"))); sys.exit()
 a = sys.argv[1]
 if a == "status": print("running=%s progress=%s storages=%s temp=%s" % (d["running"], d["display"]["progress"], [s["id"] for s in d["storages"]], d["temp"]))
 elif a == "services": print("sources=%s targets=%s" % ([s["id"] for s in d["sources"]], [s["id"] for s in d["targets"]]))
-elif a == "recent": print("medium=%s photos=%s database=%s" % (d["medium"], d["total"], d["has_db"]))
+elif a == "recent": print("showing=%s photos=%s disks=%s" % (d["medium"], d["total"], ", ".join("%s:%s" % (m["id"], m["count"]) for m in d["media"])))
 elif a == "log": print("%d lines" % len(d["lines"]))
 elif a == "sysinfo": print("ips=%s uptime=%ss" % (d["ips"], d["uptime"]))
 ' "${action}" 2>&1)
@@ -75,6 +75,10 @@ done
 
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d action=stop "${BASE}/touch-api.php")
 [[ "${code}" == "403" ]] && pass "api rejects requests without the touch header" || fail "api accepted a request without header (HTTP ${code})"
+
+# attached drives (an attached NVMe/USB drive is mounted automatically to show its photos)
+lsblk -dpno NAME,SIZE,MODEL 2>/dev/null | grep -E "^/dev/(nvme|sd)" | while read -r line; do info "drive: ${line}"; done
+grep -E " /media/(usb|nvme)_(target|source) " /proc/mounts | awk '{print $1" on "$2}' | while read -r line; do info "mounted: ${line}"; done
 
 # permissions the backend needs
 sudo -u www-data sudo -n true 2>/dev/null && pass "www-data may use sudo" || fail "www-data can not use sudo (backups can not start)"

@@ -4,27 +4,117 @@
 	#   - a "recent backups" media grid so backed-up files are shown first
 	# Read-only: it never changes configuration or the image database.
 
-	function lbb_dashboard_detect_medium($constants) {
-		# Returns array(medium_key, storage_path) of the medium to preview.
-		# Mirrors the auto-detection used by view.php, falling back to internal storage.
-		$candidates	= array(
+	function lbb_dashboard_media($constants) {
+		# All media that can hold backups, in the order view.php prefers them,
+		# with mount state and the number of files in their image database.
+		$mountpoints	= array(
 			'target_usb'	=> $constants['const_MOUNTPOINT_USB_TARGET'],
 			'source_usb'	=> $constants['const_MOUNTPOINT_USB_SOURCE'],
 			'target_nvme'	=> $constants['const_MOUNTPOINT_NVME_TARGET'],
 			'source_nvme'	=> $constants['const_MOUNTPOINT_NVME_SOURCE'],
 		);
 
-		$mounted_devices_array	= array();
-		exec('df -h', $mounted_devices_array);
-		$mounted_devices	= implode('|', $mounted_devices_array);
-
-		foreach ($candidates as $key => $mountpoint) {
-			if (strpos($mounted_devices, $constants['const_MEDIA_DIR'] . '/' . $mountpoint)) {
-				return array($key, $constants['const_MEDIA_DIR'] . '/' . $mountpoint);
+		$mounted	= array();
+		foreach (@file('/proc/mounts', FILE_IGNORE_NEW_LINES) ?: array() as $mount) {
+			$fields	= explode(' ', $mount);
+			if (count($fields) >= 2) {
+				$mounted[str_replace('\\040', ' ', $fields[1])]	= true;
 			}
 		}
 
-		return array('internal', $constants['const_MEDIA_DIR'] . '/' . $constants['const_INTERNAL_BACKUP_DIR']);
+		$media	= array();
+		foreach ($mountpoints as $key => $mountpoint) {
+			$path	= $constants['const_MEDIA_DIR'] . '/' . $mountpoint;
+			$media[$key]	= array('path' => $path, 'mounted' => isset($mounted[$path]));
+		}
+		# internal storage is a folder on the system disk, always available
+		$media['internal']	= array('path' => $constants['const_MEDIA_DIR'] . '/' . $constants['const_INTERNAL_BACKUP_DIR'], 'mounted' => true);
+
+		foreach ($media as $key => $medium) {
+			$database_file	= $medium['path'] . '/' . $constants['const_IMAGE_DATABASE_FILENAME'];
+			$media[$key]['has_db']	= $medium['mounted'] && file_exists($database_file);
+			$media[$key]['count']	= 0;
+			if ($media[$key]['has_db'] && class_exists('SQLite3')) {
+				try {
+					$db	= new SQLite3($database_file, SQLITE3_OPEN_READONLY);
+					$db->busyTimeout(2000);
+					$media[$key]['count']	= (int)$db->querySingle('SELECT count(*) FROM EXIF_DATA;');
+					$db->close();
+				} catch (Exception $e) {
+					$media[$key]['count']	= 0;
+				}
+			}
+		}
+
+		return $media;
+	}
+
+	function lbb_dashboard_automount($constants, $media) {
+		# Backups unmount all storage when they finish. Mount an attached NVMe SSD / USB drive again,
+		# so its photos are shown instead of the internal storage. Returns true if anything was mounted.
+		# never interfere with a running backup, it manages the mounts itself
+		exec("pgrep -f " . escapeshellarg("backup\\.py --SourceName"), $pids, $return_code);
+		if ($return_code == 0) {
+			return false;
+		}
+
+		$WORKING_DIR	= dirname(__FILE__);
+		$mounted_any	= false;
+		foreach (lbb_dashboard_storage_order() as $storage) {
+			if ($media['target_' . $storage]['mounted'] or $media['source_' . $storage]['mounted']) {
+				continue;
+			}
+
+			$partitions	= array();
+			exec("sudo python3 $WORKING_DIR/lib_storage.py --Action get_available_partitions --StorageName $storage --skipMounted True 2>/dev/null", $partitions);
+			if (count(array_filter($partitions, 'trim')) == 0) {
+				continue;
+			}
+
+			exec("sudo python3 $WORKING_DIR/lib_storage.py --Action mount --StorageName $storage --Role target --WaitForDevice False > /dev/null 2>&1");
+			$mounted_any	= true;
+		}
+
+		return $mounted_any;
+	}
+
+	function lbb_dashboard_storage_order() {
+		# the default backup target holds the backups: check it first
+		$config	= @parse_ini_file(dirname(__FILE__) . '/config.cfg', false) ?: array();
+		$default	= isset($config['conf_BACKUP_DEFAULT_TARGET']) ? $config['conf_BACKUP_DEFAULT_TARGET'] : '';
+		return $default == 'usb' ? array('usb', 'nvme') : array('nvme', 'usb');
+	}
+
+	function lbb_dashboard_detect_medium($constants, $media = null) {
+		# Returns array(medium_key, storage_path) of the medium to preview:
+		# the first mounted medium with backed-up files, else the first mounted one, else internal storage.
+		$media	= $media === null ? lbb_dashboard_media($constants) : $media;
+
+		# default backup target first, then the order of view.php
+		$order	= array();
+		foreach (lbb_dashboard_storage_order() as $storage) {
+			$order[]	= 'target_' . $storage;
+		}
+		$order	= array_unique(array_merge($order, array_keys($media)));
+
+		foreach ($order as $key) {
+			if ($media[$key]['count'] > 0) {
+				return array($key, $media[$key]['path']);
+			}
+		}
+		foreach ($order as $key) {
+			if ($media[$key]['mounted'] && $key != 'internal') {
+				return array($key, $media[$key]['path']);
+			}
+		}
+
+		return array('internal', $media['internal']['path']);
+	}
+
+	function lbb_dashboard_medium_label($medium) {
+		# e.g. "Local NVMe target", same wording as the view filter
+		$constant	= 'L::view_filter_medium_' . $medium;
+		return defined($constant) ? constant($constant) : $medium;
 	}
 
 	function lbb_dashboard_url_path($path) {
@@ -32,8 +122,16 @@
 		return str_replace('%2F', '/', rawurlencode($path));
 	}
 
-	function lbb_dashboard_gallery($constants, $limit = 12, $offset = 0) {
-		list($medium, $storage_path)	= lbb_dashboard_detect_medium($constants);
+	function lbb_dashboard_gallery($constants, $limit = 12, $offset = 0, $medium = null) {
+		$media	= lbb_dashboard_media($constants);
+		if ($offset == 0 and lbb_dashboard_automount($constants, $media)) {
+			$media	= lbb_dashboard_media($constants);
+		}
+		if ($medium !== null and isset($media[$medium]) and $media[$medium]['mounted']) {
+			$storage_path	= $media[$medium]['path'];
+		} else {
+			list($medium, $storage_path)	= lbb_dashboard_detect_medium($constants, $media);
+		}
 		$database_file	= $storage_path . '/' . $constants['const_IMAGE_DATABASE_FILENAME'];
 
 		$items		= array();
@@ -69,6 +167,7 @@
 			'items'			=> $items,
 			'total'			=> $total,
 			'has_db'		=> file_exists($database_file),
+			'media'			=> $media,
 		);
 	}
 
@@ -111,7 +210,7 @@
 
 		<section class="lbb-recent card">
 			<div class="lbb-recent-head">
-				<h2><?php echo L::mainmenue_view; ?></h2>
+				<h2><?php echo L::mainmenue_view; ?> <small class="lbb-medium"><?php echo lbb_dashboard_medium_label($gallery['medium']); ?></small></h2>
 				<?php if (count($gallery['items']) > 0) { ?>
 					<a class="lbb-viewall" href="<?php echo $view_all; ?>">
 						<?php echo L::mainmenue_view; ?> &rarr;
@@ -130,7 +229,11 @@
 						?>
 						<a class="lbb-card-item" href="<?php echo $single; ?>" title="<?php echo htmlspecialchars($item['File_Name']); ?>">
 							<div class="lbb-thumb">
-								<img loading="lazy" src="<?php echo lbb_dashboard_url_path($thumb); ?>" alt="<?php echo htmlspecialchars($item['File_Name']); ?>" onerror="this.src='/img/unknown.JPG';">
+								<?php if (file_exists($thumb)) { ?>
+									<img loading="lazy" src="<?php echo lbb_dashboard_url_path($thumb); ?>" alt="<?php echo htmlspecialchars($item['File_Name']); ?>">
+								<?php } else { ?>
+									<span class="lbb-nothumb"><?php echo htmlspecialchars($ext); ?></span>
+								<?php } ?>
 								<?php if ($is_video) { ?>
 									<span class="lbb-badge-play"><svg width="16" height="16"><use href="#lbbic-play"></use></svg></span>
 								<?php } ?>

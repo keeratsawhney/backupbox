@@ -16,7 +16,8 @@
 		running: false,
 		services: null,
 		wizard: { step: 0, source: null, target: null, options: {} },
-		photos: { offset: 0, total: 0, items: [], viewer: -1 },
+		// medium: storage picked by the user; empty lets the box choose (attached NVMe/USB first)
+		photos: { offset: 0, total: 0, items: [], viewer: -1, medium: '' },
 		failures: 0,
 		powering: false,
 	};
@@ -373,10 +374,11 @@
 	async function loadPhotos(offset) {
 		const grid = $('photo-grid');
 		try {
-			const data = await api('recent', { limit: PHOTOS_PER_PAGE, offset: Math.max(0, offset) });
+			const data = await api('recent', { limit: PHOTOS_PER_PAGE, offset: Math.max(0, offset), medium: state.photos.medium });
 			state.photos.offset = data.offset;
 			state.photos.total = data.total;
 			state.photos.items = data.items;
+			renderMedia(data);
 		} catch (e) {
 			toast(e.message, true);
 			return;
@@ -388,10 +390,11 @@
 			grid.append(el('div', { class: 'empty' }, [icon('photos'), el('span', { text: T.no_photos })]));
 		}
 		p.items.forEach((item, index) => {
-			const img = el('img', { src: item.thumb, alt: item.name, loading: 'lazy', draggable: 'false' });
-			img.addEventListener('error', () => { img.src = 'img/unknown.JPG'; }, { once: true });
+			const preview = item.thumb
+				? el('img', { src: item.thumb, alt: item.name, loading: 'lazy', draggable: 'false' })
+				: el('span', { class: 'nothumb' }, [el('b', { text: item.ext }), el('span', { text: item.name })]);
 			grid.append(el('button', { class: 'photo', onclick: () => openViewer(index) }, [
-				img,
+				preview,
 				item.video ? el('span', { class: 'badge' }, icon('play')) : (item.rating > 0 ? el('span', { class: 'badge', text: '★'.repeat(item.rating) }) : null),
 			]));
 		});
@@ -403,14 +406,29 @@
 		$('photos-next').disabled = p.offset + PHOTOS_PER_PAGE >= p.total;
 	}
 
+	function renderMedia(data) {
+		// which storage the photos come from; buttons to switch when several hold backups
+		const row = $('photo-media');
+		row.replaceChildren();
+		const media = data.media.length ? data.media : [{ id: data.medium, label: data.medium_label, count: data.total }];
+		media.forEach((medium) => {
+			const button = el('button', { class: 'btn' + (medium.id === data.medium ? ' selected' : ''), text: medium.label + ' · ' + medium.count });
+			button.addEventListener('click', () => {
+				state.photos.medium = medium.id;
+				loadPhotos(0);
+			});
+			row.append(button);
+		});
+	}
+
 	function openViewer(index) {
 		const p = state.photos;
 		const item = p.items[index];
 		if (!item) return;
 		p.viewer = index;
 		const img = $('viewer-img');
-		img.onerror = () => { img.onerror = null; img.src = 'img/unknown.JPG'; };
-		img.src = item.thumb;
+		img.hidden = !item.thumb;
+		if (item.thumb) img.src = item.thumb;
 		$('viewer-caption').textContent = item.name + (item.date ? '  ·  ' + item.date : '');
 		$('viewer').hidden = false;
 		$('viewer-prev').disabled = p.offset + index <= 0;

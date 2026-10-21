@@ -644,6 +644,24 @@ iframe {
 	background: var(--m-surface);
 	overflow: hidden;
 }
+/* file without generated thumbnail: show its type instead of a placeholder picture */
+.lbb-nothumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	color: var(--m-muted, #8a94a3);
+}
+
+.lbb-medium {
+	font-size: 0.6em;
+	font-weight: 500;
+	opacity: 0.7;
+}
+
 .lbb-thumb img {
 	width: 100%;
 	height: 100%;
