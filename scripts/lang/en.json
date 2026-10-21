@@ -1012,7 +1012,9 @@
     "files": "Files",
     "empty_folder": "This folder is empty.",
     "no_drive": "No drive connected.",
-    "open_drive": "Tap a drive above to open it."
+    "open_drive": "Tap a drive above to open it.",
+    "latest_files": "Latest files",
+    "app_view": "App view"
   },
   "gallery": {
     "title": "Gallery",

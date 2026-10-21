@@ -1,0 +1,15 @@
+{
+  "name": "Little Backup Box",
+  "short_name": "Backup Box",
+  "description": "Back up cards and drives, check the copied photos and videos.",
+  "start_url": "/touch.php#home",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1216",
+  "theme_color": "#1a1f26",
+  "icons": [
+    { "src": "/img/icons/favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/img/icons/favicon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

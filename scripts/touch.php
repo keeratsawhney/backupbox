@@ -73,7 +73,14 @@
 <html lang="<?php echo htmlspecialchars($config['conf_LANGUAGE'] ?: 'en'); ?>" data-theme="<?php echo $theme; ?>">
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+	<meta name="theme-color" content="#1a1f26">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="Backup Box">
+	<link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+	<link rel="apple-touch-icon" href="img/icons/favicon-180.png">
 	<title>Little Backup Box</title>
 	<link rel="icon" href="favicon.ico" type="image/x-icon">
 	<link rel="stylesheet" href="css/lbb-touch.css">
@@ -113,7 +120,7 @@
 
 	<div class="app">
 		<header class="topbar">
-			<span class="brand"><img src="img/little-backup-box-color.png" alt=""><span class="brand-name">Little Backup Box</span></span>
+			<span class="brand"><img src="img/icons/favicon-180.png" alt=""><span class="brand-name">Little Backup Box</span></span>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>
 			<span class="temp" id="temp"></span>
 			<span class="clock" id="clock"></span>
@@ -151,6 +158,10 @@
 					<button class="btn btn-danger btn-big" id="btn-stop" hidden><svg><use href="#i-stop"/></svg><span class="btn-text" id="stop-label"></span></button>
 				</div>
 				<div class="storage-strip" id="storage-strip"></div>
+				<div class="home-recent" id="home-recent" hidden>
+					<div class="home-recent-head"><span id="home-recent-title"></span><button class="btn" id="home-recent-all"></button></div>
+					<div class="home-recent-grid" id="home-recent-grid"></div>
+				</div>
 			</section>
 
 			<!-- BACKUP -->

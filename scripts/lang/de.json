@@ -1012,7 +1012,9 @@
     "files": "Dateien",
     "empty_folder": "Dieser Ordner ist leer.",
     "no_drive": "Kein Laufwerk angeschlossen.",
-    "open_drive": "Tippe oben auf ein Laufwerk, um es zu öffnen."
+    "open_drive": "Tippe oben auf ein Laufwerk, um es zu öffnen.",
+    "latest_files": "Neueste Dateien",
+    "app_view": "App-Ansicht"
   },
   "gallery": {
     "title": "Galerie",
