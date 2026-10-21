@@ -100,7 +100,7 @@
 		# mounting "a USB drive" as target could pick the card. An NVMe SSD is never a camera card.
 		$config	= @parse_ini_file(dirname(__FILE__) . '/config.cfg', false) ?: array();
 		$default	= isset($config['conf_BACKUP_DEFAULT_TARGET']) ? $config['conf_BACKUP_DEFAULT_TARGET'] : '';
-		return in_array($default, array('usb', 'nvme'), true) ? array($default) : array('nvme');
+		return $default == 'usb' ? array() : array('nvme');
 	}
 
 	function lbb_dashboard_storage_order() {

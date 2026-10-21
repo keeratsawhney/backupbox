@@ -85,6 +85,10 @@
 		$Sources	= array_merge(array('anyusb'), $LocalServices, array('camera'), $CloudServices_marked, array('ftp'));
 		$Targets	= array_merge($LocalServices, $CloudServices_marked, $SocialServices_configured);
 
+		# internal storage is not offered in the touch UI
+		$Sources	= array_values(array_diff($Sources, array('internal')));
+		$Targets	= array_values(array_diff($Targets, array('internal')));
+
 		$format	= function($list) {
 			$result	= array();
 			foreach ($list as $Storage) {

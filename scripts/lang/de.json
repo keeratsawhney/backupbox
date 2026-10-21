@@ -955,7 +955,7 @@
     "stop": "Backup stoppen",
     "stop_confirm": "Laufendes Backup stoppen?",
     "choose_source": "Kopieren von",
-    "choose_target": "Kopieren nach",
+    "choose_target": "Backup-Laufwerk wählen",
     "options": "Optionen",
     "start": "Backup starten",
     "back": "Zurück",
@@ -996,6 +996,9 @@
     "connect_target": "Backup-Laufwerk anschließen",
     "insert_source": "Karte oder USB-Laufwerk einstecken",
     "mounting": "wird eingehängt…",
-    "check_files": "Neueste Dateien prüfen"
+    "check_files": "Neueste Dateien prüfen",
+    "change": "Ändern",
+    "clear_log": "Protokoll leeren",
+    "clear_log_confirm": "Protokoll leeren?"
   }
 }

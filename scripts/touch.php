@@ -179,6 +179,7 @@
 					<button class="btn btn-icon" id="log-up"><svg><use href="#i-up"/></svg></button>
 					<button class="btn btn-icon" id="log-down"><svg><use href="#i-down"/></svg></button>
 					<button class="btn" id="log-refresh"><svg><use href="#i-backup"/></svg><span id="log-refresh-label"></span></button>
+					<button class="btn" id="log-clear"><svg><use href="#i-close"/></svg><span id="log-clear-label"></span></button>
 				</div>
 			</section>
 

@@ -175,7 +175,8 @@
 
 		// live copy of the hardware display, else a picture of the current message (logo, IP QR code)
 		const oled = $('oled');
-		const picture = data.oled ? data.oled.url : display.image;
+		// (message pictures like the IP QR code give way to the backup steps while idle)
+		const picture = data.oled ? data.oled.url : (data.running || !data.flow ? display.image : null);
 		if (picture) {
 			if (oled.dataset.url !== picture) {
 				oled.dataset.url = picture;
@@ -197,7 +198,6 @@
 
 		$('btn-stop').hidden = !data.running;
 		$('btn-new-backup').hidden = data.running;
-		$('btn-default-backup').hidden = data.running || !hasDefaultBackup();
 
 		if (data.temp !== null && data.temp !== undefined) {
 			$('temp').textContent = Math.round(data.temp) + '°C';
@@ -207,7 +207,7 @@
 		renderFlow(data.flow, data.running);
 
 		// drives plugged in or removed: the possible sources and targets change (e.g. NVMe becomes available)
-		const drives = data.flow ? JSON.stringify([data.flow.target.state, data.flow.target.id, data.flow.sources.length]) : '';
+		const drives = data.flow ? JSON.stringify([data.flow.target.state, data.flow.target.id, data.flow.sources.length, data.flow.candidates.length]) : '';
 		if (state.drives !== undefined && drives !== state.drives) {
 			loadServices(true).then(() => { if (state.page === 'backup') renderWizard(); }).catch(() => {});
 		}
@@ -227,49 +227,68 @@
 		return (T.storages && T.storages[id]) || id;
 	}
 
+	let flowSignature = '';
 	function renderFlow(flow, running) {
-		// guided home screen of a portable box: backup drive ready? card inserted?
+		// guided home screen of a portable box: 1. choose the backup drive, 2. insert the source, 3. start
 		const node = $('flow');
 		node.hidden = running || !flow;
+		const start = $('btn-default-backup');
+		start.hidden = node.hidden || flow.target.state !== 'ready' || !flow.sources.length;
 		if (node.hidden) return;
 
+		// only redraw on changes, buttons must not be replaced while they are tapped
+		const signature = JSON.stringify([flow, Math.round((flow.target.free || 0) / 1e8)]);
+		if (signature === flowSignature) return;
+		flowSignature = signature;
+
 		const target = flow.target;
-		let targetText;
-		if (target.state === 'ready') {
-			targetText = (target.name ? target.name + ' · ' : '') + formatBytes(target.free) + ' ' + T.free;
-		} else if (target.state === 'attached') {
-			targetText = target.name + ' · ' + T.mounting;
-		} else {
-			targetText = T.connect_target;
-		}
-
-		const sourceText = flow.sources.length
-			? flow.sources.map((x) => x.name + ' · ' + formatBytes(x.size)).join(', ')
-			: T.insert_source;
-
 		const row = (ok, waiting, label, text, kind) => el('div', { class: 'flow-row' + (ok ? ' ok' : '') + (waiting ? ' waiting' : '') }, [
 			el('span', { class: 'flow-mark' }, ok ? icon('check') : icon(kind)),
 			el('span', { class: 'flow-text' }, [el('small', { text: label }), el('b', { text: text })]),
 		]);
 
-		const targetRow = row(target.state === 'ready', target.state === 'attached', storageLabel(target.id), targetText, target.id.split('_')[0]);
-		if (target.state !== 'ready') {
-			// mounting happens automatically; tapping retries, e.g. after the drive was plugged in again
-			targetRow.classList.add('flow-action');
-			targetRow.setAttribute('role', 'button');
-			targetRow.addEventListener('click', () => {
-				if (targetRow.classList.contains('loading')) return;
-				targetRow.classList.add('loading');
-				api('mount', { storage: target.id.split('_')[0], role: 'target' }, 'POST')
-					.then((result) => {
-						if (!result.storages.some((x) => x.id === target.id)) toast(T.mount_failed, true);
+		const rows = [];
+		if (target.state === 'choose') {
+			// step 1: which attached drive receives the backup
+			rows.push(row(false, !flow.candidates.length, '1 · ' + T.target, flow.candidates.length ? T.choose_target : T.connect_target, 'usb'));
+			if (flow.candidates.length) {
+				const list = el('div', { class: 'flow-choices' });
+				flow.candidates.forEach((drive) => {
+					const button = el('button', { class: 'btn' }, [icon(drive.kind), el('span', { text: drive.name + ' · ' + formatBytes(drive.size) })]);
+					button.addEventListener('click', () => busy(button, async () => {
+						const result = await api('choose_target', { path: drive.path }, 'POST');
+						if (!result.storages.some((x) => x.id.endsWith('_target'))) toast(T.mount_failed, true);
+						flowSignature = '';
 						refreshStatusSoon();
-					})
-					.catch((e) => toast(e.message, true))
-					.finally(() => targetRow.classList.remove('loading'));
-			});
+					}));
+					list.append(button);
+				});
+				rows.push(list);
+			}
+		} else {
+			const ready = target.state === 'ready';
+			const text = target.name + ' · ' + (ready ? formatBytes(target.free) + ' ' + T.free : T.mounting);
+			const targetRow = row(ready, !ready, '1 · ' + storageLabel(target.id), text, target.id.split('_')[0]);
+			const change = el('button', { class: 'btn flow-change', text: T.change });
+			change.addEventListener('click', () => busy(change, async () => {
+				await api('change_target', {}, 'POST');
+				flowSignature = '';
+				refreshStatusSoon();
+			}));
+			targetRow.append(change);
+			rows.push(targetRow);
+
+			// step 2: the card or drive to back up
+			const sourceText = flow.sources.length ? flow.sources.map((x) => x.name + ' · ' + formatBytes(x.size)).join(', ') : T.insert_source;
+			rows.push(row(flow.sources.length > 0, flow.sources.length === 0, '2 · ' + T.source, sourceText, 'usb'));
 		}
-		node.replaceChildren(targetRow, row(flow.sources.length > 0, flow.sources.length === 0, T.source, sourceText, 'usb'));
+		node.replaceChildren(...rows);
+
+		// step 3
+		if (target.state === 'ready' && flow.sources.length) {
+			$('default-label').textContent = T.start;
+			$('default-sub').textContent = flow.sources[0].name + ' → ' + target.name;
+		}
 	}
 
 	function storageChip(storage, role) {
@@ -286,7 +305,7 @@
 
 	let stripSignature = '';
 	function renderStorageStrip(storages) {
-		// shown while a backup runs: target first, then source, then internal storage.
+		// shown while a backup runs: target first, then source.
 		// Only redrawn on changes.
 		const signature = JSON.stringify(storages.map((x) => [x.id, x.name, Math.round((x.free || 0) / 1e8)]));
 		if (signature === stripSignature) return;
@@ -296,7 +315,6 @@
 		strip.replaceChildren();
 		storages.filter((x) => x.id.endsWith('_target')).forEach((x) => strip.append(storageChip(x, 'target')));
 		storages.filter((x) => x.id.endsWith('_source')).forEach((x) => strip.append(storageChip(x, 'source')));
-		storages.filter((x) => x.id === 'internal').forEach((x) => strip.append(storageChip(x, 'internal')));
 	}
 
 	let statusTimer = null;
@@ -332,30 +350,11 @@
 		state.wizard.options = Object.assign({}, state.services.defaults);
 		delete state.wizard.options.source;
 		delete state.wizard.options.target;
-		updateDefaultButton();
 		return state.services;
 	}
 
 	function serviceById(list, id) {
 		return (list || []).find((service) => service.id === id);
-	}
-
-	function hasDefaultBackup() {
-		const s = state.services;
-		if (!s) return false;
-		return !!(serviceById(s.sources, s.defaults.source) && serviceById(s.targets, s.defaults.target) &&
-			(s.allowed[s.defaults.source] || []).includes(s.defaults.target));
-	}
-
-	function updateDefaultButton() {
-		if (!hasDefaultBackup()) {
-			$('btn-default-backup').hidden = true;
-			return;
-		}
-		const s = state.services;
-		$('default-label').textContent = T.start_default;
-		$('default-sub').textContent = serviceById(s.sources, s.defaults.source).label + ' → ' + serviceById(s.targets, s.defaults.target).label;
-		$('btn-default-backup').hidden = state.running;
 	}
 
 	async function startBackup(source, target, options) {
@@ -487,7 +486,7 @@
 	}
 
 	function renderMedia(data) {
-		// a tab for every mounted drive (targets, sources, internal storage); "+ Source" mounts an attached source
+		// a tab for every mounted drive (targets and sources); "+ Source" mounts an attached source
 		const row = $('photo-media');
 		row.replaceChildren();
 		const media = data.media.length ? data.media : [{ id: data.medium, label: data.medium_label, count: data.total }];
@@ -523,7 +522,7 @@
 		const item = p.items[index];
 		if (!item) return;
 		p.viewer = index;
-		const caption = item.name + (item.date ? '  ·  ' + item.date : '');
+		const caption = item.name + (item.date ? '  ·  ' + formatDate(item.date) : '');
 		const img = $('viewer-img');
 		const video = $('viewer-video');
 		stopVideo();
@@ -649,21 +648,12 @@
 				button,
 			]));
 		});
-
-		if (mounted.internal) {
-			list.append(el('div', { class: 'row' }, [
-				el('div', { class: 'row-label' }, [
-					el('b', { text: storageLabel('internal') }),
-					el('small', { text: formatBytes(mounted.internal.free) + ' ' + T.free + ' / ' + formatBytes(mounted.internal.total) }),
-				]),
-			]));
-		}
 	}
 
 	function renderFunctions() {
 		const grid = $('func-grid');
 		grid.replaceChildren();
-		const targets = ['usb', 'internal'];
+		const targets = ['usb'];
 		if (state.services && state.services.nvme) targets.push('nvme');
 
 		Object.keys(T.functions).forEach((func) => {
@@ -740,6 +730,7 @@
 		$('check-label').textContent = T.check_files;
 		$('wizard-start-label').textContent = T.start;
 		$('log-refresh-label').textContent = T.refresh;
+		$('log-clear-label').textContent = T.clear_log;
 		$('h-storage').textContent = T.storage;
 		$('h-maintenance').textContent = T.maintenance;
 		$('h-settings').textContent = T.settings;
@@ -756,11 +747,10 @@
 		});
 
 		$('btn-default-backup').addEventListener('click', (event) => busy(event.currentTarget, async () => {
-			const s = await loadServices();
-			const options = Object.assign({}, s.defaults);
-			delete options.source;
-			delete options.target;
-			await startBackup(s.defaults.source, s.defaults.target, options);
+			const result = await api('start', {}, 'POST');
+			toast(result.message);
+			state.running = true;
+			refreshStatusSoon();
 		}));
 
 		$('btn-check').addEventListener('click', () => {
@@ -802,6 +792,11 @@
 		$('log-up').addEventListener('click', () => { log.scrollTop -= log.clientHeight * 0.8; });
 		$('log-down').addEventListener('click', () => { log.scrollTop += log.clientHeight * 0.8; });
 		$('log-refresh').addEventListener('click', () => loadLog(true));
+		$('log-clear').addEventListener('click', (event) => busy(event.currentTarget, async () => {
+			if (!(await confirmDialog(T.clear_log_confirm, '', T.clear_log, 'btn-danger'))) return;
+			await api('clearlog', {}, 'POST');
+			await loadLog(true);
+		}));
 
 		$('btn-theme').addEventListener('click', () => {
 			const themes = Object.keys(T.themes);
@@ -821,9 +816,20 @@
 		setInterval(updateClock, 10000);
 	}
 
+	function formatTime(hours, minutes) {
+		// 12 hour clock: 7:05 PM
+		return ((hours % 12) || 12) + ':' + String(minutes).padStart(2, '0') + ' ' + (hours < 12 ? 'AM' : 'PM');
+	}
+
+	function formatDate(text) {
+		// "2026-10-21 19:05" -> "2026-10-21 7:05 PM"
+		const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/.exec(text || '');
+		return match ? match[1] + ' ' + formatTime(Number(match[2]), Number(match[3])) : (text || '');
+	}
+
 	function updateClock() {
 		const now = new Date();
-		$('clock').textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+		$('clock').textContent = formatTime(now.getHours(), now.getMinutes());
 	}
 
 	let savedTheme = null;

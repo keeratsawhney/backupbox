@@ -399,8 +399,8 @@ svg {
 .oled {
 	flex: none;
 	align-self: flex-start;
-	width: 160px;
-	max-width: 40%;
+	width: 120px;
+	max-width: 30%;
 	height: auto;
 	border-radius: 6px;
 	border: 1px solid var(--border);
@@ -521,6 +521,26 @@ svg {
 
 .flow-row.waiting .flow-mark {
 	animation: pulse 1.4s infinite;
+}
+
+/* step 1: attached drives to pick the backup drive from */
+.flow-choices {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding-left: 42px;
+}
+
+.flow-choices .btn {
+	min-height: 40px;
+	font-size: 13px;
+}
+
+.flow-change {
+	margin-left: auto;
+	min-height: 36px;
+	padding: 0 12px;
+	font-size: 12px;
 }
 
 /* target not mounted: the row retries mounting when tapped */
@@ -1014,7 +1034,7 @@ svg {
 	flex: none;
 }
 
-.log-controls .btn:last-child {
+.log-controls .btn:not(.btn-icon) {
 	flex: 1;
 }
 

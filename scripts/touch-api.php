@@ -217,8 +217,6 @@
 			}
 		}
 
-		$add('internal', $constants['const_MEDIA_DIR'] . '/' . $constants['const_INTERNAL_BACKUP_DIR'], '');
-
 		return($storages);
 	}
 
@@ -267,6 +265,8 @@
 				}
 				$drives[]	= array(
 					'path'			=> $partition['path'],
+					'disk'			=> $disk['path'],
+					'uuid'			=> (string)($partition['uuid'] ?? ''),
 					'kind'			=> str_starts_with($disk['path'], '/dev/nvme') ? 'nvme' : 'usb',
 					'name'			=> trim((string)($partition['label'] ?: ($disk['model'] ?: basename($partition['path'])))),
 					'size'			=> $size,
@@ -278,60 +278,111 @@
 	}
 
 	function touch_attached_drives() {
-		$json	= json_decode((string)shell_exec('lsblk -J -b -o NAME,PATH,SIZE,FSTYPE,LABEL,MOUNTPOINT,TYPE,MODEL 2>/dev/null'), true);
+		$json	= json_decode((string)shell_exec('lsblk -J -b -o NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,TYPE,MODEL 2>/dev/null'), true);
 		return(touch_parse_drives(is_array($json) && isset($json['blockdevices']) ? $json['blockdevices'] : array()));
 	}
 
+	function touch_target_choice($constants, $choice = false) {
+		# the drive picked as backup target on the home screen; kept until it is unplugged
+		# (backups unmount all drives when they finish, the chosen one is mounted again)
+		$file	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-target.json';
+		if ($choice === false) {
+			$saved	= @json_decode((string)@file_get_contents($file), true);
+			return(is_array($saved) ? $saved : null);
+		}
+		if ($choice === null) {
+			@unlink($file);
+		} else {
+			@file_put_contents($file, json_encode($choice));
+		}
+		return($choice);
+	}
+
+	function touch_mount_target($WORKING_DIR, $drive, $background = false) {
+		$command	= "sudo python3 $WORKING_DIR/lib_storage.py --Action mount --StorageName " . escapeshellarg($drive['kind']) . " --Role target --DeviceIdentifierPresetThis " . escapeshellarg($drive['path']) . " --WaitForDevice False > /dev/null 2>&1";
+		shell_exec($background ? "$command &" : $command);
+	}
+
 	function touch_flow($config, $constants, $storages, $running) {
-		# what the home screen guides through: target ready? source inserted?
-		$default	= in_array($config['conf_BACKUP_DEFAULT_TARGET'], array('usb', 'nvme'), true) ? $config['conf_BACKUP_DEFAULT_TARGET'] : 'nvme';
+		# what the home screen guides through: 1. choose the backup drive, 2. insert the source
+		global $WORKING_DIR;
 		$drives		= touch_attached_drives();
+		$choice		= touch_target_choice($constants);
 		$mounted	= array();
 		foreach ($storages as $storage) {
 			$mounted[$storage['id']]	= $storage;
 		}
 
-		# target: mounted, or attached and waiting to be mounted (done automatically, see below)
+		$find	= function($key, $value) use ($drives) {
+			foreach ($drives as $drive) {
+				if ($value !== '' and $drive[$key] === $value) {
+					return($drive);
+				}
+			}
+			return(null);
+		};
+
+		# target: a mounted target drive, else the remembered one
 		$target	= null;
-		foreach (array('nvme_target', 'usb_target') as $id) {
+		foreach (array('usb_target', 'nvme_target') as $id) {
 			if (isset($mounted[$id])) {
-				$target	= array('state' => 'ready', 'id' => $id, 'name' => $mounted[$id]['name'], 'free' => $mounted[$id]['free'], 'total' => $mounted[$id]['total']);
+				# match by mount point (as lsblk reports it), device names are only the fallback
+				$drive	= $find('mountpoint', $mounted[$id]['path']) ?: $find('path', (string)realpath($mounted[$id]['device'])) ?: $find('path', $mounted[$id]['device']);
+				$target	= array(
+					'state'	=> 'ready',
+					'id'	=> $id,
+					'name'	=> $drive ? $drive['name'] : $mounted[$id]['name'],
+					'free'	=> $mounted[$id]['free'],
+					'total'	=> $mounted[$id]['total'],
+					'disk'	=> $drive ? $drive['disk'] : '',
+					'path'	=> $drive ? $drive['path'] : $mounted[$id]['device'],
+				);
+				if ($drive and (!$choice or $choice['id'] !== ($drive['uuid'] ?: $drive['path']))) {
+					$choice	= touch_target_choice($constants, array('id' => $drive['uuid'] ?: $drive['path'], 'kind' => $drive['kind'], 'name' => $drive['name']));
+				}
 				break;
 			}
 		}
-		$target_device	= $target ? $mounted[$target['id']]['device'] : '';
+
+		if (!$target and $choice) {
+			$drive	= $find('uuid', $choice['id']) ?: $find('path', $choice['id']);
+			if ($drive) {
+				$target	= array('state' => 'mounting', 'id' => $drive['kind'] . '_target', 'name' => $drive['name'], 'free' => null, 'total' => $drive['size'], 'disk' => $drive['disk'], 'path' => $drive['path']);
+				# mounted again in the background (throttled, never during a backup)
+				$stamp	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-automount.stamp';
+				if (!$running and empty($drive['mountpoint']) and time() - (int)@filemtime($stamp) > 20) {
+					@touch($stamp);
+					touch_mount_target($WORKING_DIR, $drive, true);
+				}
+			} else {
+				# unplugged: ask again
+				touch_target_choice($constants, null);
+			}
+		}
+
+		# no target: the attached drives to choose from
+		$candidates	= array();
 		if (!$target) {
 			foreach ($drives as $drive) {
-				if ($drive['kind'] == $default and empty($drive['mountpoint'])) {
-					$target	= array('state' => 'attached', 'id' => $default . '_target', 'name' => $drive['name'], 'free' => null, 'total' => $drive['size']);
-					break;
+				if (empty($drive['mountpoint'])) {
+					$candidates[]	= array('path' => $drive['path'], 'name' => $drive['name'], 'size' => $drive['size'], 'kind' => $drive['kind']);
 				}
 			}
 		}
-		if (!$target) {
-			$target	= array('state' => 'missing', 'id' => $default . '_target', 'name' => '', 'free' => null, 'total' => null);
-		}
 
-		# sources: attached USB drives / cards that are not the target
+		# sources: cards and USB drives that are not the target
 		$sources	= array();
 		foreach ($drives as $drive) {
-			if ($drive['kind'] != 'usb' or $drive['path'] === $target_device or ($target['state'] == 'attached' and $drive['kind'] == $default and $drive['name'] === $target['name'])) {
-				continue;
-			}
-			$sources[]	= array('name' => $drive['name'], 'size' => $drive['size'], 'mounted' => !empty($drive['mountpoint']));
-		}
-
-		# mount an attached target right away (throttled, never during a backup)
-		if ($target['state'] == 'attached' and !$running) {
-			$stamp	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-automount.stamp';
-			if (time() - (int)@filemtime($stamp) > 30) {
-				@touch($stamp);
-				include_once('sub-dashboard.php');
-				lbb_dashboard_automount($constants, lbb_dashboard_media($constants));
+			if ($drive['kind'] == 'usb' and !($target and $drive['disk'] === $target['disk'])) {
+				$sources[]	= array('path' => $drive['path'], 'name' => $drive['name'], 'size' => $drive['size']);
 			}
 		}
 
-		return(array('target' => $target, 'sources' => $sources));
+		return(array(
+			'target'		=> $target ?: array('state' => 'choose', 'id' => '', 'name' => '', 'path' => ''),
+			'candidates'	=> $candidates,
+			'sources'		=> $target ? $sources : array(),
+		));
 	}
 
 	function touch_media_extensions($constants) {
@@ -533,7 +584,8 @@
 			}
 
 			# mounted drives: default backup target first, then targets, sources, internal storage
-			$order	= array_unique(array_merge(array('target_' . lbb_dashboard_automount_storages()[0]), array('target_nvme', 'target_usb', 'source_usb', 'source_nvme', 'internal')));
+			# (internal storage is not shown in the touch UI)
+			$order	= array('target_usb', 'target_nvme', 'source_usb', 'source_nvme');
 			$available	= array();
 			foreach ($order as $media_key) {
 				if (isset($media[$media_key]) and $media[$media_key]['mounted']) {
@@ -551,7 +603,7 @@
 			$key	= $key === null ? array_key_first($available) : $key;
 
 			$items	= array();
-			foreach (array_slice($available[$key], $offset, $limit) as $file) {
+			foreach (array_slice($key === null ? array() : $available[$key], $offset, $limit) as $file) {
 				$items[]	= touch_media_item($constants, $key, $media[$key]['path'], $file['path'], array('date' => date('Y-m-d H:i', $file['time'])));
 			}
 
@@ -565,10 +617,10 @@
 			touch_respond(array(
 				'ok'				=> true,
 				'medium'			=> $key,
-				'medium_label'		=> touch_text(lbb_dashboard_medium_label($key)),
+				'medium_label'		=> $key === null ? '' : touch_text(lbb_dashboard_medium_label($key)),
 				'media'				=> $tabs,
 				'can_mount_source'	=> !$source_mounted && !touch_backup_running(),
-				'total'				=> count($available[$key]),
+				'total'				=> $key === null ? 0 : count($available[$key]),
 				'offset'			=> $offset,
 				'items'				=> $items,
 			));
@@ -685,6 +737,81 @@
 
 			touch_run_backup($WORKING_DIR, "--SourceName $Function --TargetName $Target --rename-files $rename --force-sync-database $sync --generate-thumbnails $thumbnails --update-exif $exif --power-off False");
 			touch_respond(array('ok' => true, 'message' => touch_text($label . ' ' . L::main_backup_on . ' ' . touch_service_label($Target) . '.')));
+
+		case 'choose_target':
+			# home screen step 1: the drive the user picked becomes the backup target
+			if (touch_backup_running()) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$path	= isset($_POST['path']) ? (string)$_POST['path'] : '';
+			$drive	= null;
+			foreach (touch_attached_drives() as $attached) {
+				if ($attached['path'] === $path and empty($attached['mountpoint'])) {
+					$drive	= $attached;
+				}
+			}
+			if (!$drive) {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			touch_target_choice($constants, array('id' => $drive['uuid'] ?: $drive['path'], 'kind' => $drive['kind'], 'name' => $drive['name']));
+			touch_mount_target($WORKING_DIR, $drive);
+			touch_respond(array('ok' => true, 'storages' => touch_storages($constants)));
+
+		case 'change_target':
+			# forget the backup drive (and unmount it), the home screen asks again
+			if (touch_backup_running()) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			touch_target_choice($constants, null);
+			foreach (array('usb', 'nvme') as $storage) {
+				shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName $storage --Role target > /dev/null 2>&1");
+			}
+			touch_respond(array('ok' => true, 'storages' => touch_storages($constants)));
+
+		case 'start':
+			# home screen step 3: back up the inserted source to the chosen target, with the configured options
+			if (touch_backup_running()) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$storages	= touch_storages($constants);
+			$flow		= touch_flow($config, $constants, $storages, false);
+			if ($flow['target']['state'] != 'ready') {
+				touch_fail(touch_text(L::touch_choose_target));
+			}
+			if (!$flow['sources']) {
+				touch_fail(touch_text(L::touch_insert_source));
+			}
+			$source	= $flow['sources'][0];
+			foreach ($flow['sources'] as $candidate) {
+				if (isset($_POST['source']) and $candidate['path'] === $_POST['source']) {
+					$source	= $candidate;
+				}
+			}
+			$target_kind	= explode('_', $flow['target']['id'])[0];
+			$target_device	= $flow['target']['path'];
+
+			touch_run_backup($WORKING_DIR,
+				"--SourceName usb --TargetName " . escapeshellarg($target_kind) .
+				" --device-identifier-preset-source " . escapeshellarg($source['path']) .
+				" --device-identifier-preset-target " . escapeshellarg($target_device) .
+				" --move-files " . touch_bool($config['conf_BACKUP_MOVE_FILES']) .
+				" --rename-files " . touch_bool($config['conf_BACKUP_RENAME_FILES']) .
+				" --force-sync-database False" .
+				" --generate-thumbnails " . touch_bool($config['conf_BACKUP_GENERATE_THUMBNAILS']) .
+				" --update-exif " . touch_bool($config['conf_BACKUP_UPDATE_EXIF']) .
+				" --checksum " . touch_bool($config['conf_BACKUP_CHECKSUM']) .
+				" --power-off " . touch_bool($config['conf_POWER_OFF'])
+			);
+			touch_respond(array('ok' => true, 'message' => $source['name'] . ' → ' . $flow['target']['name']));
+
+		case 'clearlog':
+			# same as "Delete log" of the classic UI
+			$logfile	= $constants['const_LOGFILE'];
+			@unlink($logfile);
+			if (@file_put_contents($logfile, "Little Backup Box\n") === false) {
+				shell_exec("echo 'Little Backup Box' | sudo tee " . escapeshellarg($logfile) . " > /dev/null");
+			}
+			touch_respond(array('ok' => true));
 
 		case 'stop':
 			shell_exec("sudo $WORKING_DIR/stop_backup.sh");

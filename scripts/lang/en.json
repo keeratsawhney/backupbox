@@ -955,7 +955,7 @@
     "stop": "Stop backup",
     "stop_confirm": "Stop the running backup?",
     "choose_source": "Copy from",
-    "choose_target": "Copy to",
+    "choose_target": "Choose the backup drive",
     "options": "Options",
     "start": "Start backup",
     "back": "Back",
@@ -996,6 +996,9 @@
     "connect_target": "Connect the backup drive",
     "insert_source": "Insert a card or USB drive",
     "mounting": "mounting…",
-    "check_files": "Check latest files"
+    "check_files": "Check latest files",
+    "change": "Change",
+    "clear_log": "Clear log",
+    "clear_log_confirm": "Clear the log?"
   }
 }

@@ -955,7 +955,7 @@
     "stop": "Detener copia",
     "stop_confirm": "¿Detener la copia en curso?",
     "choose_source": "Copiar desde",
-    "choose_target": "Copiar a",
+    "choose_target": "Elige la unidad de copia",
     "options": "Opciones",
     "start": "Iniciar copia",
     "back": "Atrás",
@@ -996,6 +996,9 @@
     "connect_target": "Conecta la unidad de copia",
     "insert_source": "Inserta una tarjeta o unidad USB",
     "mounting": "montando…",
-    "check_files": "Comprobar últimos archivos"
+    "check_files": "Comprobar últimos archivos",
+    "change": "Cambiar",
+    "clear_log": "Borrar registro",
+    "clear_log_confirm": "¿Borrar el registro?"
   }
 }

@@ -955,7 +955,7 @@
     "stop": "Arrêter la sauvegarde",
     "stop_confirm": "Arrêter la sauvegarde en cours ?",
     "choose_source": "Copier depuis",
-    "choose_target": "Copier vers",
+    "choose_target": "Choisissez le disque de sauvegarde",
     "options": "Options",
     "start": "Démarrer",
     "back": "Retour",
@@ -996,6 +996,9 @@
     "connect_target": "Branchez le disque de sauvegarde",
     "insert_source": "Insérez une carte ou une clé USB",
     "mounting": "montage…",
-    "check_files": "Vérifier les derniers fichiers"
+    "check_files": "Vérifier les derniers fichiers",
+    "change": "Changer",
+    "clear_log": "Vider le journal",
+    "clear_log_confirm": "Vider le journal ?"
   }
 }
