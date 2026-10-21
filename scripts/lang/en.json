@@ -1018,7 +1018,8 @@
     "drive_backup": "Backup drive",
     "drive_source": "Card / source drive",
     "show_card": "Show inserted card",
-    "files_count": "files"
+    "files_count": "files",
+    "run": "Run"
   },
   "gallery": {
     "title": "Gallery",
@@ -1045,7 +1046,7 @@
     "folder": "Folder",
     "date": "Date",
     "refresh": "Refresh",
-    "no_drive": "No backup drive or source is mounted. Mount one on the Backup page or with + Source.",
+    "no_drive": "No drive is open. Choose the backup drive on the Backup page, or open a plugged-in drive with its + button.",
     "no_match": "No files match the filter.",
     "edit_in_view": "Rate and edit in View"
   }

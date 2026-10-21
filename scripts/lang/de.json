@@ -1018,7 +1018,8 @@
     "drive_backup": "Sicherungslaufwerk",
     "drive_source": "Karte / Quelllaufwerk",
     "show_card": "Eingesteckte Karte zeigen",
-    "files_count": "Dateien"
+    "files_count": "Dateien",
+    "run": "Ausführen"
   },
   "gallery": {
     "title": "Galerie",
@@ -1045,7 +1046,7 @@
     "folder": "Ordner",
     "date": "Datum",
     "refresh": "Aktualisieren",
-    "no_drive": "Kein Sicherungslaufwerk und keine Quelle eingebunden. Auf der Seite Backup oder mit + Quelle einbinden.",
+    "no_drive": "Kein Laufwerk geöffnet. Wählen Sie das Sicherungslaufwerk auf der Seite Backup oder öffnen Sie ein eingestecktes Laufwerk mit seiner +-Schaltfläche.",
     "no_match": "Keine Dateien passen zum Filter.",
     "edit_in_view": "In Ansehen bewerten und bearbeiten"
   }

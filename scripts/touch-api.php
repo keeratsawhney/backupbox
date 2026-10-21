@@ -439,27 +439,19 @@
 		return(touch_text(lbb_dashboard_medium_label($media_key)));
 	}
 
-	function touch_source_attached($media) {
-		# a drive or card that is plugged in, not mounted for a backup and not on the disk of the backup drive
-		$drives		= touch_attached_drives();
-		$targets	= array();
-		foreach ($media as $media_key => $medium) {
-			if (str_starts_with($media_key, 'target_') and $medium['mounted']) {
-				$targets[]	= $medium['path'];
+	function touch_drive_openable($constants, $drive) {
+		# a drive the box has not mounted itself (as backup drive, source or read only):
+		# not mounted at all, or mounted by something else (e.g. the desktop's automount under /media/<user>)
+		$mountpoint	= (string)$drive['mountpoint'];
+		if ($mountpoint === '') {
+			return(true);
+		}
+		foreach (array('const_MOUNTPOINT_USB_TARGET', 'const_MOUNTPOINT_USB_SOURCE', 'const_MOUNTPOINT_NVME_TARGET', 'const_MOUNTPOINT_NVME_SOURCE') as $constant) {
+			if ($mountpoint === $constants['const_MEDIA_DIR'] . '/' . $constants[$constant]) {
+				return(false);
 			}
 		}
-		$target_disks	= array();
-		foreach ($drives as $drive) {
-			if (in_array($drive['mountpoint'], $targets, true)) {
-				$target_disks[]	= $drive['disk'];
-			}
-		}
-		foreach ($drives as $drive) {
-			if (!in_array($drive['disk'], $target_disks, true) and ($drive['mountpoint'] === null or $drive['mountpoint'] === '' or str_starts_with((string)$drive['mountpoint'], '/media/browse/'))) {
-				return(true);
-			}
-		}
-		return(false);
+		return(!str_starts_with($mountpoint, touch_browse_dir($constants) . '/'));
 	}
 
 	function touch_media_filter($constants, $files, $type, $query, $sort) {
@@ -505,6 +497,9 @@
 
 	function touch_browse_mount($constants, $drive) {
 		$mountpoint	= touch_browse_dir($constants) . '/' . substr(touch_browse_key($drive), 7);
+		if (!empty($drive['mountpoint']) and touch_drive_openable($constants, $drive)) {
+			shell_exec('sudo umount ' . escapeshellarg($drive['mountpoint']) . ' > /dev/null 2>&1');
+		}
 		# FAT/exFAT/NTFS have no owners: make the files readable for the web server
 		$options	= in_array($drive['fstype'], array('vfat', 'exfat', 'ntfs', 'ntfs3'), true) ? 'ro,uid=33,gid=33' : 'ro';
 		shell_exec('sudo mkdir -p ' . escapeshellarg($mountpoint) . ' && sudo mount -o ' . $options . ' ' . escapeshellarg($drive['path']) . ' ' . escapeshellarg($mountpoint) . ' > /dev/null 2>&1');
@@ -543,7 +538,7 @@
 		# Cached briefly per mounted file system: paging through a big drive should not list it again and again.
 		$stat	= @stat($path);
 		$id		= $stat ? $stat['dev'] . '-' . $stat['ino'] : '';
-		$cache	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-files-' . preg_replace('/[^a-z_]/', '', $key) . '.json';
+		$cache	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-files-' . preg_replace('/[^A-Za-z0-9_-]/', '', str_replace(':', '-', $key)) . '.json';
 		$cached	= $refresh ? null : @json_decode((string)@file_get_contents($cache), true);
 		if (is_array($cached) and $cached['id'] === $id and time() - $cached['time'] < 15) {
 			return($cached['files']);
@@ -669,7 +664,7 @@
 
 		case 'copying':
 			# polled twice a second while a backup runs: only reads the file list written by the backup
-			touch_respond(array('ok' => true, 'copying' => touch_copying($constants)));
+			touch_respond(array('ok' => true, 'copying' => touch_copying($constants), 'running' => touch_backup_running()));
 
 		case 'services':
 			$services	= touch_get_services($config, $constants, $WORKING_DIR);
@@ -716,9 +711,27 @@
 			# (internal storage is not shown in the touch UI)
 			$order	= array('target_usb', 'target_nvme', 'source_usb', 'source_nvme');
 			$available	= array();
+			$paths		= array();
+			$labels		= array();
 			foreach ($order as $media_key) {
 				if (isset($media[$media_key]) and $media[$media_key]['mounted']) {
-					$available[$media_key]	= touch_media_files($constants, $media_key, $media[$media_key]['path'], $refresh and ($medium === null or $medium == $media_key));
+					$paths[$media_key]		= $media[$media_key]['path'];
+					$labels[$media_key]		= touch_medium_role_label($media_key);
+					$available[$media_key]	= touch_media_files($constants, $media_key, $paths[$media_key], $refresh and ($medium === null or $medium == $media_key));
+				}
+			}
+
+			# drives opened read only (here or in Files) and drives that can be opened, by their name
+			$openable	= array();
+			foreach (touch_attached_drives() as $drive) {
+				$browse_key	= touch_browse_key($drive);
+				$browse_path	= touch_medium_path($constants, $browse_key);
+				if ($browse_path !== false) {
+					$paths[$browse_key]		= $browse_path;
+					$labels[$browse_key]	= $drive['name'];
+					$available[$browse_key]	= touch_media_files($constants, $browse_key, $browse_path, $refresh and ($medium === null or $medium == $browse_key));
+				} elseif (touch_drive_openable($constants, $drive)) {
+					$openable[]	= array('path' => $drive['path'], 'name' => $drive['name'], 'size' => $drive['size']);
 				}
 			}
 
@@ -737,28 +750,26 @@
 
 			$items	= array();
 			foreach (array_slice($list, $offset, $limit) as $file) {
-				$items[]	= touch_media_item($constants, $key, $media[$key]['path'], $file['path'], array(
+				$items[]	= touch_media_item($constants, $key, $paths[$key], $file['path'], array(
 					'date'		=> date('Y-m-d H:i', $file['time']),
 					'time'		=> $file['time'],
 					'path'		=> $file['path'],
-					'size'		=> (int)@filesize($media[$key]['path'] . '/' . $file['path']),
+					'size'		=> (int)@filesize($paths[$key] . '/' . $file['path']),
 				));
 			}
 
-			$tabs			= array();
-			$source_mounted	= false;
+			$tabs	= array();
 			foreach ($available as $media_key => $files) {
-				$source_mounted	= $source_mounted || str_starts_with($media_key, 'source_');
-				$tabs[]	= array('id' => $media_key, 'label' => touch_medium_role_label($media_key), 'count' => count($files));
+				$tabs[]	= array('id' => $media_key, 'label' => $labels[$media_key], 'count' => count($files));
 			}
 
 			touch_respond(array(
 				'ok'				=> true,
 				'medium'			=> $key,
-				'medium_label'		=> $key === null ? '' : touch_medium_role_label($key),
+				'medium_label'		=> $key === null ? '' : $labels[$key],
 				'media'				=> $tabs,
-				# offered only when a card or drive is plugged in that is not the backup drive
-				'can_mount_source'	=> !$source_mounted && !touch_backup_running() && touch_source_attached($media),
+				# plugged-in drives not shown yet: opened read only on request (action open_drive), several at once
+				'openable'			=> touch_backup_running() ? array() : $openable,
 				'total'				=> count($list),
 				'all'				=> $key === null ? 0 : count($available[$key]),
 				'offset'			=> $offset,
@@ -786,7 +797,7 @@
 				# opened in the file browser (read only, no backup role): checked against the mounts themselves
 				if (touch_medium_path($constants, touch_browse_key($drive)) !== false) {
 					$drives[]	= array('id' => touch_browse_key($drive), 'label' => '', 'name' => $drive['name'], 'size' => $drive['size'], 'mounted' => true);
-				} elseif (empty($drive['mountpoint'])) {
+				} elseif (touch_drive_openable($constants, $drive)) {
 					$drives[]	= array('id' => 'device:' . $drive['path'], 'label' => '', 'name' => $drive['name'], 'size' => $drive['size'], 'path' => $drive['path'], 'mounted' => false);
 				}
 			}
@@ -857,7 +868,7 @@
 			$path	= isset($_POST['path']) ? (string)$_POST['path'] : '';
 			$drive	= null;
 			foreach (touch_attached_drives() as $attached) {
-				if ($attached['path'] === $path and empty($attached['mountpoint'])) {
+				if ($attached['path'] === $path and touch_drive_openable($constants, $attached)) {
 					$drive	= $attached;
 				}
 			}

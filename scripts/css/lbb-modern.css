@@ -1122,5 +1122,38 @@ details.lbb-picker[open] > summary::before { transform: rotate(-135deg); }
 .lbb-picker-value { color: var(--m-heading); font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 details.lbb-picker:not(.chosen) .lbb-picker-value { color: var(--m-muted); font-weight: 500; }
 .lbb-picker-list { padding: 0 0 0.6rem; }
-.lbb-picker-list label, .lbb-picker-list button { margin: 0.3rem 0 !important; padding: 0.55rem 0.9rem !important; }
+#picker-source .lbb-picker-list label, #picker-target .lbb-picker-list button { margin: 0.3rem 0 !important; padding: 0.55rem 0.9rem !important; }
 .lbb-picker-list > div { margin: 0 !important; }
+
+/* backup options (power off, move, rename, presets, secondary backup): third picker under source and target */
+details.lbb-picker-options { margin-top: 1rem; }
+.lbb-picker-options .lbb-picker-list { text-align: left; }
+.lbb-picker-options .backupsection { padding: 0.4rem 0; }
+.lbb-picker-options h4 { font-size: 0.95rem; margin: 0.4rem 0; }
+.lbb-picker-options table td { padding: 0.25rem 0.4rem 0.25rem 0; vertical-align: top; }
+.lbb-picker-options select { max-width: 100%; }
+
+/* maintenance: one drive chooser, then one row per task */
+.lbb-maintenance { text-align: left; }
+.lbb-maint-drive { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.2rem 0 0.8rem; }
+.lbb-maint-drive > span:first-child { color: var(--m-muted); font-weight: 600; font-size: 0.9rem; }
+.lbb-seg input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.lbb-seg label {
+	padding: 0.4rem 0.8rem;
+	border-radius: 9px;
+	color: var(--m-muted);
+	font-weight: 600;
+	cursor: pointer;
+}
+.lbb-seg input[type="radio"]:checked + label { background: var(--m-surface); color: var(--m-heading); box-shadow: var(--m-shadow-sm); }
+.lbb-seg input[type="radio"]:focus-visible + label { box-shadow: 0 0 0 3px var(--m-accent-ring); }
+table.lbb-maint { width: 100%; border-collapse: collapse; }
+table.lbb-maint td { padding: 0.65rem 0.2rem; border-top: 1px solid var(--m-border); vertical-align: middle; }
+table.lbb-maint tr:first-child td { border-top: 0; }
+table.lbb-maint td:last-child { width: 1%; white-space: nowrap; text-align: right; }
+table.lbb-maint small { color: var(--m-muted); font-weight: 400; }
+table.lbb-maint button.usb { width: auto; min-width: 5.5rem; margin: 0; }
+@media (max-width: 575.98px) {
+	.lbb-maint-drive .lbb-seg { width: 100%; }
+	.lbb-maint-drive .lbb-seg label { flex: 1 1 0; text-align: center; padding: 0.45rem 0.3rem; }
+}
