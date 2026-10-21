@@ -99,8 +99,18 @@ cd
 
 sudo rm -R ${INSTALLER_DIR} 2>/dev/null
 # clone into "little-backup-box" whatever the repository is called: INSTALLER_DIR and updates expect this directory name
-git clone --branch "${branch}" "https://github.com/${LBB_REPO}.git" little-backup-box
-GIT_CLONE=$?
+# only the newest version (no history): small and quick, survives weak connections; retried, the later tries over HTTP/1.1
+GIT_CLONE=1
+for try in 1 2 3; do
+	if [ "${try}" -gt 1 ]; then
+		echo "Cloning failed, retrying (${try}/3) ..."
+		rm -rf little-backup-box
+		sleep 5
+		git config --global http.version HTTP/1.1
+	fi
+	git clone --depth 1 --branch "${branch}" "https://github.com/${LBB_REPO}.git" little-backup-box && GIT_CLONE=0 && break
+done
+git config --global --unset http.version 2>/dev/null
 if [ "${GIT_CLONE}" -gt 0 ]; then
 	echo "Cloning little-backup-box from github.com failed. Please try again later."
 	exit 1
