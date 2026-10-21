@@ -33,6 +33,9 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
+# GitHub repository to install from (this fork of Little Backup Box with the touchscreen UI)
+LBB_REPO="keeratsawhney/backupbox"
+
 # get OS release version
 OS_RELEASE=$(lsb_release -a | grep 'Release:' | cut -d':' -f 2 | xargs)
 
@@ -41,8 +44,8 @@ if  [ "${OS_RELEASE}" == "13" ]; then
 
 elif  [ "${OS_RELEASE}" == "12" ]; then
 	# bookworm
-	echo -e "Note: It looks like you are running an outdated Raspberry Pi OS Bookworm system.\nThe current development version of Little Backup Box is no longer compatible with this release.\nThe last version supporting Bookworm will be installed instead.\nUpgrading to Trixie is strongly recommended."
-	branch='bookworm'; curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/${branch}/install-little-backup-box.sh | bash -s -- ${branch} 2> install-error.log
+	# the touchscreen UI of this fork is built on the Trixie version only
+	echo -e "Note: It looks like you are running an outdated Raspberry Pi OS Bookworm system.\nThis version of Little Backup Box needs Raspberry Pi OS Trixie.\nPlease install Raspberry Pi OS Trixie (Raspberry Pi Imager) and run the installer again."
 	exit
 else
 	echo -e "Sorry: Installation and updates are only supported on Raspberry Pi OS Trixie (main branch) and Bookworm (non-asterisk branch).\nThe Bookworm branch is no longer maintained — development has moved to Trixie."
@@ -95,7 +98,8 @@ echo "Cloning Little Backup Box"
 cd
 
 sudo rm -R ${INSTALLER_DIR} 2>/dev/null
-git clone --branch "${branch}" https://github.com/outdoorbits/little-backup-box.git
+# clone into "little-backup-box" whatever the repository is called: INSTALLER_DIR and updates expect this directory name
+git clone --branch "${branch}" "https://github.com/${LBB_REPO}.git" little-backup-box
 GIT_CLONE=$?
 if [ "${GIT_CLONE}" -gt 0 ]; then
 	echo "Cloning little-backup-box from github.com failed. Please try again later."
@@ -482,6 +486,7 @@ sudo a2enmod proxy
 sudo a2enmod proxy_http
 sudo a2enmod proxy_html
 sudo a2enmod headers
+sudo a2enmod xml2enc
 
 #enable conf php<VERSION>-fpm
 sudo a2enconf php${PHP_VERSION}-fpm
@@ -533,12 +538,16 @@ if [ "${SCRIPT_MODE}" = "install" ]; then
 	echo "ServerName little-backup-box" | sudo tee -a "/etc/apache2/apache2.conf"
 fi
 
-yes | sudo cp -f "${INSTALLER_DIR}/etc/apache2_ports.conf" "/etc/apache2/ports.conf"
-yes | sudo cp -f "${INSTALLER_DIR}/etc/apache2_conf-available_ssl-params.conf" "/etc/apache2/conf-available/ssl-params.conf"
-yes | sudo cp -f "${INSTALLER_DIR}/etc/apache2_sites-available_little-backup-box.conf" "/etc/apache2/sites-available/little-backup-box.conf"
+sudo cp -f "${INSTALLER_DIR}/etc/apache2_ports.conf" "/etc/apache2/ports.conf"
+sudo cp -f "${INSTALLER_DIR}/etc/apache2_conf-available_ssl-params.conf" "/etc/apache2/conf-available/ssl-params.conf"
+sudo cp -f "${INSTALLER_DIR}/etc/apache2_sites-available_little-backup-box.conf" "/etc/apache2/sites-available/little-backup-box.conf"
 
 sudo mkdir -p /etc/apache2/includes
 sudo touch /etc/apache2/includes/password.conf
+for src in "${INSTALLER_DIR}"/etc/apache2_includes_*.conf; do
+    name="${src##*/etc/apache2_includes_}"
+    sudo cp -f "$src" "/etc/apache2/includes/$name"
+done
 
 sudo a2enmod ssl
 sudo a2enmod headers

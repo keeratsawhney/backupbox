@@ -13,7 +13,8 @@
     "tools": "Herramientas",
     "filebrowser": "Archivos",
     "view": "View",
-    "update": "actualización"
+    "update": "actualización",
+    "captive_portal": "<nobr>Portal-WiFi</nobr>"
   },
   "main": {
     "internal_button": "Almacenamiento int.",
@@ -524,6 +525,9 @@
         "upload_not_zip": "El archivo que está intentando cargar no es un archivo .zip. Inténtelo de nuevo.",
         "upload_problem": "Hubo un problema con la carga. Inténtelo de nuevo.",
         "upload_success": "Su archivo de configuración se ha cargado y los ajustes se han instalado:"
+      },
+      "keyboard": {
+        "effect_after_reboot": "Los ajustes del teclado en pantalla solo se aplicarán después de reiniciar el equipo."
       }
     },
     "wifi": {
@@ -821,7 +825,10 @@
         "CONNECTING": "conectando ...",
         "CONNECTED": "conectado"
       },
-      "reset_done": "Comitup restablecer"
+      "reset": {
+        "done": "restablecer",
+        "started": "Reiniciando..."
+      }
     }
   },
   "seconds_short": "s",
@@ -901,7 +908,8 @@
       "medium_source_nvme": "Origen NVMe local",
       "medium_target_nvme": "Destino NVMe local",
       "social_publish": "marcado para publicación",
-      "social_published": "publicado"
+      "social_published": "publicado",
+      "apply": "Aplicar filtro"
     },
     "images": {
       "download": "Descargar originales",

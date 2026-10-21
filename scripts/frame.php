@@ -37,10 +37,11 @@
 	}
 
 	$framed_pages	= array(
-		'comitup'		=> '/comitup/',
-		'sysinfo'		=> '/sysinfo.php',
-		'files'			=> '/files',
-		'rclone_gui'	=> '/rclone/'
+		'comitup'			=> '/comitup/',
+		'captive_portal'	=> '/portalpage/',
+		'sysinfo'			=> '/sysinfo.php',
+		'files'				=> '/files',
+		'rclone_gui'		=> '/rclone/'
 	);
 
 	$frame_index	= '';

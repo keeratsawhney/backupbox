@@ -26,6 +26,7 @@ import shutil
 import string
 import subprocess
 import sys
+import time
 
 import lib_display
 import lib_language
@@ -36,6 +37,9 @@ import lib_setup
 
 class comitup(object):
 	def __init__(self):
+
+		self.WORKING_DIR = os.path.dirname(__file__)
+		self.python = shutil.which('python3')
 
 		#config
 		self.__configfile	= '/etc/comitup.conf'
@@ -55,7 +59,7 @@ class comitup(object):
 	def installed(self):
 		return(True if shutil.which("comitup-cli") else False)
 
-	def config(self, Password=''): # use general password if None is given
+	def config(self, Password=''):
 
 		try:
 			with open(self.__configfile,'w') as f:
@@ -67,6 +71,7 @@ class comitup(object):
 						(len(Password) <= 63)
 					):
 						f.write(f'ap_password: {Password}\n')
+				f.write('enable_nuke: true\n')
 		except:
 			print("Error writing comitup config file.")
 
@@ -125,8 +130,34 @@ class comitup(object):
 				return True
 		return False
 
+	def get_hotspot_ssid(self):
+		try:
+			output	= subprocess.check_output(['/usr/bin/ip', '-o', '-4', 'addr', 'show'], text=True)
+
+			interface	= None
+			for line in output.splitlines():
+				parts	= line.split()
+				if len(parts) >= 4 and parts[3].startswith('10.41.0.1/'):
+					interface = parts[1]
+					break
+
+			if not interface:
+				return False
+
+			connection	= subprocess.check_output(['/usr/bin/nmcli', '-g', 'GENERAL.CONNECTION', 'device', 'show', interface], text=True).strip()
+
+			if not connection or connection == '--':
+				return False
+
+			ssid	= subprocess.check_output(['/usr/bin/nmcli', '-g', '802-11-wireless.ssid', 'connection', 'show', connection], text=True, stderr=subprocess.DEVNULL).strip()
+
+			return ssid if ssid else False
+
+		except subprocess.SubprocessError:
+			return False
+
 	def create_wifi_link_qr_image(self):
-		status	= self.get_status()
+		SSID	= self.get_hotspot_ssid()
 
 		width			= self.__conf_DISP_RESOLUTION_X
 		height			= self.__conf_DISP_RESOLUTION_Y
@@ -141,14 +172,13 @@ class comitup(object):
 		shift_x		= size if height <= width else 0
 		shift_y		= size if height > width else 0
 
-		if 	(status['mode'] == 'router' or status['state'] == 'HOTSPOT') and \
-			status['SSID'] and \
+		if 	SSID and \
 			width >= 64 and \
 			height >= 64 and \
 			not any(c in self.__conf_WIFI_PASSWORD for c in [':', ';']):
 			# create QR code
 
-			LinkText	= f"WIFI:T:WPA;S:{status['SSID']};P:{self.__conf_WIFI_PASSWORD};H:;;"
+			LinkText	= f"WIFI:T:WPA;S:{SSID};P:{self.__conf_WIFI_PASSWORD};H:;;"
 
 			qr	= qrcode.QRCode(
 				version				= 3,
@@ -241,7 +271,7 @@ class comitup(object):
 			)
 
 			font	= ImageFont.load_default()
-			HOT		= 'HOT' if status['state'] == 'HOTSPOT' else 'WiFi'
+			HOT		= 'HOT' if SSID else 'WiFi'
 			bbox	= draw.textbbox((0, 0), HOT, font=font)
 			HOT_w	= bbox[2] - bbox[0]
 
@@ -261,13 +291,25 @@ class comitup(object):
 		# display new status
 		status_translated	= None
 		if status in ['HOTSPOT', 'CONNECTING', 'CONNECTED']:
+			if status == 'CONNECTED':
+				try:
+					subprocess.Popen(
+						[
+							self.python,
+							f'{self.WORKING_DIR}/portal_page_detector.py'
+						],
+						start_new_session=True
+					)
+				except:
+					print('Error: Portal page detector not started.', file=sys.stderr)
+
 			status_translated	= self.__lan.l(f'box_comitup_status_{status}')
 			status_translated	= status_translated if status_translated!=f'box_comitup_status_{status}' else status
 		elif status == 'RESET':
 			status_translated	= self.__lan.l('box_comitup_reset_done')
 
 		if status_translated is not None:
-			self.__display.message([f'set:temp,time={self.__conf_DISP_FRAME_TIME * 4}', ':Comitup:', f':{status_translated}'], logging=False)
+			self.__display.message([f'set:temp,time={self.__conf_DISP_FRAME_TIME * 4}', ':Comitup:', f':{status_translated}'])
 
 		# setup apache ports
 		ApachePortsConf	= '/etc/apache2/ports.conf'
@@ -284,12 +326,11 @@ class comitup(object):
 			for Port in BasicPorts:
 				f.write(f'Listen {Port}\n')
 
-			if not (status in ['HOTSPOT', 'RESET'] or self.hotspot_active()):
+			if not (status in ['HOTSPOT', 'RESET']):
 				f.write(f'Listen 80\n')
 
 		subprocess.run('/usr/sbin/service apache2 restart || /usr/sbin/service apache2 start', shell=True)
 
-		# create WIFI QR
 		self.create_wifi_link_qr_image()
 
 	def hotspot_active(self):
@@ -297,15 +338,25 @@ class comitup(object):
 		return(status['mode'] == 'router' or status['state'] == 'HOTSPOT')
 
 	def reset(self):
-		try:
-			subprocess.run(['/usr/sbin/comitup-cli', 'd'])
-			subprocess.run(['/usr/bin/systemctl', 'restart', 'comitup'])
-		except:
-			pass
-		else:
-			# adapt apache ports
-			self.new_status('RESET')
+		self.__display.message([f'set:temp,time={self.__conf_DISP_FRAME_TIME * 4}', ':Comitup:', f':{self.__lan.l('box_comitup_reset_started')}'])
 
+		try:
+			subprocess.run(['/usr/sbin/comitup-cli', 'x'], check=True)
+		except Exception as e:
+			print(f"comitup-cli x failed: {e}", flush=True)
+			return
+
+		# wait until Comitup has recreated the hotspot
+		for _ in range(60):
+			if self.get_hotspot_ssid():
+				break
+			time.sleep(0.5)
+		else:
+			print("Comitup hotspot did not return.", flush=True)
+			return
+
+		# adapt apache ports
+		self.new_status('RESET')
 
 if __name__ == "__main__":
 	try:
