@@ -47,6 +47,13 @@ echo "Copying web files ..."
 sudo cp -Rf "${INSTALLER_DIR}/scripts/"* "${WEB_ROOT}/"
 sudo chown -R www-data:www-data "${WEB_ROOT}"
 
+# Tiny File Manager (Files of the classic UI): do not show hidden files
+# (macOS "._name" files next to every photo copied from a Mac, .Spotlight-V100, .Trashes, ...)
+TFM_CONFIG="/var/www/tinyfilemanager/config.php"
+if [[ -f "${TFM_CONFIG}" ]]; then
+	sudo sed -i 's/"show_hidden":true/"show_hidden":false/' "${TFM_CONFIG}"
+fi
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."

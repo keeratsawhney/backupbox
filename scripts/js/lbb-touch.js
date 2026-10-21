@@ -18,6 +18,7 @@
 		wizard: { step: 0, source: null, target: null, options: {} },
 		// medium: storage picked by the user; empty lets the box choose (attached NVMe/USB first)
 		photos: { offset: 0, total: 0, items: [], viewer: -1, medium: '' },
+		files: { medium: '', path: '' },
 		failures: 0,
 		powering: false,
 	};
@@ -146,6 +147,7 @@
 		if (page === 'backup') loadServices().then(renderWizard);
 		if (page === 'photos') loadPhotos(state.photos.offset);
 		if (page === 'log') loadLog(true);
+		if (page === 'files') loadFiles();
 		if (page === 'system') loadSystem();
 	}
 
@@ -523,10 +525,17 @@
 	}
 
 	function openViewer(index) {
+		// items of the photos page, or (state.viewerFiles) the photos and videos of a folder
 		const p = state.photos;
-		const item = p.items[index];
+		const list = state.viewerFiles || p.items;
+		const item = list[index];
 		if (!item) return;
 		p.viewer = index;
+		$('viewer-download').hidden = !item.url;
+		if (item.url) {
+			$('viewer-download').href = item.url;
+			$('viewer-download').setAttribute('download', item.name);
+		}
 		const caption = item.name + (item.date ? '  ·  ' + formatDate(item.date) : '');
 		const img = $('viewer-img');
 		const video = $('viewer-video');
@@ -561,8 +570,13 @@
 		}
 		$('viewer-caption').textContent = caption;
 		$('viewer').hidden = false;
-		$('viewer-prev').disabled = p.offset + index <= 0;
-		$('viewer-next').disabled = p.offset + index >= p.total - 1;
+		if (state.viewerFiles) {
+			$('viewer-prev').disabled = index <= 0;
+			$('viewer-next').disabled = index >= list.length - 1;
+		} else {
+			$('viewer-prev').disabled = p.offset + index <= 0;
+			$('viewer-next').disabled = p.offset + index >= p.total - 1;
+		}
 	}
 
 	function stopVideo() {
@@ -578,6 +592,10 @@
 	async function stepViewer(delta) {
 		const p = state.photos;
 		let index = p.viewer + delta;
+		if (state.viewerFiles) {
+			if (index >= 0 && index < state.viewerFiles.length) openViewer(index);
+			return;
+		}
 		if (index < 0 || index >= p.items.length) {
 			const newOffset = p.offset + (delta > 0 ? PHOTOS_PER_PAGE : -PHOTOS_PER_PAGE);
 			if (newOffset < 0 || newOffset >= p.total) return;
@@ -585,6 +603,84 @@
 			index = delta > 0 ? 0 : p.items.length - 1;
 		}
 		openViewer(index);
+	}
+
+	// ---------- files ----------
+
+	async function loadFiles() {
+		// browse the folders of the mounted drives (hidden files are left out by the box)
+		let data;
+		try {
+			data = await api('files', { medium: state.files.medium, path: state.files.path });
+		} catch (e) {
+			toast(e.message, true);
+			return;
+		}
+		state.files.medium = data.medium || '';
+		state.files.path = data.path;
+
+		const drives = $('files-drives');
+		drives.replaceChildren();
+		data.drives.forEach((drive) => {
+			const button = el('button', { class: 'btn' + (drive.id === data.medium ? ' selected' : ''), text: drive.label });
+			button.addEventListener('click', () => {
+				state.files.medium = drive.id;
+				state.files.path = '';
+				loadFiles();
+			});
+			drives.append(button);
+		});
+
+		const label = (data.drives.find((x) => x.id === data.medium) || {}).label || '';
+		$('files-crumb').textContent = data.path ? label + ' / ' + data.path.split('/').join(' / ') : label;
+		$('files-up').disabled = !data.path;
+
+		const list = $('files-list');
+		list.replaceChildren();
+		list.scrollTop = 0;
+		if (!data.drives.length) {
+			list.append(el('div', { class: 'empty' }, [icon('folder'), el('span', { text: T.connect_target })]));
+			return;
+		}
+		if (!data.entries.length) {
+			list.append(el('div', { class: 'empty' }, [icon('folder'), el('span', { text: T.empty_folder })]));
+			return;
+		}
+
+		const media = data.entries.filter((x) => x.type === 'file' && x.media);
+		data.entries.forEach((entry) => {
+			let preview;
+			if (entry.type === 'dir') {
+				preview = el('span', { class: 'file-icon folder' }, icon('folder'));
+			} else if (entry.thumb) {
+				preview = el('img', { class: 'file-thumb', src: entry.thumb, alt: '', loading: 'lazy' });
+				preview.addEventListener('error', () => preview.replaceWith(el('span', { class: 'file-icon' }, el('b', { text: entry.ext }))), { once: true });
+			} else {
+				preview = el('span', { class: 'file-icon' }, el('b', { text: entry.ext || '' }));
+			}
+			const sub = entry.type === 'dir' ? '' : formatBytes(entry.size) + '  ·  ' + formatDate(entry.date);
+			const row = el('button', { class: 'file-row' }, [
+				preview,
+				el('span', { class: 'file-text' }, [el('b', { text: entry.name }), sub ? el('small', { text: sub }) : null]),
+				entry.type === 'dir' ? icon('right') : null,
+			]);
+			row.addEventListener('click', () => {
+				if (entry.type === 'dir') {
+					state.files.path = entry.path;
+					loadFiles();
+				} else if (entry.media) {
+					state.viewerFiles = media;
+					openViewer(media.indexOf(entry));
+				} else {
+					// other files: download
+					const link = el('a', { href: entry.url, download: entry.name });
+					document.body.append(link);
+					link.click();
+					link.remove();
+				}
+			});
+			list.append(row);
+		});
 	}
 
 	// ---------- log ----------
@@ -722,7 +818,7 @@
 	// ---------- init ----------
 
 	function initLabels() {
-		const tabLabels = { home: T.home, backup: T.backup, photos: T.photos, log: T.log, system: T.system };
+		const tabLabels = { home: T.home, backup: T.backup, photos: T.photos, log: T.log, files: T.files, system: T.system };
 		document.querySelectorAll('.tab').forEach((tab) => {
 			tab.querySelector('span').textContent = tabLabels[tab.dataset.page];
 			tab.addEventListener('click', () => {
@@ -789,6 +885,11 @@
 		$('viewer-close').addEventListener('click', () => {
 			stopVideo();
 			$('viewer').hidden = true;
+			state.viewerFiles = null;
+		});
+		$('files-up').addEventListener('click', () => {
+			state.files.path = state.files.path.split('/').slice(0, -1).join('/');
+			loadFiles();
 		});
 		$('viewer-prev').addEventListener('click', () => stepViewer(-1));
 		$('viewer-next').addEventListener('click', () => stepViewer(1));

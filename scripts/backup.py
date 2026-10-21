@@ -1368,7 +1368,7 @@ class backup(object):
 		Files	= []
 		for File in OnlyFiles:
 			File	= File.strip('/')
-			if '/tims/' in f'/{File}' or not '.' in File or File.rsplit('.', 1)[1].lower() not in Extensions:
+			if '/tims/' in f'/{File}' or '/.' in f'/{File}' or not '.' in File or File.rsplit('.', 1)[1].lower() not in Extensions:
 				continue
 			if os.path.isfile(os.path.join(Device.MountPoint, File)):
 				Files.append(f'/{File}')
@@ -1691,6 +1691,10 @@ class backup(object):
 
 		for BannedPath in self.__const_VIEW_BANNED_PATHS:
 			BannedPathsList += ['-not', '-ipath', BannedPath]
+
+		# hidden files and folders: macOS writes a "._name" metadata file next to every file it copies
+		# to FAT/exFAT drives, plus .Spotlight-V100, .Trashes, ... (used in shell commands, hence quoted)
+		BannedPathsList += ['-not', '-path', "'*/.*'"]
 
 		return(BannedPathsList)
 

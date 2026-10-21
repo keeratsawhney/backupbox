@@ -38,7 +38,7 @@
 				try {
 					$db	= new SQLite3($database_file, SQLITE3_OPEN_READONLY);
 					$db->busyTimeout(2000);
-					$media[$key]['count']	= (int)$db->querySingle('SELECT count(*) FROM EXIF_DATA;');
+					$media[$key]['count']	= (int)$db->querySingle("SELECT count(*) FROM EXIF_DATA WHERE File_Name NOT LIKE '.%';");
 					$db->close();
 				} catch (Exception $e) {
 					$media[$key]['count']	= 0;
@@ -167,12 +167,13 @@
 				$db	= new SQLite3($database_file, SQLITE3_OPEN_READONLY);
 				$db->busyTimeout(2000);
 
-				$countResult	= $db->querySingle('SELECT count(*) FROM EXIF_DATA;');
+				# without hidden files (macOS "._name" metadata files) that older versions put into the database
+				$countResult	= $db->querySingle("SELECT count(*) FROM EXIF_DATA WHERE File_Name NOT LIKE '.%';");
 				$total			= $countResult === null ? 0 : (int)$countResult;
 
 				$statement	= $db->prepare(
 					'SELECT ID, Directory, File_Name, LbbRating, Create_Date, Comment, File_Type_Extension
-					 FROM EXIF_DATA ORDER BY Create_Date DESC, ID DESC LIMIT :limit OFFSET :offset;'
+					 FROM EXIF_DATA WHERE File_Name NOT LIKE \'.%\' ORDER BY Create_Date DESC, ID DESC LIMIT :limit OFFSET :offset;'
 				);
 				$statement->bindValue(':limit', (int)$limit, SQLITE3_INTEGER);
 				$statement->bindValue(':offset', max(0, (int)$offset), SQLITE3_INTEGER);

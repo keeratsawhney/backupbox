@@ -82,6 +82,9 @@
 	<svg width="0" height="0" style="position:absolute" aria-hidden="true">
 		<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></symbol>
 		<symbol id="i-backup" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></symbol>
+		<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+		<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></symbol>
+		<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
 		<symbol id="i-photos" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
 		<symbol id="i-log" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></symbol>
 		<symbol id="i-system" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
@@ -121,6 +124,7 @@
 			<button class="tab" data-page="backup"><svg><use href="#i-backup"/></svg><span></span></button>
 			<button class="tab" data-page="photos"><svg><use href="#i-photos"/></svg><span></span></button>
 			<button class="tab" data-page="log"><svg><use href="#i-log"/></svg><span></span></button>
+			<button class="tab" data-page="files"><svg><use href="#i-folder"/></svg><span></span></button>
 			<button class="tab" data-page="system"><svg><use href="#i-system"/></svg><span></span></button>
 		</nav>
 
@@ -184,6 +188,16 @@
 			</section>
 
 			<!-- SYSTEM -->
+			<!-- FILES -->
+			<section class="page" id="page-files">
+				<div class="photo-media" id="files-drives"></div>
+				<div class="files-bar">
+					<button class="btn btn-icon" id="files-up" aria-label="up"><svg><use href="#i-left"/></svg></button>
+					<span class="files-crumb" id="files-crumb"></span>
+				</div>
+				<div class="files-list scroll" id="files-list"></div>
+			</section>
+
 			<section class="page" id="page-system">
 				<div class="scroll" id="system-scroll">
 					<div class="info-grid" id="sysinfo"></div>
@@ -218,6 +232,7 @@
 		<button class="btn btn-icon viewer-close" id="viewer-close"><svg><use href="#i-close"/></svg></button>
 		<button class="btn btn-icon viewer-prev" id="viewer-prev"><svg><use href="#i-left"/></svg></button>
 		<button class="btn btn-icon viewer-next" id="viewer-next"><svg><use href="#i-right"/></svg></button>
+		<a class="btn btn-icon viewer-download" id="viewer-download" download hidden aria-label="download"><svg><use href="#i-download"/></svg></a>
 	</div>
 
 	<!-- confirm dialog -->

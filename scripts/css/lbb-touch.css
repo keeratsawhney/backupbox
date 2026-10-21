@@ -1010,6 +1010,100 @@ svg {
 	text-overflow: ellipsis;
 }
 
+/* ---------- files ---------- */
+
+.files-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: none;
+}
+
+.files-crumb {
+	flex: 1;
+	min-width: 0;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.files-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.file-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 52px;
+	padding: 4px 10px 4px 4px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.file-row:active {
+	background: var(--surface-2);
+}
+
+.file-row > svg {
+	color: var(--muted);
+}
+
+.file-thumb,
+.file-icon {
+	flex: none;
+	width: 44px;
+	height: 44px;
+	border-radius: 8px;
+	object-fit: cover;
+	background: var(--surface-2);
+}
+
+.file-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted);
+	font-size: 10px;
+}
+
+.file-icon.folder {
+	color: var(--accent);
+}
+
+.file-text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.file-text b,
+.file-text small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.file-text small {
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.viewer-download {
+	top: 6px;
+	right: 60px;
+}
+
 /* ---------- log ---------- */
 
 .log {

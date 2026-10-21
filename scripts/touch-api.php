@@ -458,7 +458,8 @@
 		}
 
 		$lines	= array();
-		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' ' . implode(' ', $banned) . " -printf '%T@\\t%P\\n' 2>/dev/null", $lines);
+		# without hidden files and folders (macOS "._name" metadata files, .Spotlight-V100, .Trashes, ...)
+		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' -not -path ' . escapeshellarg('*/.*') . ' ' . implode(' ', $banned) . " -printf '%T@\\t%P\\n' 2>/dev/null", $lines);
 
 		$files	= array();
 		foreach ($lines as $line) {
@@ -485,6 +486,7 @@
 			'date'		=> '',
 			'rating'	=> 0,
 			'video'		=> touch_is_video($ext, $constants),
+			'url'		=> lbb_dashboard_url_path($file),
 			# thumbnail made during backup, else a preview made on demand
 			'thumb'		=> file_exists($tims) ? lbb_dashboard_url_path($tims) : 'touch-api.php?action=thumb&medium=' . rawurlencode($medium) . '&path=' . rawurlencode($relative),
 		), $extra);
@@ -642,6 +644,70 @@
 				'total'				=> $key === null ? 0 : count($available[$key]),
 				'offset'			=> $offset,
 				'items'				=> $items,
+			));
+
+		case 'files':
+			# file browser of the touch UI: folders and files of a mounted drive, hidden and technical files left out
+			$drives	= array();
+			foreach (array('target_usb', 'target_nvme', 'source_usb', 'source_nvme') as $media_key) {
+				if (touch_medium_path($constants, $media_key) !== false) {
+					$drives[]	= array('id' => $media_key, 'label' => touch_text(lbb_dashboard_medium_label($media_key)));
+				}
+			}
+			if (!$drives) {
+				touch_respond(array('ok' => true, 'drives' => array(), 'medium' => null, 'path' => '', 'entries' => array()));
+			}
+
+			$key	= isset($_GET['medium']) && in_array($_GET['medium'], array_column($drives, 'id'), true) ? (string)$_GET['medium'] : $drives[0]['id'];
+			$root	= realpath(touch_medium_path($constants, $key));
+			$sub	= trim(isset($_GET['path']) ? (string)$_GET['path'] : '', '/');
+			$dir	= realpath($root . '/' . $sub);
+			if ($dir === false or !is_dir($dir) or ($dir !== $root and !str_starts_with($dir, $root . '/'))) {
+				$dir	= $root;
+			}
+			$sub	= ltrim(substr($dir, strlen($root)), '/');
+
+			$extensions	= touch_media_extensions($constants);
+			$entries	= array();
+			foreach (scandir($dir) ?: array() as $name) {
+				# hidden (".name", macOS "._name"), thumbnail folders and the database/ID files of the box
+				if (str_starts_with($name, '.') or $name === 'tims' or $name === $constants['const_IMAGE_DATABASE_FILENAME'] or str_ends_with($name, '.lbbid')) {
+					continue;
+				}
+				$full		= $dir . '/' . $name;
+				$relative	= ($sub === '' ? '' : $sub . '/') . $name;
+				if (is_dir($full)) {
+					$entries[]	= array('type' => 'dir', 'name' => $name, 'path' => $relative);
+					continue;
+				}
+				$ext	= strtolower(pathinfo($name, PATHINFO_EXTENSION));
+				$media	= in_array($ext, $extensions, true);
+				$entry	= touch_media_item($constants, $key, $root, $relative, array(
+					'type'	=> 'file',
+					'path'	=> $relative,
+					'size'	=> @filesize($full),
+					'date'	=> date('Y-m-d H:i', (int)@filemtime($full)),
+					'url'	=> lbb_dashboard_url_path($full),
+					'media'	=> $media,
+				));
+				if (!$media) {
+					$entry['thumb']	= null;
+				}
+				$entries[]	= $entry;
+			}
+
+			# folders first, then files, by name
+			usort($entries, function($a, $b) {
+				return(($a['type'] == 'dir' ? 0 : 1) <=> ($b['type'] == 'dir' ? 0 : 1) ?: strnatcasecmp($a['name'], $b['name']));
+			});
+
+			touch_respond(array(
+				'ok'		=> true,
+				'drives'	=> $drives,
+				'medium'	=> $key,
+				'path'		=> $sub,
+				'entries'	=> array_slice($entries, 0, 3000),
+				'truncated'	=> count($entries) > 3000,
 			));
 
 		case 'thumb':
