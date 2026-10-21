@@ -20,18 +20,30 @@
 // Usage:
 //$constants and $config must be defined in main script.-->
 
-function display($clear=true) {
+function display($clear=true, $title='') {
 	global $config;
 	global $constants;
 
-	if ($config['conf_DISP'] == 'display' and $config['conf_DISP_RESOLUTION_X'] > 0 and $config['conf_DISP_RESOLUTION_Y'] > 0) {
+	$show_display	= ($config['conf_DISP'] == 'display' and $config['conf_DISP_RESOLUTION_X'] > 0 and $config['conf_DISP_RESOLUTION_Y'] > 0);
+
+	if (! $show_display and $title == '') {
+		return;
+	}
+	?>
+	<header class="lbb-pagehead">
+		<?php if ($title != '') { ?>
+			<h1><?php echo $title; ?></h1>
+		<?php } ?>
+		<?php
+	if ($show_display) {
 		?>
 
-		<img id="display" src="<?php echo str_replace('/var/www/little-backup-box', '' , $constants['const_DISPLAY_IMAGE_EXPORT_FILE']); ?>" style="width: <?php echo $constants['const_DISPLAY_SIZE_UI_X']; ?>px; height: <?php echo $constants['const_DISPLAY_SIZE_UI_Y']; ?>px; background: #000000; float: right;">
-
+		<div class="lbb-display">
+			<img id="display" src="<?php echo str_replace('/var/www/little-backup-box', '' , $constants['const_DISPLAY_IMAGE_EXPORT_FILE']); ?>" width="<?php echo $constants['const_DISPLAY_SIZE_UI_X']; ?>" height="<?php echo $constants['const_DISPLAY_SIZE_UI_Y']; ?>" alt="">
+		</div>
 		<?php
-		if ($clear) {
-			print('<div style="clear: both;"></div>');
-		}
 	}
+	?>
+	</header>
+	<?php
 }

@@ -165,20 +165,13 @@
 		}
 	</script>
 
-	<?php display(false); ?>
-	<div style="clear: both;"></div>
-
-	<?php
-		include "${WORKING_DIR}/sub-dashboard.php";
-		render_dashboard($constants, $config, $WORKING_DIR);
-	?>
+	<?php display(false, 'Little Backup Box'); ?>
 
 	<form class="text-center" style="margin-top: 1em;" method="POST">
 
 		<input type="hidden" name="form_sent" value="1">
 
-		<details class="card lbb-backup-panel" id="backup">
-			<summary class="lbb-panel-summary"><?php echo L::main_source . " &rarr; " . L::main_target; ?></summary>
+		<div class="card lbb-backup-panel" id="backup">
 			<div class="row" style="width:100%; float: left; display: block;">
 				<div class="column" style="display: block;">
 					<?php
@@ -268,9 +261,9 @@
 			</div>
 
 			<div class='backupsection'>
-				<button name="stopbackup" class="danger"><?php echo L::main_stopbackup_button; ?>
+				<button name="stopbackup" class="danger"><?php echo L::main_stopbackup_button; ?></button>
 			</div>
-		</details>
+		</div>
 
 		<div class="card" style="margin-top: 3em;">
 
@@ -468,6 +461,12 @@
 		</div>
 
 	</form>
+
+	<?php
+		// newest photos and videos of the backup drive and source, like the touch UI shows them
+		include "${WORKING_DIR}/sub-gallery.php";
+		gallery_section('compact', 12);
+	?>
 
 	<?php include "sub-logmonitor.php";
 		logmonitor($sourcefile=$constants['const_LOGFILE'], $title=L::log_logmonitor, $allow_logfile_operations=true);

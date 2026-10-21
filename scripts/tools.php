@@ -105,7 +105,7 @@
 	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
 	<?php
 		include "${WORKING_DIR}/sub-display.php";
-		display();
+		display(true, L::mainmenue_tools);
 	?>
 
 	<div class="card">

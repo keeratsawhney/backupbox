@@ -638,15 +638,15 @@ CONFIGDATA;
 	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
 	<?php
 		include "${WORKING_DIR}/sub-display.php";
-		display();
+		display(true, L::mainmenue_config);
 	?>
 
 	<?php echo($SetupMessages); ?>
 
 	<form action="<?php echo $_SERVER['PHP_SELF'] ?>" method="POST" enctype="multipart/form-data">
 
-		<div class="card" style="margin-top: 2em;">
-			<?php echo '<button style="margin-top: 2em;" type="submit" name="save">' . L::config_save_button . '</button>'; ?>
+		<div class="card lbb-savebar">
+			<?php echo '<button type="submit" name="save">' . L::config_save_button . '</button>'; ?>
 		</div>
 
 		<div class="card" style="margin-top: 2em;">
@@ -1989,8 +1989,8 @@ CONFIGDATA;
 		</div>
 
 <!-- 		save -->
-		<div class="card" style="margin-top: 2em; position: sticky; bottom: 0; z-index: 10; background-color: var(--cbg)">
-            <?php echo '<button style="margin-top: 2em" type="submit" name="save">' . L::config_save_button . '</button>'; ?>
+		<div class="card lbb-savebar lbb-savebar-sticky">
+			<?php echo '<button type="submit" name="save">' . L::config_save_button . '</button>'; ?>
 		</div>
 
 	</form>

@@ -943,7 +943,7 @@
 	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
 	<?php
 		include "${WORKING_DIR}/sub-display.php";
-		display();
+		display(true, L::mainmenue_view);
 		if (isset($saved_message)) {print ($saved_message);}
 
 	include("${WORKING_DIR}/sub-view-icons.php")

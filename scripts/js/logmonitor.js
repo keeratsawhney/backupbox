@@ -10,6 +10,11 @@ let LogMonitorInterval = 'undefined';
 function refreshLogMonitor() {
 	var logmonitor = document.getElementById("logmonitor");
 
+	// page without log monitor (e.g. cmd.php before a command runs)
+	if (!logmonitor) {
+		return;
+	}
+
 	if (!(logmonitor === document.activeElement)) {
 
 		logmonitor.contentWindow.location.reload();

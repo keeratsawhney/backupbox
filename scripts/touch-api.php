@@ -428,6 +428,33 @@
 		return(array_values(array_unique(array_filter(array_map('strtolower', $extensions)))));
 	}
 
+	function touch_media_filter($constants, $files, $type, $query, $sort) {
+		# type: photo, raw, video ('' = all); query: part of the path; sort: new (default), old, name
+		$lists	= array(
+			'raw'	=> explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']),
+			'video'	=> array_merge(explode(';', $constants['const_FILE_EXTENSIONS_LIST_VIDEO']), array('mov', 'mts', 'm4v', 'mkv', '3gp')),
+		);
+		$query	= trim((string)$query);
+
+		if ($type !== '' or $query !== '') {
+			$files	= array_values(array_filter($files, function($file) use ($lists, $type, $query) {
+				$ext	= strtolower(pathinfo($file['path'], PATHINFO_EXTENSION));
+				if ($type == 'raw' and !in_array($ext, $lists['raw'], true)) {return(false);}
+				if ($type == 'video' and !in_array($ext, $lists['video'], true)) {return(false);}
+				if ($type == 'photo' and (in_array($ext, $lists['raw'], true) or in_array($ext, $lists['video'], true))) {return(false);}
+				return($query === '' or stripos($file['path'], $query) !== false);
+			}));
+		}
+
+		if ($sort == 'old') {
+			$files	= array_reverse($files);
+		} elseif ($sort == 'name') {
+			usort($files, function($a, $b) {return(strnatcasecmp(basename($a['path']), basename($b['path'])));});
+		}
+
+		return($files);
+	}
+
 	function touch_is_video($ext, $constants) {
 		$videos	= array_merge(explode(';', $constants['const_FILE_EXTENSIONS_LIST_VIDEO']), array('mov', 'mts', 'm4v', 'mkv', '3gp'));
 		return(in_array(strtolower($ext), $videos, true));
@@ -641,7 +668,7 @@
 			));
 
 		case 'recent':
-			$limit		= isset($_GET['limit']) ? max(1, min(48, (int)$_GET['limit'])) : 12;
+			$limit		= isset($_GET['limit']) ? max(1, min(96, (int)$_GET['limit'])) : 12;
 			$offset		= isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
 			$medium		= isset($_GET['medium']) && $_GET['medium'] !== '' ? (string)$_GET['medium'] : null;
 			$refresh	= !empty($_GET['refresh']);
@@ -670,9 +697,18 @@
 			}
 			$key	= $key === null ? array_key_first($available) : $key;
 
+			# optional filters of the gallery of the web UI: file type, name search, order
+			$list	= $key === null ? array() : touch_media_filter($constants, $available[$key], $_GET['type'] ?? '', $_GET['q'] ?? '', $_GET['sort'] ?? '');
+			$offset	= min($offset, max(0, count($list) - 1));
+
 			$items	= array();
-			foreach (array_slice($key === null ? array() : $available[$key], $offset, $limit) as $file) {
-				$items[]	= touch_media_item($constants, $key, $media[$key]['path'], $file['path'], array('date' => date('Y-m-d H:i', $file['time'])));
+			foreach (array_slice($list, $offset, $limit) as $file) {
+				$items[]	= touch_media_item($constants, $key, $media[$key]['path'], $file['path'], array(
+					'date'		=> date('Y-m-d H:i', $file['time']),
+					'time'		=> $file['time'],
+					'path'		=> $file['path'],
+					'size'		=> (int)@filesize($media[$key]['path'] . '/' . $file['path']),
+				));
 			}
 
 			$tabs			= array();
@@ -688,7 +724,8 @@
 				'medium_label'		=> $key === null ? '' : touch_text(lbb_dashboard_medium_label($key)),
 				'media'				=> $tabs,
 				'can_mount_source'	=> !$source_mounted && !touch_backup_running(),
-				'total'				=> $key === null ? 0 : count($available[$key]),
+				'total'				=> count($list),
+				'all'				=> $key === null ? 0 : count($available[$key]),
 				'offset'			=> $offset,
 				'items'				=> $items,
 			));
