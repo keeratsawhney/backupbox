@@ -54,12 +54,12 @@
 	</symbol>
 </svg>
 
-<nav class="navbar navbar-expand-sm <?php echo $nav_theme_class; ?>">
+<nav class="navbar navbar-expand-lg <?php echo $nav_theme_class; ?>">
 	<div class="container-fluid">
 
 		<a class="lbb-brand" href="/index.php">
-			<img src="/img/little-backup-box-color.png" alt="Little Backup Box logo">
-			<span class="hidden-mobile">Little Backup Box</span>
+			<img src="/img/icons/favicon-180.png" alt="">
+			<span>Little Backup Box</span>
 		</a>
 
 		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,6 +69,7 @@
 		<div class="collapse navbar-collapse" id="navbarSupportedContent">
 			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="index.php"?" active":""; ?>" href="/index.php"><?php echo L::mainmenue_main; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="gallery.php"?" active":""; ?>" href="/gallery.php"><?php echo L::gallery_title; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="view.php"?" active":""; ?>" href="/view.php"><?php echo L::mainmenue_view; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="files"?" active":""; ?>" href="/frame.php?page=files"><?php echo L::mainmenue_filebrowser; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="tools.php"?" active":""; ?>" href="/tools.php"><?php echo L::mainmenue_tools; ?></a></li>

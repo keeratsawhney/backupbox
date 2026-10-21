@@ -22,8 +22,8 @@
 ?>
 
 <div class="footer">
-	<form action="shutdown.php" class="text-center" style="margin-top: 1em;" method="POST">
-			<div class="card" style="margin-top: 3em;">
+	<form action="shutdown.php" method="POST">
+			<div class="card lbb-power">
 				<button type="submit" name="reboot" value="1" class="danger"><?php echo L::main_reboot_button; ?></button>
 				<button type="submit" name="shutdown" value="1" class="danger"><?php echo L::main_shutdown_button; ?></button>
 			</div>
@@ -51,7 +51,7 @@
 	}
 
 	if ($info_box != '') {
-		echo('<div class="card" style="margin-top: 3em;">' . $info_box . '</div>');
+		echo('<div class="card lbb-info">' . $info_box . '</div>');
 	}
 
 ?>
