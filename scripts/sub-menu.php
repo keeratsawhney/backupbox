@@ -124,4 +124,24 @@
 
 	</div>
 </nav>
+<script>
+	// one row only while all entries fit (comitup, Wi-Fi portal, update and long translations add entries), else the menu button
+	(function () {
+		const nav = document.currentScript.previousElementSibling;
+		const row = nav.querySelector('.container-fluid');
+		const overflows = () => row.scrollWidth > row.clientWidth + 1;
+		function fit() {
+			nav.classList.remove('lbb-nav-menu', 'lbb-nav-tight');
+			nav.classList.add('navbar-expand-lg');
+			if (window.innerWidth < 992 || !overflows()) return;
+			nav.classList.add('lbb-nav-tight');
+			if (!overflows()) return;
+			nav.classList.remove('navbar-expand-lg', 'lbb-nav-tight');
+			nav.classList.add('lbb-nav-menu');
+		}
+		fit();
+		window.addEventListener('resize', fit);
+		if (document.fonts) document.fonts.ready.then(fit);
+	})();
+</script>
 
