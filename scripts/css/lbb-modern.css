@@ -58,7 +58,7 @@ html[data-theme='light'], :root {
 	--m-font-mono:     ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
 
 	/* map the original variables onto the modern palette */
-	--width:      64rem;
+	--width:      72rem;
 	--clight:     var(--m-surface-2);
 	--cdark:      var(--m-muted);
 	--cmed:       var(--m-border-strong);
@@ -203,12 +203,19 @@ hr { border: 0; border-top: 1px solid var(--m-border); margin: 1.2rem 0; }
 
 .navbar .container-fluid { gap: 0.4rem 0.75rem; flex-wrap: wrap; align-items: center; }
 
-/* wide: one row; narrow (< 992px, navbar-expand-lg): menu button with a vertical list */
+/* wide: one row; narrow (< 992px, navbar-expand-lg) or too many entries for one row
+   (sub-menu.php sets .lbb-nav-menu): menu button with a vertical list */
 @media (min-width: 992px) {
-	.navbar .navbar-collapse { display: flex !important; flex: 1 1 auto; align-items: center; }
-	.navbar .navbar-nav { flex-direction: row; flex-wrap: nowrap; }
+	.navbar:not(.lbb-nav-menu) .navbar-collapse { display: flex !important; flex: 1 1 auto; align-items: center; }
+	.navbar:not(.lbb-nav-menu) .navbar-nav { flex-direction: row; flex-wrap: nowrap; }
+	/* settings and power at the right end, like the original */
+	.navbar:not(.lbb-nav-menu) .navbar-nav { flex: 0 0 auto; width: auto; }
+	.navbar:not(.lbb-nav-menu) .navbar-nav.ms-auto { margin-left: auto !important; }
 	.navbar .nav-link { white-space: nowrap; }
 }
+/* many entries (sub-menu.php sets .lbb-nav-tight): icon as brand, tighter entries */
+.navbar.lbb-nav-tight .lbb-brand span { display: none; }
+.navbar.lbb-nav-tight .nav-link { padding: 0.4rem 0.6rem !important; font-size: 0.9rem; }
 
 .navbar .nav-link.lbb-update {
 	color: #fff !important;
@@ -561,6 +568,21 @@ pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
 	.navbar .nav-item.dropdown { align-self: flex-start; }
 	.navbar .dropdown-menu { position: static; box-shadow: none; }
 }
+/* the same when the entries do not fit in one row on a wide screen */
+.navbar.lbb-nav-menu .container-fluid { flex-wrap: wrap; }
+.navbar.lbb-nav-menu .navbar-toggler { margin-left: auto; }
+.navbar.lbb-nav-menu .navbar-collapse { flex-basis: 100%; }
+.navbar.lbb-nav-menu .navbar-collapse.show, .navbar .navbar-collapse.collapsing { padding-top: 0.5rem; }
+.navbar.lbb-nav-menu .navbar-nav { flex-direction: column; align-items: stretch; gap: 0.15rem; }
+.navbar.lbb-nav-menu .navbar-nav + .navbar-nav {
+	margin-top: 0.4rem !important;
+	padding-top: 0.4rem;
+	border-top: 1px solid var(--m-border);
+}
+.navbar.lbb-nav-menu .nav-link { padding: 0.65rem 0.9rem !important; border-radius: 10px; }
+/* power menu: a full row with its label instead of a lone icon */
+.navbar.lbb-nav-menu .nav-item.dropdown { align-self: flex-start; }
+.navbar.lbb-nav-menu .dropdown-menu { position: static; box-shadow: none; }
 
 /* section spacing: the inline "margin-top: 2em/3em" of the pages is evened out */
 body > .card, form > .card, .footer .card, body > details.card { margin-top: 1rem !important; margin-bottom: 0; }
@@ -743,6 +765,7 @@ details select, details textarea { max-width: 100%; }
 @media (max-width: 991.98px) {
 	.navbar .navbar-nav.align-items-center { align-items: stretch !important; }
 }
+.navbar.lbb-nav-menu .navbar-nav.align-items-center { align-items: stretch !important; }
 
 /* ============================================================
    Gallery (gallery.php, newest files on the backup page)
