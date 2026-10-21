@@ -273,6 +273,26 @@ if (isset($CMD_HEADER)) {
 doFlush();
 if ($run_command) {exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT);}
 
+function update_command_line($branch, $repo, $user, $logfile) {
+	# The installer runs as its own systemd unit: it upgrades and restarts php-fpm and the web server,
+	# which would stop everything started from this web request. Its output goes to the log shown here.
+	# It needs sudo without password for the user (as on a fresh Raspberry Pi OS); without, say so instead of hanging.
+	$home		= function_exists('posix_getpwnam') ? (posix_getpwnam($user)['dir'] ?? "/home/$user") : "/home/$user";
+	$installer	= "$home/install-little-backup-box.sh";
+	$run		= "curl -sSL https://raw.githubusercontent.com/$repo/$branch/install-little-backup-box.sh -o $installer && bash $installer $branch";
+
+	return(
+		"if sudo -u $user sudo -n true 2>/dev/null; then " .
+			"echo 'Update runs in the background, the box reboots when it is finished.'; " .
+			"sudo systemd-run --unit=lbb-update --collect --uid=$user --setenv=HOME=$home --working-directory=$home " .
+				"-p StandardOutput=append:$logfile -p StandardError=append:$logfile /bin/bash -c " . escapeshellarg($run) . "; " .
+		"else " .
+			"echo 'Update not possible: user $user needs sudo without password.'; " .
+			"echo 'Run once over SSH: echo $user ALL=NOPASSWD: ALL | sudo tee /etc/sudoers.d/010_pi-nopasswd'; " .
+		"fi"
+	);
+}
+
 function exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT) {
 	# call this function at the end of the code: if $MAIL_RESULT==true the script will wait until the process is finished
 
@@ -300,14 +320,12 @@ function exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT) {
 		switch($CMD) {
 			case 'update':
 				$COMMAND_LINE	= "sudo python3 $WORKING_DIR/lib_display.py ':" . L::box_cmd_update_start1 . "' ':" . L::box_cmd_update_start2 . "'";
-				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER curl -sSL https://raw.githubusercontent.com/$UPDATE_REPO/main/install-little-backup-box.sh -o ~$UPDATE_USER/install-little-backup-box.sh";
-				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER bash ~$UPDATE_USER/install-little-backup-box.sh main";
+				$COMMAND_LINE	.= ";" . update_command_line('main', $UPDATE_REPO, $UPDATE_USER, $constants['const_CMD_LOGFILE']);
 				break;
 
 			case 'update_development':
 				$COMMAND_LINE	= "sudo python3 $WORKING_DIR/lib_display.py ':" . L::box_cmd_update_start1 . "' ':" . L::box_cmd_update_start2 . "'";
-				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER curl -sSL https://raw.githubusercontent.com/$UPDATE_REPO/development/install-little-backup-box.sh -o ~$UPDATE_USER/install-little-backup-box.sh";
-				$COMMAND_LINE	.= ";sudo -u $UPDATE_USER bash ~$UPDATE_USER/install-little-backup-box.sh development";
+				$COMMAND_LINE	.= ";" . update_command_line('development', $UPDATE_REPO, $UPDATE_USER, $constants['const_CMD_LOGFILE']);
 				break;
 
 			case 'update_libraw':

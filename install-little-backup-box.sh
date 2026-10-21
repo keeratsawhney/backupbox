@@ -355,8 +355,13 @@ sudo usermod -aG sudo ${USER_WWW_DATA}
 yes | sudo cp -f "${INSTALLER_DIR}/etc/sudoers_d_www-data" "/etc/sudoers.d/www-data"
 sudo chmod 0440 "/etc/sudoers.d/www-data"
 
-# allow sudo for pi and www-data without password
-echo 'pi ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/010_pi-nopasswd
+# allow sudo without password for the user installing (Raspberry Pi OS keeps the first user in this file,
+# overwriting it with "pi" only took it away from users with another name) and for www-data
+INSTALL_USER="$(whoami)"
+{
+	echo "${INSTALL_USER} ALL=(ALL) NOPASSWD: ALL"
+	if [ "${INSTALL_USER}" != "pi" ] && id pi >/dev/null 2>&1; then echo 'pi ALL=(ALL) NOPASSWD: ALL'; fi
+} | sudo tee /etc/sudoers.d/010_pi-nopasswd
 sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 
 echo 'www-data ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/010_www-data-nopasswd
