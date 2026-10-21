@@ -428,6 +428,40 @@
 		return(array_values(array_unique(array_filter(array_map('strtolower', $extensions)))));
 	}
 
+	function touch_medium_role_label($media_key) {
+		# what a mounted drive is for, in plain words: the backup drive or the card / drive copied from
+		if (str_starts_with($media_key, 'target_')) {
+			return(touch_text(L::touch_drive_backup));
+		}
+		if (str_starts_with($media_key, 'source_')) {
+			return(touch_text(L::touch_drive_source));
+		}
+		return(touch_text(lbb_dashboard_medium_label($media_key)));
+	}
+
+	function touch_source_attached($media) {
+		# a drive or card that is plugged in, not mounted for a backup and not on the disk of the backup drive
+		$drives		= touch_attached_drives();
+		$targets	= array();
+		foreach ($media as $media_key => $medium) {
+			if (str_starts_with($media_key, 'target_') and $medium['mounted']) {
+				$targets[]	= $medium['path'];
+			}
+		}
+		$target_disks	= array();
+		foreach ($drives as $drive) {
+			if (in_array($drive['mountpoint'], $targets, true)) {
+				$target_disks[]	= $drive['disk'];
+			}
+		}
+		foreach ($drives as $drive) {
+			if (!in_array($drive['disk'], $target_disks, true) and ($drive['mountpoint'] === null or $drive['mountpoint'] === '' or str_starts_with((string)$drive['mountpoint'], '/media/browse/'))) {
+				return(true);
+			}
+		}
+		return(false);
+	}
+
 	function touch_media_filter($constants, $files, $type, $query, $sort) {
 		# type: photo, raw, video ('' = all); query: part of the path; sort: new (default), old, name
 		$lists	= array(
@@ -715,15 +749,16 @@
 			$source_mounted	= false;
 			foreach ($available as $media_key => $files) {
 				$source_mounted	= $source_mounted || str_starts_with($media_key, 'source_');
-				$tabs[]	= array('id' => $media_key, 'label' => touch_text(lbb_dashboard_medium_label($media_key)), 'count' => count($files));
+				$tabs[]	= array('id' => $media_key, 'label' => touch_medium_role_label($media_key), 'count' => count($files));
 			}
 
 			touch_respond(array(
 				'ok'				=> true,
 				'medium'			=> $key,
-				'medium_label'		=> $key === null ? '' : touch_text(lbb_dashboard_medium_label($key)),
+				'medium_label'		=> $key === null ? '' : touch_medium_role_label($key),
 				'media'				=> $tabs,
-				'can_mount_source'	=> !$source_mounted && !touch_backup_running(),
+				# offered only when a card or drive is plugged in that is not the backup drive
+				'can_mount_source'	=> !$source_mounted && !touch_backup_running() && touch_source_attached($media),
 				'total'				=> count($list),
 				'all'				=> $key === null ? 0 : count($available[$key]),
 				'offset'			=> $offset,
@@ -744,7 +779,7 @@
 							$name	= $drive['name'];
 						}
 					}
-					$drives[]	= array('id' => $media_key, 'label' => touch_text(lbb_dashboard_medium_label($media_key)), 'name' => $name, 'mounted' => true);
+					$drives[]	= array('id' => $media_key, 'label' => touch_medium_role_label($media_key), 'name' => $name, 'mounted' => true);
 				}
 			}
 			foreach ($attached as $drive) {

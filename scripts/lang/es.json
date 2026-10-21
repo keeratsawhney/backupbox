@@ -1014,7 +1014,11 @@
     "no_drive": "No hay ninguna unidad conectada.",
     "open_drive": "Toca una unidad arriba para abrirla.",
     "latest_files": "Últimos archivos",
-    "app_view": "Vista app"
+    "app_view": "Vista app",
+    "drive_backup": "Unidad de copia",
+    "drive_source": "Tarjeta / unidad de origen",
+    "show_card": "Mostrar la tarjeta insertada",
+    "files_count": "archivos"
   },
   "gallery": {
     "title": "Galería",

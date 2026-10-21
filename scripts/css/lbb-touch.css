@@ -1564,3 +1564,30 @@ svg {
 		grid-template-columns: repeat(6, 1fr);
 	}
 }
+
+/* drive tabs on the photos page: what the drive is for, then its number of files */
+.photo-media .btn {
+	gap: 6px;
+}
+
+.photo-media .media-count {
+	font-size: 12px;
+	font-weight: 600;
+	opacity: .75;
+}
+
+.photo-media .btn-add {
+	border-style: dashed;
+}
+
+.photo-media .btn-add svg {
+	width: 18px;
+	height: 18px;
+}
+
+@media (min-height: 600px) and (min-width: 1400px) {
+	.photo-grid,
+	.home-recent-grid {
+		grid-template-columns: repeat(8, 1fr);
+	}
+}

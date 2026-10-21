@@ -1014,7 +1014,11 @@
     "no_drive": "No drive connected.",
     "open_drive": "Tap a drive above to open it.",
     "latest_files": "Latest files",
-    "app_view": "App view"
+    "app_view": "App view",
+    "drive_backup": "Backup drive",
+    "drive_source": "Card / source drive",
+    "show_card": "Show inserted card",
+    "files_count": "files"
   },
   "gallery": {
     "title": "Gallery",
