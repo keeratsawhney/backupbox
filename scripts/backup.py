@@ -174,6 +174,7 @@ class backup(object):
 		self.SourceDevice				= None
 		self.TargetDevice				= None
 		self.__TIMSCopied				= False
+		self.__CopiedFiles				= [] # files copied by this run, relative to the target's mount point
 		self.__mail_threads_started		= []
 		self.__break_generateThumbnails	= False
 
@@ -257,9 +258,13 @@ class backup(object):
 			if self.DoRenameFiles:
 				self.RenameFiles()
 
+			# after a backup only the files it copied are processed (fast on the go);
+			# the functions thumbnails/database (web UI) process the whole drive
+			OnlyFiles	= None if self.SourceStorageType in ['thumbnails', 'database', 'exif', 'rename'] else self.__CopiedFiles
+
 			# sync database
 			if self.ForceSyncDatabase or self.__TIMSCopied:
-				self.syncDatabase()
+				self.syncDatabase(OnlyFiles=OnlyFiles)
 
 			# update exif
 			if self.TargetDevice and self.DoUpdateEXIF:
@@ -267,7 +272,7 @@ class backup(object):
 
 			# generate thumbnails
 			if self.TargetDevice and self.DoGenerateThumbnails_primary:
-					self.generateThumbnails(Device=self.TargetDevice)
+					self.generateThumbnails(Device=self.TargetDevice, OnlyFiles=OnlyFiles)
 
 		self.finish()
 
@@ -968,6 +973,10 @@ class backup(object):
 
 					del progress
 
+					# thumbnails and database are made for these files only, not for the whole target
+					# (files that do not arrive on the target are skipped there)
+					self.__CopiedFiles	+= [os.path.join(self.TargetDevice.CloudBaseDir, self.SourceDevice.SubPathAtTarget, File).strip('/') for File in FilesList if File]
+
 					# validate files after backup
 					if SourceStorageType == 'camera':
 						DisplayLine1	= self.__lan.l('box_backup_validate_files_from')		# header1
@@ -1221,7 +1230,8 @@ class backup(object):
 		# Set the PWR LED ON to indicate that RenameFiles has finished
 		lib_system.rpi_leds(led='PWR', trigger='none', brightness='1')
 
-	def syncDatabase(self):
+	def syncDatabase(self, OnlyFiles=None):
+		# OnlyFiles: list of files below the target's mount point (just copied); None: whole drive
 		if not self.TargetDevice:
 			return()
 
@@ -1233,6 +1243,11 @@ class backup(object):
 
 		# prepare database
 		db	= lib_view.viewdb(self.__setup, self.__log, self.TargetDevice.MountPoint)
+
+		if OnlyFiles is not None:
+			# just copied files: no cleaning of the whole database
+			self.__syncDatabaseImport(db, [os.path.join(self.TargetDevice.MountPoint, File.strip('/')) for File in self.get_OnlyFilesMedia(self.TargetDevice, OnlyFiles)])
+			return()
 
 ## clean database
 		# remove duplicates
@@ -1298,6 +1313,11 @@ class backup(object):
 		Images	= subprocess.check_output(Command, shell=True).decode().strip().split('\n')
 		Images[:]	= [element for element in Images if element]
 
+		self.__syncDatabaseImport(db, Images)
+
+	def __syncDatabaseImport(self, db, Images):
+		# insert images (full paths) missing in the database
+
 		# prepare loop to insert images into the database
 		FilesToProcess	= len(Images)
 
@@ -1331,6 +1351,29 @@ class backup(object):
 		# Set the PWR LED ON to indicate that syncDatabase has finished
 		lib_system.rpi_leds(led='PWR', trigger='none', brightness=1)
 
+	def get_AllowedExtensions(self, textfiles=False):
+		Extensions	= ';'.join([
+			self.const_FILE_EXTENSIONS_LIST_WEB_IMAGES,
+			self.const_FILE_EXTENSIONS_LIST_HEIC,
+			self.const_FILE_EXTENSIONS_LIST_RAW,
+			self.const_FILE_EXTENSIONS_LIST_TIF,
+			self.const_FILE_EXTENSIONS_LIST_VIDEO,
+			self.const_FILE_EXTENSIONS_LIST_AUDIO
+		] + ([self.const_FILE_EXTENSIONS_LIST_TEXT] if textfiles else []))
+		return([Extension.lower() for Extension in Extensions.split(';') if Extension])
+
+	def get_OnlyFilesMedia(self, Device, OnlyFiles):
+		# media files out of a list of copied files, as '/subpath/file' below the mount point
+		Extensions	= self.get_AllowedExtensions(textfiles=True)
+		Files	= []
+		for File in OnlyFiles:
+			File	= File.strip('/')
+			if '/tims/' in f'/{File}' or not '.' in File or File.rsplit('.', 1)[1].lower() not in Extensions:
+				continue
+			if os.path.isfile(os.path.join(Device.MountPoint, File)):
+				Files.append(f'/{File}')
+		return(Files)
+
 	def get_AllowedExtensionsFindOptions(self, textfiles=False):
 
 		AllowedExtensionsList	= (
@@ -1357,7 +1400,8 @@ class backup(object):
 
 		return(AllowedExtensionsFindOptions)
 
-	def generateThumbnails(self, Device=None):
+	def generateThumbnails(self, Device=None, OnlyFiles=None):
+		# OnlyFiles: list of files below the device's mount point (just copied); None: whole drive
 
 		if Device is None:
 			return()
@@ -1367,20 +1411,13 @@ class backup(object):
 
 		lib_system.rpi_leds(trigger='timer', delay_on=900, delay_off=100, brightness=1)
 
-		if os.path.isfile('/usr/lib/libraw/dcraw_emu'):
-			DCRAW_EMU	= '/usr/lib/libraw/dcraw_emu'
-		else:
-			try:
-				DCRAW_EMU	= subprocess.check_output(['/usr/bin/whereis', 'dcraw_emu']).decode().strip().split('\n')[0].split(' ')[1]
-			except:
-				DCRAW_EMU	= 'dcraw_emu'
-
 		# remove all empty tims files
-		Command	= ['/usr/bin/find',  Device.MountPoint, '-type', 'f','-size', '0', '-path', '*/tims/*', '-delete']
-		try:
-			subprocess.run(Command)
-		except:
-			pass
+		if OnlyFiles is None:
+			Command	= ['/usr/bin/find',  Device.MountPoint, '-type', 'f','-size', '0', '-path', '*/tims/*', '-delete']
+			try:
+				subprocess.run(Command)
+			except:
+				pass
 
 		# prepare database
 		db	= lib_view.viewdb(self.__setup,self.__log, Device.MountPoint)
@@ -1394,6 +1431,20 @@ class backup(object):
 			])
 
 		BannedPathsViewCaseInsensitive	= self.get_BannedPathsViewCaseInsensitive()
+
+		if OnlyFiles is not None:
+			# just copied files without (non empty) thumbnail
+			MissingTIMSList	= []
+			for File in self.get_OnlyFilesMedia(Device, OnlyFiles):
+				TIMS	= os.path.join(Device.MountPoint, os.path.dirname(File).strip('/'), 'tims', f'{os.path.basename(File)}.JPG')
+				if not os.path.isfile(TIMS) or os.path.getsize(TIMS) == 0:
+					MissingTIMSList.append(File)
+		else:
+			MissingTIMSList	= self.__findMissingTIMS(Device, BannedPathsViewCaseInsensitive)
+
+		self.__generateThumbnailsFor(Device, MissingTIMSList)
+
+	def __findMissingTIMS(self, Device, BannedPathsViewCaseInsensitive):
 		Command	= rf"/usr/bin/find '{Device.MountPoint}' -type f \( {' '.join(self.get_AllowedExtensionsFindOptions(textfiles=True))} \) -not -path '*/tims/*' {' '.join(BannedPathsViewCaseInsensitive)}"
 
 		ImagesList	= subprocess.check_output(Command, shell=True).decode().strip().split('\n')
@@ -1413,7 +1464,16 @@ class backup(object):
 			TIMSList[i]	= '/'.join(TIMSList[i].rsplit('/tims/', 1))									# remove /tims from folder
 
 		#remove from ImagesList all items known in TIMSList
-		MissingTIMSList	= list(set(ImagesList) - set(TIMSList))
+		return(list(set(ImagesList) - set(TIMSList)))
+
+	def __generateThumbnailsFor(self, Device, MissingTIMSList):
+		if os.path.isfile('/usr/lib/libraw/dcraw_emu'):
+			DCRAW_EMU	= '/usr/lib/libraw/dcraw_emu'
+		else:
+			try:
+				DCRAW_EMU	= subprocess.check_output(['/usr/bin/whereis', 'dcraw_emu']).decode().strip().split('\n')[0].split(' ')[1]
+			except:
+				DCRAW_EMU	= 'dcraw_emu'
 
 		#prepare loop to create thumbnails
 		FilesToProcess	= len(MissingTIMSList)
