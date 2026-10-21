@@ -334,7 +334,7 @@
 		} else {
 			const ready = target.state === 'ready';
 			const text = target.name + ' · ' + (ready ? formatBytes(target.free) + ' ' + T.free : T.mounting);
-			const targetRow = row(ready, !ready, '1 · ' + storageLabel(target.id), text, target.id.split('_')[0]);
+			const targetRow = row(ready, !ready, '1 · ' + T.drive_backup, text, target.id.split('_')[0]);
 			const change = el('button', { class: 'btn flow-change', text: T.change });
 			change.addEventListener('click', () => busy(change, async () => {
 				await api('change_target', {}, 'POST');
@@ -346,7 +346,7 @@
 
 			// step 2: the card or drive to back up
 			const sourceText = flow.sources.length ? flow.sources.map((x) => x.name + ' · ' + formatBytes(x.size)).join(', ') : T.insert_source;
-			rows.push(row(flow.sources.length > 0, flow.sources.length === 0, '2 · ' + T.source, sourceText, 'usb'));
+			rows.push(row(flow.sources.length > 0, flow.sources.length === 0, '2 · ' + T.drive_source, sourceText, 'usb'));
 		}
 		node.replaceChildren(...rows);
 
@@ -564,12 +564,15 @@
 	}
 
 	function renderMedia(data) {
-		// a tab for every mounted drive (targets and sources); "+ Source" mounts an attached source
+		// a tab for every mounted drive (backup drive, card / source drive); a button opens a plugged in card
 		const row = $('photo-media');
 		row.replaceChildren();
 		const media = data.media.length ? data.media : [{ id: data.medium, label: data.medium_label, count: data.total }];
 		media.forEach((medium) => {
-			const button = el('button', { class: 'btn' + (medium.id === data.medium ? ' selected' : ''), text: medium.label + ' · ' + medium.count });
+			const button = el('button', { class: 'btn' + (medium.id === data.medium ? ' selected' : '') }, [
+				el('span', { text: medium.label }),
+				el('small', { class: 'media-count', text: medium.count + ' ' + T.files_count }),
+			]);
 			button.addEventListener('click', () => {
 				state.photos.medium = medium.id;
 				loadPhotos(0);
@@ -577,7 +580,7 @@
 			row.append(button);
 		});
 		if (data.can_mount_source) {
-			const button = el('button', { class: 'btn', text: '+ ' + T.source });
+			const button = el('button', { class: 'btn btn-add' }, [icon('plus'), el('span', { text: T.show_card })]);
 			button.addEventListener('click', () => busy(button, async () => {
 				const result = await api('mount', { storage: 'usb', role: 'source' }, 'POST');
 				if (!result.storages.some((x) => x.id === 'usb_source')) {

@@ -239,10 +239,10 @@
 					s.medium = medium.id;
 					save('medium', medium.id);
 					this.reload(0);
-				} }, [el('span', { text: medium.label }), el('span', { class: 'lbb-chip-count', text: medium.count })]));
+				} }, [el('span', { text: medium.label }), el('span', { class: 'lbb-chip-count', text: medium.count + ' ' + T.files })]));
 			});
 			if (data.can_mount_source) {
-				const button = el('button', { type: 'button', class: 'lbb-chip lbb-chip-add', text: '+ ' + T.source });
+				const button = el('button', { type: 'button', class: 'lbb-chip lbb-chip-add', text: '+ ' + T.show_card });
 				button.addEventListener('click', async () => {
 					button.disabled = true;
 					try {

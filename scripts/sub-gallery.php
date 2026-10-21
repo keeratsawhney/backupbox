@@ -24,7 +24,7 @@ function gallery_section($mode='full', $limit=48) {
 	foreach (array('title', 'latest', 'open', 'all', 'photos', 'raw', 'videos', 'search', 'sort_new', 'sort_old', 'sort_name', 'per_page', 'files', 'page', 'first', 'last', 'previous', 'next', 'close', 'download', 'size', 'folder', 'date', 'refresh', 'no_drive', 'no_match') as $key) {
 		$text[$key]	= constant('L::gallery_' . $key);
 	}
-	foreach (array('no_photos', 'source', 'mount_failed', 'video_unsupported') as $key) {
+	foreach (array('no_photos', 'show_card', 'mount_failed', 'video_unsupported') as $key) {
 		$text[$key]	= constant('L::touch_' . $key);
 	}
 	?>

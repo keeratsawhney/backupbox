@@ -1014,7 +1014,11 @@
     "no_drive": "Aucun disque connecté.",
     "open_drive": "Touchez un disque ci-dessus pour l'ouvrir.",
     "latest_files": "Derniers fichiers",
-    "app_view": "Vue appli"
+    "app_view": "Vue appli",
+    "drive_backup": "Disque de sauvegarde",
+    "drive_source": "Carte / disque source",
+    "show_card": "Afficher la carte insérée",
+    "files_count": "fichiers"
   },
   "gallery": {
     "title": "Galerie",
