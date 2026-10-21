@@ -1211,6 +1211,15 @@ svg {
 	text-align: center;
 }
 
+/* weak power supply warning: bottom of the screen, the connection banner keeps the top */
+.offline.power-warning {
+	top: auto;
+	bottom: 0;
+	background: var(--warn);
+	color: #1d1300;
+	z-index: 24;
+}
+
 /* small landscape screens: toast over the drive chips, clear of status and buttons
    (must come after the .toast base rule) */
 @media (orientation: landscape) and (max-height: 520px) {

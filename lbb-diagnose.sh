@@ -46,12 +46,24 @@ sudo grep -E "^conf_(BACKUP|DISP|MENU|LANGUAGE|POWER_OFF|LOGLEVEL|THEME)" "${WEB
 	| sed -E "s/^(conf_[A-Z_]*(PASSWORD|TOKEN)[A-Z_]*)=.*/\1=<removed>/"
 
 section "drives"
-lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT,MODEL 2>&1
+lsblk -o NAME,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,MODEL 2>&1
 echo
 grep -E " /media/" /proc/mounts || echo "nothing mounted under /media"
 echo
 grep -E "^dtparam=pciex1|^dtparam=spi|^dtoverlay" /boot/firmware/config.txt 2>/dev/null
 sudo dmesg 2>/dev/null | grep -iE "nvme|pcie.*link" | tail -8
+
+section "power (a weak power supply makes USB drives disconnect)"
+throttled=$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)
+if [[ -n "${throttled}" ]]; then
+	echo "get_throttled: ${throttled}"
+	(( throttled & 0x1 )) && echo "WARNING: under-voltage NOW"
+	(( throttled & 0x10000 )) && echo "WARNING: under-voltage happened since boot"
+	(( throttled & 0x4 )) && echo "WARNING: throttled NOW"
+	echo "usb_max_current_enable: $(vcgencmd get_config usb_max_current_enable 2>/dev/null | cut -d= -f2)"
+fi
+echo "--- USB disconnects / resets / under-voltage in the kernel log"
+sudo dmesg 2>/dev/null | grep -iE "under-?voltage|usb .*disconnect|reset (high|super)speed|i/o error|offline device" | tail -15
 
 section "available partitions as Little Backup Box sees them"
 sudo python3 "${WEB_ROOT}/lib_storage.py" --Action get_available_partitions --skipMounted False 2>&1 | tail -20

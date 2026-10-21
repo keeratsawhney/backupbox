@@ -999,6 +999,7 @@
     "check_files": "Neueste Dateien prüfen",
     "change": "Ändern",
     "clear_log": "Protokoll leeren",
-    "clear_log_confirm": "Protokoll leeren?"
+    "clear_log_confirm": "Protokoll leeren?",
+    "power_warning": "Stromversorgung: Unterspannung erkannt. USB-Laufwerke können sich während Backups trennen. Verwende das offizielle 27-W-Netzteil."
   }
 }

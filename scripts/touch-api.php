@@ -220,6 +220,23 @@
 		return($storages);
 	}
 
+	function touch_power($constants) {
+		# under-voltage (weak power supply): USB drives disconnect, backups stop half way.
+		# vcgencmd get_throttled: bit 0 = under-voltage now, bit 16 = since boot. Cached, it is polled.
+		$cache	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-throttled.txt';
+		if (time() - (int)@filemtime($cache) > 30) {
+			$output	= (string)shell_exec('sudo -n /usr/bin/vcgencmd get_throttled 2>/dev/null');
+			@file_put_contents($cache, $output);
+		} else {
+			$output	= (string)@file_get_contents($cache);
+		}
+		if (!preg_match('/throttled=0x([0-9a-fA-F]+)/', $output, $matches)) {
+			return(null);
+		}
+		$flags	= hexdec($matches[1]);
+		return(array('undervoltage' => (bool)($flags & 0x1), 'undervoltage_since_boot' => (bool)($flags & 0x10000)));
+	}
+
 	function touch_cpu_temp() {
 		$temp	= @file_get_contents('/sys/class/thermal/thermal_zone0/temp');
 		return($temp === false ? null : round((int)$temp / 1000, 1));
@@ -239,7 +256,7 @@
 
 	function touch_parse_drives($blockdevices) {
 		# partitions of attached drives (lsblk -J output), without the system disk and
-		# without tiny boot/EFI partitions that many USB drives carry next to the data partition
+		# without the EFI partition many USB drives carry next to the data partition
 		$drives	= array();
 		foreach ($blockdevices as $disk) {
 			if (!preg_match('#^/dev/(sd[a-z]+|nvme\\d+n\\d+)$#', (string)$disk['path'])) {
@@ -260,7 +277,8 @@
 				if (empty($partition['fstype']) or $partition['fstype'] == 'swap') {
 					continue;
 				}
-				if (strtoupper((string)$partition['label']) == 'EFI' or ($partition['fstype'] == 'vfat' and $size < 300 * 1024 * 1024)) {
+				# EFI system partition (drives formatted on a Mac, many SSDs), not a data partition
+				if (strtoupper((string)$partition['label']) == 'EFI' or in_array(strtolower((string)($partition['parttype'] ?? '')), array('c12a7328-f81f-11d2-ba4b-00a0c93ec93b', '0xef'), true)) {
 					continue;
 				}
 				$drives[]	= array(
@@ -278,7 +296,7 @@
 	}
 
 	function touch_attached_drives() {
-		$json	= json_decode((string)shell_exec('lsblk -J -b -o NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,TYPE,MODEL 2>/dev/null'), true);
+		$json	= json_decode((string)shell_exec('lsblk -J -b -o NAME,PATH,SIZE,FSTYPE,LABEL,UUID,PARTTYPE,MOUNTPOINT,TYPE,MODEL 2>/dev/null'), true);
 		return(touch_parse_drives(is_array($json) && isset($json['blockdevices']) ? $json['blockdevices'] : array()));
 	}
 
@@ -538,6 +556,7 @@
 				'oled'		=> touch_oled($config, $constants),
 				'storages'	=> $storages,
 				'flow'		=> touch_flow($config, $constants, $storages, $running),
+				'power'		=> touch_power($constants),
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),
 			));
@@ -824,7 +843,36 @@
 			if (!in_array($Storage, array('usb', 'nvme'), true) or !in_array($Role, array('source', 'target'), true)) {
 				touch_fail('unknown storage');
 			}
-			$command	= "sudo python3 $WORKING_DIR/lib_storage.py --Action $action --StorageName $Storage --Role $Role" . ($action == 'mount' ? ' --WaitForDevice False' : '');
+			$preset	= '';
+			if ($action == 'mount') {
+				# lib_storage takes the first partition it finds, often the small EFI partition of a USB SSD:
+				# name the data partition (from the attached drives), a source never on the target's disk
+				$target_mountpoints	= array($constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_USB_TARGET'], $constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_NVME_TARGET']);
+				$drives			= touch_attached_drives();
+				$target_disks	= array();
+				foreach ($drives as $drive) {
+					if (in_array($drive['mountpoint'], $target_mountpoints, true)) {
+						$target_disks[]	= $drive['disk'];
+					}
+				}
+				$chosen	= touch_target_choice($constants);
+				$found	= null;
+				foreach ($drives as $drive) {
+					if ($drive['kind'] !== $Storage or !empty($drive['mountpoint']) or ($Role == 'source' and in_array($drive['disk'], $target_disks, true))) {
+						continue;
+					}
+					# a target: the drive chosen on the home screen first
+					if ($found === null or ($Role == 'target' and $chosen and $chosen['id'] === ($drive['uuid'] ?: $drive['path']))) {
+						$found	= $drive;
+					}
+				}
+				if ($found === null) {
+					# nothing to mount: the UI reports it
+					touch_respond(array('ok' => true, 'storages' => touch_storages($constants)));
+				}
+				$preset	= ' --DeviceIdentifierPresetThis ' . escapeshellarg($found['path']) . ' --WaitForDevice False';
+			}
+			$command	= "sudo python3 $WORKING_DIR/lib_storage.py --Action $action --StorageName $Storage --Role $Role" . $preset;
 			shell_exec("python3 $WORKING_DIR/lib_log.py 'execute' '' " . escapeshellarg($command) . " '1'");
 			touch_respond(array('ok' => true, 'storages' => touch_storages($constants)));
 

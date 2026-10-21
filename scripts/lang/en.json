@@ -999,6 +999,7 @@
     "check_files": "Check latest files",
     "change": "Change",
     "clear_log": "Clear log",
-    "clear_log_confirm": "Clear the log?"
+    "clear_log_confirm": "Clear the log?",
+    "power_warning": "Power problem: under-voltage detected. USB drives can disconnect during backups. Use the official 27 W power supply."
   }
 }

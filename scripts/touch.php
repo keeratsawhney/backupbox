@@ -237,6 +237,7 @@
 
 	<div class="toast" id="toast" hidden></div>
 	<div class="offline" id="offline" hidden></div>
+	<div class="offline power-warning" id="power-warning" hidden></div>
 
 	<script>
 		window.LBB_TOUCH = {

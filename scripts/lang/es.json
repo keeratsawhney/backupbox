@@ -999,6 +999,7 @@
     "check_files": "Comprobar últimos archivos",
     "change": "Cambiar",
     "clear_log": "Borrar registro",
-    "clear_log_confirm": "¿Borrar el registro?"
+    "clear_log_confirm": "¿Borrar el registro?",
+    "power_warning": "Problema de alimentación: subtensión detectada. Las unidades USB pueden desconectarse durante las copias. Usa la fuente oficial de 27 W."
   }
 }

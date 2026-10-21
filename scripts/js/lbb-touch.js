@@ -204,6 +204,11 @@
 			$('temp').classList.toggle('hot', data.temp >= 75);
 		}
 
+		// weak power supply: drives disconnect during backups
+		const power = data.power || {};
+		$('power-warning').hidden = !(power.undervoltage || power.undervoltage_since_boot);
+		$('power-warning').textContent = T.power_warning;
+
 		renderFlow(data.flow, data.running);
 
 		// drives plugged in or removed: the possible sources and targets change (e.g. NVMe becomes available)
