@@ -171,6 +171,17 @@
 
 		$('status-card').classList.toggle('alert', !!display.alert);
 
+		const oled = $('oled');
+		if (data.oled) {
+			if (oled.dataset.url !== data.oled.url) {
+				oled.dataset.url = data.oled.url;
+				oled.src = data.oled.url;
+			}
+			oled.hidden = false;
+		} else {
+			oled.hidden = true;
+		}
+
 		const linesNode = $('status-lines');
 		linesNode.replaceChildren();
 		if (data.running) {

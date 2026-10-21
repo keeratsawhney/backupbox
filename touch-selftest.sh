@@ -80,6 +80,22 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d action=stop "${BASE}/to
 sudo -u www-data sudo -n true 2>/dev/null && pass "www-data may use sudo" || fail "www-data can not use sudo (backups can not start)"
 sudo -u www-data test -w /var/www/little-backup-box/tmp && pass "tmp is writable for www-data" || fail "/var/www/little-backup-box/tmp not writable for www-data"
 
+# hardware display (OLED HAT)
+echo
+if grep -q "^conf_DISP='display'" /var/www/little-backup-box/config.cfg 2>/dev/null; then
+	info "display: $(grep -E "^conf_DISP_(DRIVER|CONNECTION)=" /var/www/little-backup-box/config.cfg | tr '\n' ' ')"
+	ps -eo args | grep -qE "^(/usr/bin/)?python3 /var/www/little-backup-box/display[.]py" && pass "display.py is running" || fail "display.py is not running (nothing shown on the display)"
+	png="/var/www/little-backup-box/tmp/display.png"
+	if [[ -f "${png}" ]]; then
+		pass "display mirror image exists ($(( $(date +%s) - $(stat -c %Y "${png}") ))s old)"
+	else
+		fail "no display mirror image (${png})"
+	fi
+	grep -q "^conf_MENU_ENABLED=True" /var/www/little-backup-box/config.cfg && info "display menu (buttons) enabled" || info "display menu (buttons) disabled"
+else
+	info "no hardware display configured"
+fi
+
 # screen and touch
 echo
 for status in /sys/class/drm/card*-*/status; do

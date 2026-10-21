@@ -58,47 +58,71 @@
 
 	function touch_display_lines($constants) {
 		# the latest message of the backup process, as shown on the hardware display
+		$files	= glob($constants['const_DISPLAY_CONTENT_PATH'] . '/*.txt') ?: array();
+		sort($files);
+		$files	= array_reverse($files);
+		$files[]	= $constants['const_DISPLAY_CONTENT_OLD_FILE'];
+
+		# display.py deletes content files once shown: fall back to the next one
+		$raw	= false;
 		$file	= '';
-		$content_files	= glob($constants['const_DISPLAY_CONTENT_PATH'] . '/*.txt');
-		if ($content_files) {
-			sort($content_files);
-			$file	= end($content_files);
+		foreach ($files as $file) {
+			$raw	= @file($file, FILE_IGNORE_NEW_LINES);
+			if ($raw !== false) {
+				break;
+			}
 		}
-		if ($file === '' and is_file($constants['const_DISPLAY_CONTENT_OLD_FILE'])) {
-			$file	= $constants['const_DISPLAY_CONTENT_OLD_FILE'];
-		}
-
-		$lines		= array();
-		$progress	= null;
-		$alert		= false;
-
-		$raw	= $file !== '' ? @file($file, FILE_IGNORE_NEW_LINES) : false;
 		if ($raw === false) {
 			$raw	= array();
+			$file	= '';
 		}
 
+		$entries	= array();
 		foreach ($raw as $line) {
 			$line	= trim($line);
 			if ($line === '' or str_starts_with($line, 'set:')) {
 				continue;
 			}
 
-			# strip format prefix (":text", "s=hc:text", ...)
+			# split format prefix (":text", "s=hc:text", ...)
+			$format	= '';
 			if (preg_match('/^(s=([a-z]*))?:(.*)$/', $line, $matches)) {
+				$format	= $matches[2];
 				$line	= trim($matches[3]);
-				if (str_contains($matches[2], 'a')) {
-					$alert	= true;
-				}
 			}
+			$entries[]	= array('format' => $format, 'text' => $line, 'pgbar' => str_starts_with($line, 'PGBAR='));
+		}
 
-			if (str_starts_with($line, 'PGBAR=')) {
-				$progress	= (float)preg_replace('/[^0-9\.]/', '', '0' . substr($line, 6));
+		# display.py appends lines of older messages (always as "s=b") to the shown file:
+		# the current message ends at its first progress bar or its last non-basic line
+		$cut	= -1;
+		foreach ($entries as $index => $entry) {
+			if ($entry['format'] !== 'b') {
+				$cut	= $index;
+			}
+		}
+		foreach ($entries as $index => $entry) {
+			if ($entry['pgbar']) {
+				$cut	= max($cut, $index);
+				break;
+			}
+		}
+		if ($cut >= 0) {
+			$entries	= array_slice($entries, 0, $cut + 1);
+		}
+
+		$lines		= array();
+		$progress	= null;
+		$alert		= false;
+		foreach ($entries as $entry) {
+			if (str_contains($entry['format'], 'a')) {
+				$alert	= true;
+			}
+			if ($entry['pgbar']) {
+				$progress	= (float)preg_replace('/[^0-9\.]/', '', '0' . substr($entry['text'], 6));
 				$progress	= max(0, min(100, $progress));
-				continue;
-			}
-
-			if ($line !== '') {
-				$lines[]	= $line;
+			} elseif ($entry['text'] !== '') {
+				$lines[]	= $entry['text'];
 			}
 		}
 
@@ -107,6 +131,21 @@
 			'progress'	=> $progress,
 			'alert'		=> $alert,
 			'time'		=> $file !== '' ? @filemtime($file) : null,
+		));
+	}
+
+	function touch_oled($config, $constants) {
+		# mirror of the hardware display, written by display.py
+		if ($config['conf_DISP'] != 'display') {
+			return(null);
+		}
+		$image	= $constants['const_DISPLAY_IMAGE_EXPORT_FILE'];
+		clearstatcache(true, $image);
+		$time	= @filemtime($image);
+		return($time === false ? null : array(
+			'url'		=> str_replace($constants['const_WEB_ROOT_LBB'], '', $image) . '?t=' . $time,
+			'width'		=> (int)$config['conf_DISP_RESOLUTION_X'],
+			'height'	=> (int)$config['conf_DISP_RESOLUTION_Y'],
 		));
 	}
 
@@ -188,6 +227,7 @@
 				'ok'		=> true,
 				'running'	=> touch_backup_running(),
 				'display'	=> $display,
+				'oled'		=> touch_oled($config, $constants),
 				'storages'	=> touch_storages($constants),
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),

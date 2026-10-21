@@ -128,12 +128,15 @@
 			<!-- HOME -->
 			<section class="page" id="page-home">
 				<div class="status-card" id="status-card">
-					<div class="status-head">
-						<span class="status-title" id="status-title"></span>
-						<span class="status-percent" id="status-percent"></span>
+					<div class="status-main">
+						<div class="status-head">
+							<span class="status-title" id="status-title"></span>
+							<span class="status-percent" id="status-percent"></span>
+						</div>
+						<div class="progress" id="progress"><div class="progress-bar" id="progress-bar"></div></div>
+						<div class="status-lines" id="status-lines"></div>
 					</div>
-					<div class="progress" id="progress"><div class="progress-bar" id="progress-bar"></div></div>
-					<div class="status-lines" id="status-lines"></div>
+					<img class="oled" id="oled" alt="" hidden>
 				</div>
 				<div class="actions" id="home-actions">
 					<button class="btn btn-primary btn-big" id="btn-default-backup" hidden><svg><use href="#i-play"/></svg><span class="btn-text"><span id="default-label"></span><small id="default-sub"></small></span></button>
