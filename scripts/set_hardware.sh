@@ -25,8 +25,8 @@ source "$CONFIG"
 # fan control
 if [ ! "${conf_FAN_PWM_GPIO}" = "-" ] && [ ! "${conf_FAN_PWM_TEMP_C}" = "0" ]; then
 	# activate fan control
-	raspi-config nonint do_fan 0 ${conf_FAN_PWM_GPIO} ${conf_FAN_PWM_TEMP_C}
+	sudo raspi-config nonint do_fan 0 ${conf_FAN_PWM_GPIO} ${conf_FAN_PWM_TEMP_C}
 else
 	# deactivate fan control
-	raspi-config nonint do_fan 1
+	sudo raspi-config nonint do_fan 1
 fi
