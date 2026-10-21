@@ -1018,7 +1018,8 @@
     "drive_backup": "Unidad de copia",
     "drive_source": "Tarjeta / unidad de origen",
     "show_card": "Mostrar la tarjeta insertada",
-    "files_count": "archivos"
+    "files_count": "archivos",
+    "run": "Ejecutar"
   },
   "gallery": {
     "title": "Galería",
@@ -1045,7 +1046,7 @@
     "folder": "Carpeta",
     "date": "Fecha",
     "refresh": "Actualizar",
-    "no_drive": "No hay ninguna unidad de copia ni origen montado. Monte una en la página Copia de seguridad o con + Origen.",
+    "no_drive": "No hay ninguna unidad abierta. Elija la unidad de copia en la página Copia de seguridad o abra una unidad conectada con su botón +.",
     "no_match": "Ningún archivo coincide con el filtro.",
     "edit_in_view": "Valorar y editar en Ver"
   }

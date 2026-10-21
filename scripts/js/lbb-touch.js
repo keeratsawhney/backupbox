@@ -564,7 +564,7 @@
 	}
 
 	function renderMedia(data) {
-		// a tab for every mounted drive (backup drive, card / source drive); a button opens a plugged in card
+		// a tab for every open drive (backup drive, card / source drive, drives opened read only)
 		const row = $('photo-media');
 		row.replaceChildren();
 		const media = data.media.length ? data.media : [{ id: data.medium, label: data.medium_label, count: data.total }];
@@ -579,19 +579,17 @@
 			});
 			row.append(button);
 		});
-		if (data.can_mount_source) {
-			const button = el('button', { class: 'btn btn-add' }, [icon('plus'), el('span', { text: T.show_card })]);
+		// every other plugged-in drive, by its name: opened read only, several at once, backup roles unchanged
+		(data.openable || []).forEach((drive) => {
+			const button = el('button', { class: 'btn btn-add' }, [icon('plus'), el('span', { text: drive.name })]);
 			button.addEventListener('click', () => busy(button, async () => {
-				const result = await api('mount', { storage: 'usb', role: 'source' }, 'POST');
-				if (!result.storages.some((x) => x.id === 'usb_source')) {
-					toast(T.mount_failed, true);
-					return;
-				}
-				state.photos.medium = 'source_usb';
+				const result = await api('open_drive', { path: drive.path }, 'POST');
+				state.photos.medium = result.medium;
+				state.photos.refresh = true;
 				await loadPhotos(0);
 			}));
 			row.append(button);
-		}
+		});
 	}
 
 	function typeTile(item) {

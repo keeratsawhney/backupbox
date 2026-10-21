@@ -241,14 +241,15 @@
 					this.reload(0);
 				} }, [el('span', { text: medium.label }), el('span', { class: 'lbb-chip-count', text: medium.count + ' ' + T.files })]));
 			});
-			if (data.can_mount_source) {
-				const button = el('button', { type: 'button', class: 'lbb-chip lbb-chip-add', text: '+ ' + T.show_card });
+			// every other plugged-in drive, by its name: opened read only, several at once, backup roles unchanged
+			(data.openable || []).forEach((drive) => {
+				const button = el('button', { type: 'button', class: 'lbb-chip lbb-chip-add', text: '+ ' + drive.name });
 				button.addEventListener('click', async () => {
 					button.disabled = true;
 					try {
-						const result = await api('mount', { storage: 'usb', role: 'source' }, 'POST');
-						if (!result.storages.some((x) => x.id === 'usb_source')) throw new Error(T.mount_failed);
-						s.medium = 'source_usb';
+						const result = await api('open_drive', { path: drive.path }, 'POST');
+						s.medium = result.medium;
+						save('medium', s.medium);
 						await this.reload(0, false, true);
 					} catch (e) {
 						this.info.textContent = e.message;
@@ -257,7 +258,7 @@
 					}
 				});
 				this.media.append(button);
-			}
+			});
 
 			if (this.types) {
 				this.types.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.value === s.type)));
