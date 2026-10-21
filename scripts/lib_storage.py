@@ -1085,7 +1085,7 @@ def get_available_partitions(StorageType='all', TargetDeviceIdentifier='', exclu
 	else:
 		StorageMask	= rf"^PATH=\"/dev/{setup.get_val('const_STORAGE_EXT_MASK')}\|^PATH=\"/dev/{setup.get_val('const_STORAGE_NVME_MASK')}"
 
-	Command	= f"/usr/bin/lsblk -p -P -o PATH,MOUNTPOINT,UUID,FSTYPE | /usr/bin/grep '{StorageMask}'"
+	Command	= f"/usr/bin/lsblk -p -P -o PATH,MOUNTPOINT,UUID,FSTYPE,PARTTYPE,LABEL | /usr/bin/grep '{StorageMask}'"
 	try:
 		# get all devices having MOUNTPOINT="" and starting with "PATH=\"...
 		DeviceListRaw = subprocess.check_output(Command,shell=True).decode().split('\n')
@@ -1119,6 +1119,16 @@ def get_available_partitions(StorageType='all', TargetDeviceIdentifier='', exclu
 		except:
 			fs_type		= ''
 
+		try:
+			part_type	= USB_Device.split('PARTTYPE=',1)[1].split('"',2)[1].lower()
+		except:
+			part_type	= ''
+
+		try:
+			label		= USB_Device.split('LABEL=',1)[1].split('"',2)[1]
+		except:
+			label		= ''
+
 		# find TargetDeviceIdentifier
 		if lum_alpha and TargetDeviceIdentifier and (TargetDeviceIdentifier in [uuid, lum]):
 			TargetDevice_lum_alpha	= lum_alpha
@@ -1130,6 +1140,11 @@ def get_available_partitions(StorageType='all', TargetDeviceIdentifier='', exclu
 
 		## exclude invalid fs types
 		if (not ignore_fs) and (not fs_type in FS_Types_supported):
+			continue
+
+		## exclude EFI system partitions: drives formatted on a Mac (and many SSDs) carry one in front of
+		## the data partition, it would be taken as source or target instead of the data partition
+		if (not ignore_fs) and (part_type in ['c12a7328-f81f-11d2-ba4b-00a0c93ec93b', '0xef'] or label.upper() == 'EFI'):
 			continue
 
 		## exclude all excludePartitions
@@ -1206,7 +1221,7 @@ def get_available_devices():
 
 	StorageMask	= rf"^PATH=\"/dev/{setup.get_val('const_STORAGE_EXT_MASK')}\|^PATH=\"/dev/{setup.get_val('const_STORAGE_NVME_MASK')}"
 
-	Command	= f"/usr/bin/lsblk -p -P -o PATH,MOUNTPOINT,UUID,FSTYPE | /usr/bin/grep '{StorageMask}'"
+	Command	= f"/usr/bin/lsblk -p -P -o PATH,MOUNTPOINT,UUID,FSTYPE,PARTTYPE,LABEL | /usr/bin/grep '{StorageMask}'"
 
 	try:
 		# get all devices having MOUNTPOINT="" and starting with "PATH=\"...

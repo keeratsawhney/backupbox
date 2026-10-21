@@ -56,22 +56,22 @@
 <nav class="navbar navbar-expand-sm <?php echo $nav_theme_class; ?>">
 	<div class="container-fluid">
 
+		<a class="lbb-brand" href="/index.php">
+			<img src="/img/little-backup-box-color.png" alt="Little Backup Box logo">
+			<span class="hidden-mobile">Little Backup Box</span>
+		</a>
+
 		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
 			<span class="navbar-toggler-icon"></span>
 		</button>
 
-		<div class="collapse navbar-collapse w-50" id="navbarSupportedContent">
-			<ul class="navbar-nav me-auto mb-2 mb-lg-0  w-100">
+		<div class="collapse navbar-collapse" id="navbarSupportedContent">
+			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="index.php"?" active":""; ?>" href="/index.php"><?php echo L::mainmenue_main; ?></a></li>
-				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="sysinfo"?" active":""; ?>" href="/frame.php?page=sysinfo"><?php echo L::mainmenue_sysinfo; ?></a></li>
-				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="tools.php"?" active":""; ?>" href="/tools.php"><?php echo L::mainmenue_tools; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="view.php"?" active":""; ?>" href="/view.php"><?php echo L::mainmenue_view; ?></a></li>
-			</ul>
-		</div>
-
-		<div class="collapse navbar-collapse w-50" id="navbarSupportedContent">
-			<ul class="navbar-nav me-auto mb-2 mb-lg-0  w-100">
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="files"?" active":""; ?>" href="/frame.php?page=files"><?php echo L::mainmenue_filebrowser; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="tools.php"?" active":""; ?>" href="/tools.php"><?php echo L::mainmenue_tools; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="sysinfo"?" active":""; ?>" href="/frame.php?page=sysinfo"><?php echo L::mainmenue_sysinfo; ?></a></li>
 				<?php
 					if ($comitup_installed) {
 						?>
@@ -80,18 +80,24 @@
 					}
 				?>
 			</ul>
-		</div>
 
-		<div class="navbar-collapse collapse" id="navbarSupportedContent">
-			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+			<ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
 				<?php
 					if (trim(shell_exec("python3 $WORKING_DIR/lib_git.py --update-available")) == 'True') {
 						?>
-							<li class="nav-item"><a class="nav-link" href="/cmd.php?CMD=update"><nobr><?php echo L::mainmenue_update; ?></nobr></a></li>
+							<li class="nav-item"><a class="nav-link lbb-update" href="/cmd.php?CMD=update"><nobr><?php echo L::mainmenue_update; ?></nobr></a></li>
 						<?php
 					}
 				?>
 				<li class="nav-item"><a class="nav-link<?php echo in_array($scriptname, ["setup.php", "rclone_gui"])?" active":""; ?>" href="/setup.php"><?php echo L::mainmenue_config; ?></a></li>
+				<?php
+					// way back to the touch UI on the box's own screen
+					if (in_array($_SERVER['REMOTE_ADDR'] ?? '', array('127.0.0.1', '::1'), true)) {
+						?>
+							<li class="nav-item"><a class="nav-link" href="/touch.php"><?php echo L::touch_home; ?></a></li>
+						<?php
+					}
+				?>
 				<li class="nav-item dropdown">
 					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdownPower" role="button" data-bs-toggle="dropdown" aria-expanded="false">
 						<svg width="1em" height="1em" style="vertical-align: middle;">

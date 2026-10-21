@@ -4,3 +4,11 @@
 X_*
 /scripts/__pycache__
 /scripts/cache
+
+# runtime files of an installed box, never commit them
+/config.cfg
+/config-standards.cfg
+/scripts/config.cfg
+/scripts/config-standards.cfg
+/tmp/
+__pycache__/
