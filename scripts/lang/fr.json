@@ -550,7 +550,8 @@
         "label": "Démarrez le programme d’étalonnage sur l’écran tactile.",
         "started": "La calibration de l’écran tactile a démarré. Veuillez toucher aussi précisément que possible le centre des quatre repères successifs. Attention : les modifications ne prendront effet qu’après un redémarrage."
       }
-    }
+    },
+    "view_theme_sage": "sauge"
   },
   "tools": {
     "tools": "Outils",

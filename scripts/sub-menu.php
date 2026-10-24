@@ -58,8 +58,8 @@
 	<div class="container-fluid">
 
 		<a class="lbb-brand" href="/index.php">
-			<img src="/img/icons/favicon-180.png" alt="">
-			<span>Little Backup Box</span>
+			<img src="/img/icons/favicon-180.png" alt="Your Wedding Saga">
+			<span>Backup Box</span>
 		</a>
 
 		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">

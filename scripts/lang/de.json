@@ -550,7 +550,8 @@
         "label": "Das Kalibrierungsprogramm auf dem Touchscreen starten.",
         "started": "Die Kalibrierung des Touchscreens wurde gestartet. Bitte tippen Sie möglichst exakt in die Mitte der vier aufeinanderfolgenden Markierungen. Achtung: Die Änderungen werden erst nach einem Neustart wirksam."
       }
-    }
+    },
+    "view_theme_sage": "Salbei"
   },
   "tools": {
     "tools": "Werkzeug",

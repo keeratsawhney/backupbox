@@ -166,7 +166,7 @@
 		}
 	</script>
 
-	<?php display(false, 'Little Backup Box'); ?>
+	<?php display(false, 'Backup Box'); ?>
 
 	<form class="text-center" style="margin-top: 1em;" method="POST">
 

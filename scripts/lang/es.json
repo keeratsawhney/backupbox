@@ -550,7 +550,8 @@
         "label": "Inicie el programa de calibración en la pantalla táctil.",
         "started": "La calibración de la pantalla táctil se ha iniciado. Por favor, toque con la mayor precisión posible el centro de las cuatro marcas consecutivas. Atención: Los cambios solo entrarán en vigor después de reiniciar."
       }
-    }
+    },
+    "view_theme_sage": "salvia"
   },
   "tools": {
     "tools": "Herramientas",

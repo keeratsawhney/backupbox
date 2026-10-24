@@ -115,6 +115,25 @@ html[data-theme='dark'] {
 	--m-shadow-lg:     0 20px 46px rgba(0,0,0,0.55);
 }
 
+/* sage: the Your Wedding Saga color #a9af90 as background, darker sage for text and buttons (readable) */
+html[data-theme='sage'] {
+	--m-bg:            #a9af90;
+	--m-bg-grad:       radial-gradient(1200px 600px at 100% -10%, #c3c8ad 0%, rgba(195,200,173,0) 55%),
+	                   radial-gradient(1000px 600px at -10% 110%, #9aa080 0%, rgba(154,160,128,0) 50%);
+	--m-surface:       #f6f7f1;
+	--m-surface-2:     #e6e8dc;
+	--m-surface-soft:  rgba(246,247,241,0.82);
+	--m-border:        #cfd2c0;
+	--m-border-strong: #9da387;
+	--m-fg:            #23271a;
+	--m-muted:         #555b47;
+	--m-heading:       #1b1f13;
+	--m-accent:        #5a6245;
+	--m-accent-2:      #6f7856;
+	--m-accent-soft:   rgba(90,98,69,0.12);
+	--m-accent-ring:   rgba(90,98,69,0.35);
+}
+
 html[data-theme='sepia'] {
 	--m-bg:            #efe7d8;
 	--m-bg-grad:       radial-gradient(1200px 600px at 100% -10%, #f3e9d2 0%, rgba(243,233,210,0) 55%);
