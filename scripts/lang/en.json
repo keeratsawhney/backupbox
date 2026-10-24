@@ -1019,7 +1019,8 @@
     "drive_source": "Card / source drive",
     "show_card": "Show inserted card",
     "files_count": "files",
-    "run": "Run"
+    "run": "Run",
+    "power_short": "Low power"
   },
   "gallery": {
     "title": "Gallery",

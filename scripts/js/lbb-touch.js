@@ -250,10 +250,12 @@
 			$('temp').classList.toggle('hot', data.temp >= 75);
 		}
 
-		// weak power supply: drives disconnect during backups
+		// weak power supply: drives disconnect during backups. A pill in the top bar (tap: the full message),
+		// a banner would cover the tab bar on phones
 		const power = data.power || {};
-		$('power-warning').hidden = !(power.undervoltage || power.undervoltage_since_boot);
-		$('power-warning').textContent = T.power_warning;
+		$('power-pill').hidden = !(power.undervoltage || power.undervoltage_since_boot);
+		$('power-pill').classList.toggle('now', !!power.undervoltage);
+		if ($('power-pill').hidden) showPowerNote(false);
 
 		// names of the files being copied, live while a backup runs
 		renderCopying(data.running ? data.copying : null);
@@ -662,6 +664,11 @@
 		$('viewer').classList.remove('playing');
 	}
 
+	function showPowerNote(open) {
+		$('power-note').hidden = !open;
+		$('power-pill').setAttribute('aria-expanded', String(!!open));
+	}
+
 	function hideViewer() {
 		stopVideo();
 		$('viewer').hidden = true;
@@ -962,12 +969,25 @@
 		$('h-maintenance').textContent = T.maintenance;
 		$('h-settings').textContent = T.settings;
 		$('h-power').textContent = T.power;
+		$('power-pill-text').textContent = T.power_short;
+		$('power-note-text').textContent = T.power_warning;
+		$('power-note-close').setAttribute('aria-label', T.cancel);
+		$('power-pill').title = T.power_warning;
 		$('classic-label').textContent = T.classic_ui;
 		$('reboot-label').textContent = T.reboot;
 		$('shutdown-label').textContent = T.shutdown;
 	}
 
 	function initEvents() {
+		// the full power message: opened from the pill, closed with x, the pill or a tap anywhere else
+		$('power-pill').addEventListener('click', (event) => {
+			event.stopPropagation();
+			showPowerNote($('power-note').hidden);
+		});
+		$('power-note-close').addEventListener('click', () => showPowerNote(false));
+		$('power-note').addEventListener('click', (event) => event.stopPropagation());
+		document.addEventListener('click', () => showPowerNote(false));
+
 		$('btn-new-backup').addEventListener('click', () => {
 			resetWizard();
 			showPage('backup', true);

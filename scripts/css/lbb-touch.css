@@ -1591,3 +1591,79 @@ svg {
 		grid-template-columns: repeat(8, 1fr);
 	}
 }
+
+/* under-voltage: small pill in the top bar, the full message under it on tap */
+.power-pill {
+	margin-left: auto;
+	border: 0;
+	color: #1d1300;
+	background: var(--warn);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1.3;
+	cursor: pointer;
+}
+
+.power-pill svg {
+	width: 14px;
+	height: 14px;
+	fill: currentColor;
+	stroke: none;
+}
+
+.power-pill:not(.now) {
+	opacity: .85;
+}
+
+/* the state pill follows the power pill instead of pushing to the right itself */
+.power-pill:not([hidden]) + .pill {
+	margin-left: 0;
+}
+
+.power-note {
+	position: fixed;
+	top: calc(var(--top) + env(safe-area-inset-top) + 6px);
+	right: max(8px, env(safe-area-inset-right));
+	z-index: 26;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	max-width: min(420px, calc(100vw - 16px));
+	padding: 10px 6px 10px 14px;
+	border-radius: var(--radius);
+	background: var(--warn);
+	color: #1d1300;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.35;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+
+.power-note span {
+	padding-top: 4px;
+}
+
+.power-note .btn-icon {
+	flex: none;
+	min-width: 36px;
+	min-height: 36px;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 0;
+	background: rgba(0, 0, 0, .12);
+	color: inherit;
+}
+
+.power-note .btn-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* narrow phones: the clock gives way to the warning */
+@media (max-width: 380px) {
+	.power-pill:not([hidden]) ~ .clock {
+		display: none;
+	}
+}
