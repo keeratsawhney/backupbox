@@ -1019,7 +1019,8 @@
     "drive_source": "Carte / disque source",
     "show_card": "Afficher la carte insérée",
     "files_count": "fichiers",
-    "run": "Lancer"
+    "run": "Lancer",
+    "power_short": "Tension faible"
   },
   "gallery": {
     "title": "Galerie",

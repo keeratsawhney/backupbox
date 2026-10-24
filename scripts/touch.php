@@ -109,6 +109,7 @@
 		<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
 		<symbol id="i-up" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></symbol>
 		<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+		<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
 		<symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
 		<symbol id="i-power" viewBox="0 0 24 24"><path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/></symbol>
 		<symbol id="i-reboot" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></symbol>
@@ -121,6 +122,7 @@
 	<div class="app">
 		<header class="topbar">
 			<span class="brand"><img src="img/icons/favicon-180.png" alt=""><span class="brand-name">Little Backup Box</span></span>
+			<button class="pill power-pill" id="power-pill" aria-expanded="false" aria-controls="power-note" hidden><svg><use href="#i-bolt"/></svg><span id="power-pill-text"></span></button>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>
 			<span class="temp" id="temp"></span>
 			<span class="clock" id="clock"></span>
@@ -262,9 +264,9 @@
 	<!-- full screen message (power off, reboot) -->
 	<div class="overlay" id="overlay" hidden><p id="overlay-text"></p></div>
 
+	<div class="power-note" id="power-note" role="status" hidden><span id="power-note-text"></span><button class="btn btn-icon" id="power-note-close"><svg><use href="#i-close"/></svg></button></div>
 	<div class="toast" id="toast" hidden></div>
 	<div class="offline" id="offline" hidden></div>
-	<div class="offline power-warning" id="power-warning" hidden></div>
 
 	<script>
 		window.LBB_TOUCH = {

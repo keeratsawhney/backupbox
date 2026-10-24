@@ -1019,7 +1019,8 @@
     "drive_source": "Tarjeta / unidad de origen",
     "show_card": "Mostrar la tarjeta insertada",
     "files_count": "archivos",
-    "run": "Ejecutar"
+    "run": "Ejecutar",
+    "power_short": "Tensión baja"
   },
   "gallery": {
     "title": "Galería",

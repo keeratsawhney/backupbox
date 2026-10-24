@@ -1019,7 +1019,8 @@
     "drive_source": "Karte / Quelllaufwerk",
     "show_card": "Eingesteckte Karte zeigen",
     "files_count": "Dateien",
-    "run": "Ausführen"
+    "run": "Ausführen",
+    "power_short": "Unterspannung"
   },
   "gallery": {
     "title": "Galerie",
