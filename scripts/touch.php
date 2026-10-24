@@ -109,6 +109,9 @@
 		<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
 		<symbol id="i-up" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></symbol>
 		<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+		<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></symbol>
+		<symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+		<symbol id="i-checks" viewBox="0 0 24 24"><path d="M3 12l4 4 8-8M11 16l1 1 9-9"/></symbol>
 		<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
 		<symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
 		<symbol id="i-power" viewBox="0 0 24 24"><path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/></symbol>
@@ -205,9 +208,17 @@
 			<!-- FILES -->
 			<section class="page" id="page-files">
 				<div class="photo-media" id="files-drives"></div>
-				<div class="files-bar">
+				<div class="files-bar" id="files-bar">
 					<button class="btn btn-icon" id="files-up" aria-label="up"><svg><use href="#i-left"/></svg></button>
 					<span class="files-crumb" id="files-crumb"></span>
+				</div>
+				<!-- long-press a file or folder: selection with its actions -->
+				<div class="files-bar files-select" id="files-select" hidden>
+					<button class="btn btn-icon" id="sel-cancel" aria-label="cancel"><svg><use href="#i-close"/></svg></button>
+					<span class="files-crumb" id="sel-count"></span>
+					<button class="btn btn-icon" id="sel-all"><svg><use href="#i-checks"/></svg></button>
+					<button class="btn btn-icon" id="sel-rename"><svg><use href="#i-edit"/></svg></button>
+					<button class="btn btn-icon btn-danger" id="sel-delete"><svg><use href="#i-trash"/></svg></button>
 				</div>
 				<div class="files-list scroll" id="files-list"></div>
 			</section>
@@ -217,10 +228,7 @@
 					<div class="info-grid" id="sysinfo"></div>
 
 					<h3 id="h-storage"></h3>
-					<div class="list" id="mount-list"></div>
-
-					<h3 id="h-maintenance"></h3>
-					<div class="func-grid" id="func-grid"></div>
+					<div class="list" id="drive-list"></div>
 
 					<h3 id="h-settings"></h3>
 					<div class="btn-row">
@@ -254,10 +262,22 @@
 		<div class="modal-box">
 			<p id="modal-text"></p>
 			<p class="modal-sub" id="modal-sub"></p>
+			<input class="modal-input" id="modal-input" type="text" autocomplete="off" spellcheck="false" hidden>
 			<div class="modal-buttons">
 				<button class="btn" id="modal-cancel"></button>
 				<button class="btn btn-primary" id="modal-ok"></button>
 			</div>
+		</div>
+	</div>
+
+	<!-- one drive: what it is used for and what can be done with it -->
+	<div class="sheet" id="drive-sheet" role="dialog" hidden>
+		<div class="sheet-box">
+			<div class="sheet-head">
+				<span class="row-label"><b id="sheet-title"></b><small id="sheet-sub"></small></span>
+				<button class="btn btn-icon" id="sheet-close"><svg><use href="#i-close"/></svg></button>
+			</div>
+			<div class="sheet-body" id="sheet-body"></div>
 		</div>
 	</div>
 

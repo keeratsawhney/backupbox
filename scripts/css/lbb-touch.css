@@ -1667,3 +1667,221 @@ svg {
 		display: none;
 	}
 }
+
+/* ---------- Files: long-press selection ---------- */
+
+.file-check {
+	display: none;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border: 2px solid var(--border);
+	border-radius: 50%;
+	color: transparent;
+}
+
+.file-check svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 3;
+}
+
+.files-list.selecting .file-check {
+	display: inline-flex;
+}
+
+.file-row.selected {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+.file-row.selected .file-check {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-text);
+}
+
+/* no text selection or callout menu on a long press */
+.file-row {
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+
+.files-select .btn-icon:disabled {
+	opacity: .35;
+}
+
+/* ---------- System: drives ---------- */
+
+.drive-row {
+	width: 100%;
+	min-height: var(--tap);
+	padding: 6px 10px;
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.drive-row:active {
+	background: var(--surface-2);
+}
+
+.drive-row > svg {
+	color: var(--muted);
+}
+
+.drive-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background: var(--surface-2);
+	color: var(--muted);
+}
+
+.drive-row.mounted .drive-icon {
+	background: color-mix(in srgb, var(--ok) 22%, var(--surface));
+	color: var(--ok);
+}
+
+.drive-row .row-label {
+	flex: 1;
+	min-width: 0;
+}
+
+.drive-row .row-label b,
+.drive-row .row-label small {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* drive panel: full screen on small screens, a card on bigger ones */
+.sheet {
+	position: fixed;
+	inset: 0;
+	z-index: 28;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	background: rgba(0, 0, 0, .55);
+}
+
+.sheet-box {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 560px;
+	max-height: 100%;
+	padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+	border-radius: var(--radius) var(--radius) 0 0;
+	background: var(--bg);
+	border: 1px solid var(--border);
+}
+
+@media (min-height: 600px) {
+	.sheet-box {
+		max-height: 88%;
+	}
+}
+
+.sheet-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: none;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--border);
+}
+
+.sheet-head .row-label {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.sheet-head small {
+	color: var(--muted);
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sheet-body {
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	min-height: 0;
+	padding-top: 8px;
+}
+
+.sheet-body h4 {
+	margin: 12px 0 6px;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	color: var(--muted);
+}
+
+.sheet-body .btn-row .btn {
+	flex: 1 1 140px;
+}
+
+.sheet-body .list {
+	margin-bottom: 8px;
+}
+
+.sheet-note {
+	margin: 8px 0;
+	font-size: 13px;
+	color: var(--muted);
+}
+
+.sheet-note.warn {
+	color: var(--warn);
+	font-weight: 600;
+}
+
+.sheet-note.ok {
+	color: var(--ok);
+	font-weight: 600;
+}
+
+.task-log {
+	margin: 0 0 10px;
+	max-height: 40vh;
+	min-height: 80px;
+	overflow: auto;
+	padding: 8px;
+	border-radius: 10px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	font: 12px/1.35 ui-monospace, "DejaVu Sans Mono", monospace;
+	white-space: pre-wrap;
+	word-break: break-word;
+	user-select: text;
+}
+
+/* rename: text field in the dialog (16px: phones do not zoom in) */
+.modal-input {
+	width: 100%;
+	min-height: 44px;
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--surface-2);
+	color: var(--text);
+	font: inherit;
+	font-size: 16px;
+	user-select: text;
+	-webkit-user-select: text;
+}
