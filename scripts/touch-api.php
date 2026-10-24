@@ -301,6 +301,7 @@
 					'size'			=> $size,
 					'mountpoint'	=> $partition['mountpoint'],
 					'fstype'		=> $partition['fstype'],
+					'label'			=> (string)($partition['label'] ?? ''),
 				);
 			}
 		}
@@ -380,7 +381,7 @@
 				$target	= array('state' => 'mounting', 'id' => $drive['kind'] . '_target', 'name' => $drive['name'], 'free' => null, 'total' => $drive['size'], 'disk' => $drive['disk'], 'path' => $drive['path']);
 				# mounted again in the background (throttled, never during a backup)
 				$stamp	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-automount.stamp';
-				if (!$running and empty($drive['mountpoint']) and time() - (int)@filemtime($stamp) > 20) {
+				if (!$running and !touch_disk_task_running($constants) and empty($drive['mountpoint']) and time() - (int)@filemtime($stamp) > 20) {
 					@touch($stamp);
 					touch_mount_target($WORKING_DIR, $drive, true);
 				}
@@ -437,6 +438,148 @@
 			return(touch_text(L::touch_drive_source));
 		}
 		return(touch_text(lbb_dashboard_medium_label($media_key)));
+	}
+
+	function touch_find_drive($path) {
+		foreach (touch_attached_drives() as $drive) {
+			if ($drive['path'] === $path) {
+				return($drive);
+			}
+		}
+		return(null);
+	}
+
+	function touch_drive_role($constants, $drive) {
+		# what the box uses a drive for: target_usb / source_usb / target_nvme / source_nvme, browse (read only), other (mounted by
+		# something else), '' (not mounted)
+		$mountpoint	= (string)$drive['mountpoint'];
+		if ($mountpoint === '') {
+			return('');
+		}
+		foreach (array('target_usb' => 'const_MOUNTPOINT_USB_TARGET', 'source_usb' => 'const_MOUNTPOINT_USB_SOURCE', 'target_nvme' => 'const_MOUNTPOINT_NVME_TARGET', 'source_nvme' => 'const_MOUNTPOINT_NVME_SOURCE') as $role => $constant) {
+			if ($mountpoint === $constants['const_MEDIA_DIR'] . '/' . $constants[$constant]) {
+				return($role);
+			}
+		}
+		return(str_starts_with($mountpoint, touch_browse_dir($constants) . '/') ? 'browse' : 'other');
+	}
+
+	function touch_release_drive($constants, $drive, $forget = true) {
+		# unmount a drive whatever mounted it. $forget: the chosen backup drive is forgotten, else the home screen mounts it
+		# again (a check or repair keeps it: the home screen waits until the task is finished)
+		global $WORKING_DIR;
+		$choice	= touch_target_choice($constants);
+		if ($forget and $choice and $choice['id'] === ($drive['uuid'] ?: $drive['path'])) {
+			touch_target_choice($constants, null);
+		}
+		# a drive can be busy for a moment (previews still being read): a few tries
+		for ($try = 0; $try < 6; $try++) {
+			$current	= touch_find_drive($drive['path']);
+			if (!$current or empty($current['mountpoint'])) {
+				return(true);
+			}
+			$role	= touch_drive_role($constants, $current);
+			if (in_array($role, array('target_usb', 'source_usb', 'target_nvme', 'source_nvme'), true)) {
+				[$r, $k]	= explode('_', $role);
+				shell_exec("sudo python3 $WORKING_DIR/lib_storage.py --Action umount --StorageName $k --Role $r > /dev/null 2>&1");
+			} elseif ($role === 'browse') {
+				touch_browse_umount($constants, $current['mountpoint']);
+			} elseif ($role === 'other') {
+				shell_exec('sudo umount ' . escapeshellarg($current['mountpoint']) . ' > /dev/null 2>&1');
+			}
+			usleep(800000);
+		}
+		$after	= touch_find_drive($drive['path']);
+		return(!$after or empty($after['mountpoint']));
+	}
+
+	# disk tasks (check, repair, format): one at a time, run as root in the background, output kept for the UI
+	function touch_disk_task_files($constants) {
+		$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp';
+		return(array($dir . '/touch-disk-task.json', $dir . '/touch-disk-task.log', $dir . '/touch-disk-task.exit'));
+	}
+
+	function touch_disk_task_running($constants) {
+		[$json, $log, $exit]	= touch_disk_task_files($constants);
+		$task	= @json_decode((string)@file_get_contents($json), true);
+		return(is_array($task) and !is_file($exit) and is_dir('/proc/' . (int)$task['pid']));
+	}
+
+	function touch_disk_task_status($constants) {
+		[$json, $log, $exit]	= touch_disk_task_files($constants);
+		$task	= @json_decode((string)@file_get_contents($json), true);
+		if (!is_array($task)) {
+			return(null);
+		}
+		$lines	= @file($log, FILE_IGNORE_NEW_LINES) ?: array();
+		$code	= is_file($exit) ? (int)trim((string)@file_get_contents($exit)) : null;
+		return(array(
+			'title'		=> $task['title'],
+			'device'	=> $task['device'],
+			'started'	=> $task['started'],
+			'running'	=> $code === null and is_dir('/proc/' . (int)$task['pid']),
+			'exit'		=> $code,
+			'log'		=> array_slice($lines, -60),
+		));
+	}
+
+	function touch_disk_task_start($constants, $title, $device, $commands) {
+		# $commands: shell commands run one after another; the first is the task, its exit code is the result
+		# (the others only show the outcome, e.g. lsblk after formatting)
+		[$json, $log, $exit]	= touch_disk_task_files($constants);
+		@unlink($exit);
+		$script	= '';
+		foreach (array_values($commands) as $index => $command) {
+			$script	.= 'echo ' . escapeshellarg('$ ' . $command) . '; ' . $command . ($index === 0 ? '; rc=$?; ' : '; ');
+		}
+		$script	.= 'sync; echo $rc > ' . escapeshellarg($exit);
+		$pid	= (int)shell_exec('sudo sh -c ' . escapeshellarg($script) . ' > ' . escapeshellarg($log) . ' 2>&1 & echo $!');
+		@file_put_contents($json, json_encode(array('title' => $title, 'device' => $device, 'pid' => $pid, 'started' => time())));
+	}
+
+	function touch_fsck_command($fstype, $repair, $device) {
+		$d	= escapeshellarg($device);
+		switch ($fstype) {
+			case 'exfat':	return($repair ? "fsck.exfat -p $d" : "fsck.exfat -n $d");
+			case 'vfat':	return($repair ? "fsck.vfat -a $d" : "fsck.vfat -n $d");
+			case 'ext2':
+			case 'ext3':
+			case 'ext4':	return($repair ? "e2fsck -f -p $d" : "e2fsck -f -n $d");
+			case 'ntfs':
+			case 'ntfs3':	return($repair ? "ntfsfix $d" : "ntfsfix -n $d");
+			case 'hfsplus':	return($repair ? "fsck.hfsplus -p $d" : "fsck.hfsplus -n $d");
+		}
+		return(null);
+	}
+
+	function touch_format_command($fs, $device, $label) {
+		# the drive keeps its name (label) where the file system allows it
+		$d	= escapeshellarg($device);
+		switch ($fs) {
+			case 'exfat':	return('mkfs.exfat -L ' . escapeshellarg(substr($label, 0, 15)) . " $d");
+			case 'vfat':	return('mkfs.vfat -F 32 -I -n ' . escapeshellarg(strtoupper(substr($label, 0, 11))) . " $d");
+			case 'ext4':	return('mkfs.ext4 -F -L ' . escapeshellarg(substr($label, 0, 16)) . " $d");
+			case 'ntfs':	return('mkfs.ntfs -f -L ' . escapeshellarg(substr($label, 0, 32)) . " $d");
+		}
+		return(null);
+	}
+
+	# file operations of the Files tab: paths are relative to the root of a mounted drive and must stay inside it
+	function touch_file_target($root, $relative) {
+		$relative	= trim(str_replace('\\', '/', (string)$relative), '/');
+		if ($relative === '' or in_array('..', explode('/', $relative), true)) {
+			return(false);
+		}
+		$full	= realpath($root . '/' . $relative);
+		if ($full === false or !str_starts_with($full, $root . '/')) {
+			return(false);
+		}
+		return($full);
+	}
+
+	function touch_valid_file_name($name) {
+		$name	= trim((string)$name);
+		return($name !== '' and $name !== '.' and $name !== '..' and !str_starts_with($name, '.') and strpbrk($name, "/\\\0") === false and strlen($name) <= 255);
 	}
 
 	function touch_drive_openable($constants, $drive) {
@@ -1134,6 +1277,175 @@
 			$command	= "sudo python3 $WORKING_DIR/lib_storage.py --Action $action --StorageName $Storage --Role $Role" . $preset;
 			shell_exec("python3 $WORKING_DIR/lib_log.py 'execute' '' " . escapeshellarg($command) . " '1'");
 			touch_respond(array('ok' => true, 'storages' => touch_storages($constants)));
+
+		case 'drives':
+			# System tab: every attached drive with what the box uses it for, and the running disk task
+			$choice	= touch_target_choice($constants);
+			$drives	= array();
+			foreach (touch_attached_drives() as $drive) {
+				$role	= touch_drive_role($constants, $drive);
+				$total	= $drive['mountpoint'] ? @disk_total_space($drive['mountpoint']) : false;
+				$free	= $drive['mountpoint'] ? @disk_free_space($drive['mountpoint']) : false;
+				$drives[]	= array(
+					'path'		=> $drive['path'],
+					'name'		=> $drive['name'],
+					'size'		=> $drive['size'],
+					'fstype'	=> $drive['fstype'],
+					'kind'		=> $drive['kind'],
+					'role'		=> $role,
+					'role_label'	=> in_array($role, array('target_usb', 'target_nvme', 'source_usb', 'source_nvme'), true) ? touch_medium_role_label($role) : '',
+					'chosen'	=> $choice and $choice['id'] === ($drive['uuid'] ?: $drive['path']),
+					'mounted'	=> !empty($drive['mountpoint']),
+					'medium'	=> in_array($role, array('target_usb', 'target_nvme', 'source_usb', 'source_nvme'), true) ? $role : ($role === 'browse' ? touch_browse_key($drive) : null),
+					'total'		=> $total === false ? null : $total,
+					'free'		=> $free === false ? null : $free,
+					'check'		=> touch_fsck_command($drive['fstype'], false, $drive['path']) !== null,
+				);
+			}
+			touch_respond(array('ok' => true, 'drives' => $drives, 'task' => touch_disk_task_status($constants), 'running' => touch_backup_running()));
+
+		case 'disk_task':
+			touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
+
+		case 'drive_action':
+			# one drive: unmount, photo maintenance, check, repair, format
+			$drive	= touch_find_drive(isset($_POST['path']) ? (string)$_POST['path'] : '');
+			$do		= isset($_POST['do']) ? (string)$_POST['do'] : '';
+			if (!$drive) {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			if (touch_backup_running()) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			if (touch_disk_task_running($constants)) {
+				touch_fail(touch_text(L::touch_task_busy));
+			}
+
+			if ($do === 'unmount') {
+				if (!touch_release_drive($constants, $drive)) {
+					touch_fail(touch_text(L::touch_umount_failed));
+				}
+				touch_respond(array('ok' => true, 'message' => touch_text(L::touch_umount_done)));
+			}
+
+			$functions	= array(
+				# function => rename, sync database, thumbnails, exif
+				'thumbnails'	=> array('False', 'False', 'True', 'False', L::main_function_thumbnails),
+				'database'		=> array('False', 'True', 'False', 'False', L::main_function_sync),
+				'exif'			=> array('False', 'False', 'False', 'True', L::main_function_exif),
+				'rename'		=> array('True', 'False', 'False', 'False', L::main_backup_rename_checkbox_label),
+			);
+			if (isset($functions[$do])) {
+				# runs on this drive as backup target; a drive opened read only or by something else is released first
+				if (in_array(touch_drive_role($constants, $drive), array('browse', 'other'), true)) {
+					touch_release_drive($constants, $drive);
+				}
+				[$rename, $sync, $thumbnails, $exif, $label]	= $functions[$do];
+				touch_run_backup($WORKING_DIR, "--SourceName $do --TargetName " . escapeshellarg($drive['kind']) . " --rename-files $rename --force-sync-database $sync --generate-thumbnails $thumbnails --update-exif $exif --device-identifier-preset-target " . escapeshellarg($drive['path']) . " --power-off False");
+				touch_respond(array('ok' => true, 'message' => touch_text($label . ': ' . $drive['name']), 'home' => true));
+			}
+
+			if ($do === 'check' or $do === 'repair') {
+				$command	= touch_fsck_command($drive['fstype'], $do === 'repair', $drive['path']);
+				if ($command === null) {
+					touch_fail(touch_text(L::touch_fs_unsupported));
+				}
+				if (!touch_release_drive($constants, $drive, false)) {
+					touch_fail(touch_text(L::touch_umount_failed));
+				}
+				touch_disk_task_start($constants, touch_text(($do === 'repair' ? L::touch_repair : L::touch_check) . ': ' . $drive['name']), $drive['path'], array($command));
+				touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
+			}
+
+			if ($do === 'format') {
+				$fs		= isset($_POST['fs']) ? (string)$_POST['fs'] : '';
+				$label	= preg_replace('/[^A-Za-z0-9 _-]/', '', (string)($drive['label'] ?? '')) ?: 'LBB';
+				$command	= touch_format_command($fs, $drive['path'], $label);
+				if ($command === null) {
+					touch_fail(touch_text(L::touch_fs_unsupported));
+				}
+				# the name typed by the user must match: nothing is formatted by a stray tap
+				if ((string)($_POST['confirm'] ?? '') !== $drive['name']) {
+					touch_fail(touch_text(L::touch_format_confirm_mismatch));
+				}
+				if (!touch_release_drive($constants, $drive)) {
+					touch_fail(touch_text(L::touch_umount_failed));
+				}
+				touch_disk_task_start($constants, touch_text(L::touch_format . ': ' . $drive['name'] . ' (' . $fs . ')'), $drive['path'], array($command, 'lsblk -f ' . escapeshellarg($drive['path'])));
+				touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
+			}
+
+			touch_fail('unknown drive action');
+
+		case 'file_op':
+			# Files tab: delete or rename on a mounted drive; drives opened read only are writable for this moment only
+			$medium	= isset($_POST['medium']) ? (string)$_POST['medium'] : '';
+			$op		= isset($_POST['op']) ? (string)$_POST['op'] : '';
+			$root	= touch_medium_path($constants, $medium);
+			if ($root === false or $medium === 'internal') {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			$root	= realpath($root);
+			if (touch_backup_running()) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$paths	= isset($_POST['paths']) ? json_decode((string)$_POST['paths'], true) : null;
+			if (!is_array($paths) or !$paths or count($paths) > 500) {
+				touch_fail('nothing selected');
+			}
+			$targets	= array();
+			foreach ($paths as $relative) {
+				$full	= touch_file_target($root, $relative);
+				if ($full === false) {
+					touch_fail('invalid path');
+				}
+				$targets[]	= $full;
+			}
+
+			$readonly	= str_starts_with($medium, 'browse:');
+			if ($readonly) {
+				# a device mount, or a bind mount (a drive the system had mounted): both made writable
+				shell_exec('sudo mount -o remount,rw ' . escapeshellarg($root) . ' > /dev/null 2>&1; sudo mount -o remount,bind,rw ' . escapeshellarg($root) . ' > /dev/null 2>&1');
+			}
+			$failed	= 0;
+			if ($op === 'delete') {
+				foreach ($targets as $full) {
+					# with its thumbnail of the box, if there is one
+					$tims	= dirname($full) . '/tims/' . basename($full) . '.JPG';
+					exec('sudo rm -rf -- ' . escapeshellarg($full) . (is_file($tims) ? ' ' . escapeshellarg($tims) : '') . ' 2>&1', $output, $rc);
+					$failed	+= ($rc !== 0 or file_exists($full)) ? 1 : 0;
+				}
+			} elseif ($op === 'rename' and count($targets) === 1) {
+				$name	= isset($_POST['name']) ? trim((string)$_POST['name']) : '';
+				if (!touch_valid_file_name($name)) {
+					touch_fail(touch_text(L::touch_invalid_name));
+				}
+				$full	= $targets[0];
+				$new	= dirname($full) . '/' . $name;
+				if (file_exists($new)) {
+					touch_fail(touch_text(L::touch_name_exists));
+				}
+				exec('sudo mv -n -- ' . escapeshellarg($full) . ' ' . escapeshellarg($new) . ' 2>&1', $output, $rc);
+				$tims	= dirname($full) . '/tims/' . basename($full) . '.JPG';
+				if ($rc === 0 and is_file($tims)) {
+					shell_exec('sudo mv -n -- ' . escapeshellarg($tims) . ' ' . escapeshellarg(dirname($full) . '/tims/' . $name . '.JPG') . ' > /dev/null 2>&1');
+				}
+				$failed	= ($rc !== 0 or !file_exists($new)) ? 1 : 0;
+			} else {
+				touch_fail('unknown file operation');
+			}
+			if ($readonly) {
+				# back to read only for this mount point only (never the whole file system behind a bind mount)
+				shell_exec('sudo mount -o remount,bind,ro ' . escapeshellarg($root) . ' > /dev/null 2>&1');
+			}
+			# photo lists read the drive again
+			foreach (glob($constants['const_WEB_ROOT_LBB'] . '/tmp/touch-files-*.json') ?: array() as $cache) {
+				@unlink($cache);
+			}
+			if ($failed) {
+				touch_fail(touch_text(L::touch_file_op_failed));
+			}
+			touch_respond(array('ok' => true));
 
 		case 'power':
 			$mode	= isset($_POST['mode']) ? (string)$_POST['mode'] : '';

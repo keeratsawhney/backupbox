@@ -19,7 +19,7 @@
 		wizard: { step: 0, source: null, target: null, options: {} },
 		// medium: storage picked by the user; empty lets the box choose (attached NVMe/USB first)
 		photos: { offset: 0, total: 0, items: [], viewer: -1, medium: '' },
-		files: { medium: '', path: '' },
+		files: { medium: '', path: '', entries: [], selecting: false, selected: new Set() },
 		failures: 0,
 		powering: false,
 	};
@@ -100,8 +100,13 @@
 		toastTimer = setTimeout(() => { node.hidden = true; }, isError ? 5000 : 3000);
 	}
 
-	function confirmDialog(text, sub, okLabel, okClass) {
+	function confirmDialog(text, sub, okLabel, okClass, inputValue) {
+		// with inputValue (a string): a text field, the promise gives its value (null when cancelled)
+		const withInput = typeof inputValue === 'string';
 		return new Promise((resolve) => {
+			const input = $('modal-input');
+			input.hidden = !withInput;
+			input.value = withInput ? inputValue : '';
 			$('modal-text').textContent = text;
 			$('modal-sub').textContent = sub || '';
 			$('modal-sub').hidden = !sub;
@@ -110,49 +115,69 @@
 			$('modal-ok').className = 'btn ' + (okClass || 'btn-primary');
 			$('modal').hidden = false;
 
+			const onBack = () => close(withInput ? null : false);
 			const close = (result) => {
-				closeOverlay();
+				closeOverlay(onBack);
 				$('modal').hidden = true;
 				$('modal-ok').onclick = null;
 				$('modal-cancel').onclick = null;
 				resolve(result);
 			};
-			$('modal-ok').onclick = () => close(true);
-			$('modal-cancel').onclick = () => close(false);
-			openOverlay(() => close(false));
+			$('modal-ok').onclick = () => close(withInput ? input.value.trim() : true);
+			$('modal-cancel').onclick = () => close(withInput ? null : false);
+			input.onkeydown = (event) => { if (event.key === 'Enter') $('modal-ok').click(); };
+			openOverlay(onBack);
+			if (withInput) {
+				input.focus();
+				// the name without its extension is selected: typing replaces it
+				const dot = inputValue.lastIndexOf('.');
+				input.setSelectionRange(0, dot > 0 ? dot : inputValue.length);
+			}
 		});
+	}
+
+	function fill(text, values) {
+		return String(text).replace(/\{(\w+)\}/g, (match, key) => (key in values ? values[key] : match));
 	}
 
 	// ---------- back button (phones, web views) ----------
 	// tabs are history entries; an open viewer or dialog is one more, so "back" closes it first
 
-	let overlayClose = null;
-	let ignorePop = false;
+	// open overlays, innermost last (a dialog over the drive panel): each has its own history entry
+	const overlays = [];
+	let ignorePop = 0;
+	const afterBack = [];
+
+	// run when the history steps of closed overlays are done (switching tabs earlier would be undone)
+	function whenSettled(fn) {
+		if (ignorePop > 0) afterBack.push(fn);
+		else fn();
+	}
 
 	function openOverlay(close) {
-		if (overlayClose) return;
-		overlayClose = close;
+		overlays.push(close);
 		history.pushState({ overlay: true }, '', location.hash);
 	}
 
-	function closeOverlay() {
-		if (!overlayClose) return;
-		overlayClose = null;
+	function closeOverlay(close) {
+		// closed by its own button: drop its history entry (closed by "back": already gone, nothing to do)
+		const index = overlays.lastIndexOf(close);
+		if (index < 0) return;
+		overlays.splice(index, 1);
 		if (history.state && history.state.overlay) {
-			ignorePop = true;
+			ignorePop++;
 			history.back();
 		}
 	}
 
 	window.addEventListener('popstate', () => {
-		if (ignorePop) {
-			ignorePop = false;
+		if (ignorePop > 0) {
+			ignorePop--;
+			if (!ignorePop) afterBack.splice(0).forEach((fn) => fn());
 			return;
 		}
-		if (overlayClose) {
-			const close = overlayClose;
-			overlayClose = null;
-			close();
+		if (overlays.length) {
+			overlays.pop()();
 			return;
 		}
 		const page = location.hash.slice(1) || 'home';
@@ -763,6 +788,9 @@
 		$('files-crumb').textContent = data.path ? label + ' / ' + data.path.split('/').join(' / ') : label;
 		$('files-up').disabled = !data.path;
 
+		state.files.entries = data.entries || [];
+		endSelection();
+
 		const list = $('files-list');
 		list.replaceChildren();
 		list.scrollTop = 0;
@@ -791,12 +819,22 @@
 				preview = el('span', { class: 'file-icon' }, el('b', { text: entry.ext || '' }));
 			}
 			const sub = entry.type === 'dir' ? '' : formatBytes(entry.size) + '  ·  ' + formatDate(entry.date);
-			const row = el('button', { class: 'file-row' }, [
+			const row = el('button', { class: 'file-row', 'data-path': entry.path }, [
+				el('span', { class: 'file-check' }, icon('check')),
 				preview,
 				el('span', { class: 'file-text' }, [el('b', { text: entry.name }), sub ? el('small', { text: sub }) : null]),
 				entry.type === 'dir' ? icon('right') : null,
 			]);
+			onLongPress(row, () => startSelection(entry.path));
 			row.addEventListener('click', () => {
+				if (row.dataset.longPressed) {
+					delete row.dataset.longPressed;
+					return;
+				}
+				if (state.files.selecting) {
+					toggleSelected(entry.path);
+					return;
+				}
 				if (entry.type === 'dir') {
 					state.files.path = entry.path;
 					loadFiles();
@@ -813,6 +851,82 @@
 			});
 			list.append(row);
 		});
+	}
+
+	// long press (touch, mouse, resistive stylus) and the context menu of a long tap start the selection
+	function onLongPress(node, callback) {
+		let timer = null;
+		let start = null;
+		const cancel = () => { clearTimeout(timer); timer = null; };
+		node.addEventListener('pointerdown', (event) => {
+			start = [event.clientX, event.clientY];
+			cancel();
+			timer = setTimeout(() => {
+				timer = null;
+				node.dataset.longPressed = '1';
+				callback();
+			}, 550);
+		});
+		node.addEventListener('pointermove', (event) => {
+			if (timer && start && Math.hypot(event.clientX - start[0], event.clientY - start[1]) > 10) cancel();
+		});
+		['pointerup', 'pointercancel', 'pointerleave'].forEach((type) => node.addEventListener(type, cancel));
+		node.addEventListener('contextmenu', (event) => {
+			event.preventDefault();
+			if (!node.dataset.longPressed && !state.files.selecting) {
+				cancel();
+				node.dataset.longPressed = '1';
+				callback();
+			}
+		});
+	}
+
+	function startSelection(path) {
+		if (!state.files.selecting) {
+			state.files.selecting = true;
+			state.files.selected = new Set();
+		}
+		if (!state.files.selected.has(path)) toggleSelected(path);
+	}
+
+	function toggleSelected(path) {
+		const selected = state.files.selected;
+		if (selected.has(path)) selected.delete(path);
+		else selected.add(path);
+		if (!selected.size) {
+			endSelection();
+			return;
+		}
+		renderSelection();
+	}
+
+	function endSelection() {
+		state.files.selecting = false;
+		state.files.selected = new Set();
+		renderSelection();
+	}
+
+	function renderSelection() {
+		const f = state.files;
+		$('files-list').classList.toggle('selecting', f.selecting);
+		document.querySelectorAll('#files-list .file-row').forEach((row) => row.classList.toggle('selected', f.selected.has(row.dataset.path)));
+		$('files-select').hidden = !f.selecting;
+		$('files-bar').hidden = f.selecting;
+		$('sel-count').textContent = fill(T.selected, { n: f.selected.size });
+		$('sel-rename').disabled = f.selected.size !== 1;
+	}
+
+	async function fileOperation(op, extra) {
+		const f = state.files;
+		const params = Object.assign({ op: op, medium: f.medium, paths: JSON.stringify([...f.selected]) }, extra || {});
+		await api('file_op', params, 'POST');
+		endSelection();
+		await loadFiles();
+	}
+
+	function driveName() {
+		const button = document.querySelector('#files-drives .btn.selected');
+		return button ? button.textContent : '';
 	}
 
 	// ---------- log ----------
@@ -851,60 +965,193 @@
 		if (data.model) add(T.model, data.model);
 		if (data.branch && data.branch !== 'main') add('Branch', data.branch);
 
-		renderMounts(data.storages);
-		renderFunctions();
+		loadDrives();
 	}
 
-	function renderMounts(storages) {
-		const list = $('mount-list');
+	// ---------- drives (system page) ----------
+
+	const fsChoices = ['exfat', 'vfat', 'ext4', 'ntfs'];
+	let taskTimer = null;
+
+	function roleText(drive) {
+		if (drive.role_label) return drive.role_label;
+		if (drive.role === 'browse') return T.role_browse;
+		if (drive.role === 'other') return T.role_other;
+		return drive.chosen ? T.chosen_backup : T.role_none;
+	}
+
+	async function loadDrives() {
+		let data;
+		try {
+			data = await api('drives');
+		} catch (e) {
+			toast(e.message, true);
+			return;
+		}
+		state.drives = data;
+		const list = $('drive-list');
 		list.replaceChildren();
-		const mounted = {};
-		storages.forEach((storage) => { mounted[storage.id] = storage; });
-
-		const devices = ['usb_target', 'usb_source'];
-		if (state.services && state.services.nvme) devices.push('nvme_target', 'nvme_source');
-
-		devices.forEach((id) => {
-			const [storage, role] = id.split('_');
-			const isMounted = !!mounted[id];
-			const sub = isMounted ? formatBytes(mounted[id].free) + ' ' + T.free + ' / ' + formatBytes(mounted[id].total) : '–';
-			const button = el('button', { class: 'btn' + (isMounted ? '' : ' btn-primary'), text: isMounted ? T.umount : T.mount });
-			button.addEventListener('click', () => busy(button, async () => {
-				button.textContent = T.loading;
-				const result = await api(isMounted ? 'umount' : 'mount', { storage: storage, role: role }, 'POST');
-				const nowMounted = result.storages.some((s) => s.id === id);
-				if (nowMounted === isMounted) toast(isMounted ? T.umount_failed : T.mount_failed, true);
-				renderMounts(result.storages);
-			}));
-			list.append(el('div', { class: 'row' }, [
-				el('div', { class: 'row-label' }, [el('b', { text: storageLabel(id) }), el('small', { text: sub })]),
-				button,
-			]));
+		if (!data.drives.length) list.append(el('div', { class: 'empty' }, [icon('usb'), el('span', { text: T.no_drive })]));
+		data.drives.forEach((drive) => {
+			const usage = drive.total ? formatBytes(drive.free) + ' ' + T.free + ' / ' + formatBytes(drive.total) : formatBytes(drive.size);
+			const row = el('button', { class: 'row drive-row' + (drive.mounted ? ' mounted' : '') }, [
+				el('span', { class: 'drive-icon' }, icon(drive.kind === 'nvme' ? 'nvme' : 'usb')),
+				el('div', { class: 'row-label' }, [
+					el('b', { text: drive.name }),
+					el('small', { text: [roleText(drive), usage, drive.fstype].filter(Boolean).join('  ·  ') }),
+				]),
+				icon('right'),
+			]);
+			row.addEventListener('click', () => openDriveSheet(drive));
+			list.append(row);
 		});
+		// a task started earlier (check, repair, format) is shown again
+		if (data.task && data.task.running && $('drive-sheet').hidden) {
+			const drive = data.drives.find((x) => x.path === data.task.device);
+			if (drive) openDriveSheet(drive);
+		}
 	}
 
-	function renderFunctions() {
-		const grid = $('func-grid');
-		grid.replaceChildren();
-		const targets = ['usb'];
-		if (state.services && state.services.nvme) targets.push('nvme');
+	function closeDriveSheet(fromBack) {
+		clearTimeout(taskTimer);
+		taskTimer = null;
+		$('drive-sheet').hidden = true;
+		if (!fromBack) closeOverlay(sheetBack);
+		if (state.page === 'system') loadDrives();
+	}
 
+	function sheetBack() {
+		closeDriveSheet(true);
+	}
+
+	function sheetButton(iconName, text, cls, onClick) {
+		const button = el('button', { class: 'btn ' + (cls || '') }, [icon(iconName), el('span', { text: text })]);
+		button.addEventListener('click', () => busy(button, onClick));
+		return button;
+	}
+
+	function openDriveSheet(drive) {
+		$('sheet-title').textContent = drive.name;
+		$('sheet-sub').textContent = [roleText(drive), formatBytes(drive.size), drive.fstype, drive.path].filter(Boolean).join('  ·  ');
+		const body = $('sheet-body');
+		body.replaceChildren();
+		const task = state.drives && state.drives.task;
+		// a task still running on this drive (a finished one was shown while it ran)
+		if (task && task.device === drive.path && task.running) {
+			showTask(task);
+		} else {
+			renderDriveActions(drive);
+		}
+		if ($('drive-sheet').hidden) {
+			$('drive-sheet').hidden = false;
+			openOverlay(sheetBack);
+		}
+	}
+
+	function renderDriveActions(drive) {
+		const body = $('sheet-body');
+		const busyNow = state.drives && state.drives.running;
+		if (busyNow) body.append(el('p', { class: 'sheet-note warn', text: T.running }));
+
+		const use = el('div', { class: 'btn-row' });
+		if (!drive.role.startsWith('target_')) {
+			use.append(sheetButton('check', T.use_as_backup, 'btn-primary', async () => {
+				await api('choose_target', { path: drive.path }, 'POST');
+				toast(T.use_as_backup + ': ' + drive.name);
+				closeDriveSheet();
+				refreshStatusSoon();
+			}));
+		}
+		use.append(sheetButton('folder', T.open_in_files, '', async () => {
+			let medium = drive.medium;
+			if (!medium) medium = (await api('open_drive', { path: drive.path }, 'POST')).medium;
+			state.files.medium = medium;
+			state.files.path = '';
+			closeDriveSheet();
+			whenSettled(() => showPage('files', true));
+		}));
+		if (drive.mounted) {
+			use.append(sheetButton('close', T.unmount_drive, '', async () => {
+				const result = await api('drive_action', { path: drive.path, do: 'unmount' }, 'POST');
+				toast(result.message);
+				closeDriveSheet();
+				refreshStatusSoon();
+			}));
+		}
+		body.append(use);
+
+		body.append(el('h4', { text: T.photo_tasks }));
+		const photos = el('div', { class: 'btn-row' });
 		Object.keys(T.functions).forEach((func) => {
-			grid.append(el('span', { class: 'func-name', text: T.functions[func] }));
-			const row = el('div', { class: 'btn-row' });
-			targets.forEach((target) => {
-				const button = el('button', { class: 'btn', text: storageLabel(target) });
-				button.addEventListener('click', () => busy(button, async () => {
-					const ok = await confirmDialog(T.functions[func] + ' → ' + storageLabel(target) + '?', state.running ? T.busy_warning : '', T.ok);
-					if (!ok) return;
-					const result = await api('function', { function: func, target: target }, 'POST');
-					toast(result.message);
-					refreshStatusSoon();
-				}));
-				row.append(button);
-			});
-			grid.append(row);
+			photos.append(sheetButton('photos', T.functions[func], '', async () => {
+				if (!(await confirmDialog(T.functions[func] + ': ' + drive.name + '?', '', T.ok))) return;
+				const result = await api('drive_action', { path: drive.path, do: func }, 'POST');
+				toast(result.message);
+				closeDriveSheet();
+				whenSettled(() => showPage('home', true));
+				refreshStatusSoon();
+			}));
 		});
+		body.append(photos);
+
+		body.append(el('h4', { text: T.disk_tasks }));
+		const disk = el('div', { class: 'btn-row' });
+		if (drive.check) {
+			disk.append(sheetButton('check', T.check, '', () => startDiskTask(drive, { do: 'check' })));
+			disk.append(sheetButton('tool', T.repair, 'btn-warn', () => startDiskTask(drive, { do: 'repair' })));
+		}
+		disk.append(sheetButton('trash', T.format, 'btn-danger', () => chooseFormat(drive)));
+		body.append(disk);
+		if (drive.check) body.append(el('p', { class: 'sheet-note', text: T.check_hint }));
+	}
+
+	function chooseFormat(drive) {
+		// 1. the file system, 2. what will be erased, 3. really
+		const body = $('sheet-body');
+		body.replaceChildren(el('h4', { text: T.format_choose }), el('p', { class: 'sheet-note warn', text: fill(T.format_warning, { name: drive.name, size: formatBytes(drive.size) }) }));
+		const list = el('div', { class: 'list' });
+		fsChoices.forEach((fs) => {
+			list.append(sheetButton('trash', T['fs_' + fs], 'btn-wide', async () => {
+				if (!(await confirmDialog(fill(T.format_warning, { name: drive.name, size: formatBytes(drive.size) }), T['fs_' + fs], T.format, 'btn-danger'))) return;
+				if (!(await confirmDialog(fill(T.format_really, { name: drive.name }), '', T.format, 'btn-danger'))) return;
+				await startDiskTask(drive, { do: 'format', fs: fs, confirm: drive.name });
+			}));
+		});
+		body.append(list, sheetButton('left', T.back, '', async () => {
+			body.replaceChildren();
+			renderDriveActions(drive);
+		}));
+	}
+
+	async function startDiskTask(drive, params) {
+		const result = await api('drive_action', Object.assign({ path: drive.path }, params), 'POST');
+		showTask(result.task);
+	}
+
+	function showTask(task) {
+		const body = $('sheet-body');
+		const done = !task.running;
+		const ok = task.exit === 0;
+		const status = done ? (ok ? T.task_done : fill(T.task_failed, { code: task.exit === null ? '?' : task.exit })) : T.task_running;
+		const log = el('pre', { class: 'task-log', text: (task.log || []).join('\n') });
+		body.replaceChildren(
+			el('h4', { text: task.title }),
+			el('p', { class: 'sheet-note' + (done ? (ok ? ' ok' : ' warn') : ''), text: status }),
+			log,
+			done ? sheetButton('check', T.close, 'btn-primary', async () => closeDriveSheet()) : null,
+		);
+		log.scrollTop = log.scrollHeight;
+		clearTimeout(taskTimer);
+		if (!done) {
+			taskTimer = setTimeout(async () => {
+				if ($('drive-sheet').hidden) return;
+				try {
+					showTask((await api('disk_task')).task);
+				} catch (e) {
+					taskTimer = setTimeout(() => showTask(task), 2000);
+				}
+			}, 1000);
+		}
 	}
 
 	async function power(mode) {
@@ -965,8 +1212,11 @@
 		$('wizard-start-label').textContent = T.start;
 		$('log-refresh-label').textContent = T.refresh;
 		$('log-clear-label').textContent = T.clear_log;
-		$('h-storage').textContent = T.storage;
-		$('h-maintenance').textContent = T.maintenance;
+		$('h-storage').textContent = T.drives;
+		[['sel-all', T.select_all], ['sel-rename', T.rename], ['sel-delete', T.delete], ['sel-cancel', T.cancel], ['sheet-close', T.close]].forEach(([id, label]) => {
+			$(id).setAttribute('aria-label', label);
+			$(id).title = label;
+		});
 		$('h-settings').textContent = T.settings;
 		$('h-power').textContent = T.power;
 		$('power-pill-text').textContent = T.power_short;
@@ -980,6 +1230,31 @@
 
 	function initEvents() {
 		// the full power message: opened from the pill, closed with x, the pill or a tap anywhere else
+		// Files: selection actions
+		$('sel-cancel').addEventListener('click', () => endSelection());
+		$('sel-all').addEventListener('click', () => {
+			const f = state.files;
+			f.selected = f.selected.size === f.entries.length ? new Set() : new Set(f.entries.map((x) => x.path));
+			if (!f.selected.size) endSelection();
+			else renderSelection();
+		});
+		$('sel-rename').addEventListener('click', (event) => busy(event.currentTarget, async () => {
+			const path = [...state.files.selected][0];
+			const current = path.split('/').pop();
+			const name = await confirmDialog(T.rename, '', T.rename, 'btn-primary', current);
+			if (!name || name === current) return;
+			await fileOperation('rename', { name: name });
+		}));
+		$('sel-delete').addEventListener('click', (event) => busy(event.currentTarget, async () => {
+			const f = state.files;
+			const names = [...f.selected].map((x) => x.split('/').pop());
+			const sub = fill(T.delete_sub, { drive: driveName() }) + '\n' + names.slice(0, 5).join(', ') + (names.length > 5 ? ' …' : '');
+			if (!(await confirmDialog(fill(T.delete_confirm, { n: names.length }), sub, T.delete, 'btn-danger'))) return;
+			await fileOperation('delete');
+		}));
+
+		$('sheet-close').addEventListener('click', () => closeDriveSheet());
+
 		$('power-pill').addEventListener('click', (event) => {
 			event.stopPropagation();
 			showPowerNote($('power-note').hidden);
@@ -1036,7 +1311,7 @@
 		$('photos-next').addEventListener('click', () => loadPhotos(state.photos.offset + PHOTOS_PER_PAGE));
 		$('viewer-close').addEventListener('click', () => {
 			hideViewer();
-			closeOverlay();
+			closeOverlay(hideViewer);
 		});
 		$('files-up').addEventListener('click', () => {
 			state.files.path = state.files.path.split('/').slice(0, -1).join('/');
