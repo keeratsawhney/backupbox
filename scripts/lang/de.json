@@ -1091,6 +1091,7 @@
     "refresh": "Aktualisieren",
     "no_drive": "Kein Laufwerk geöffnet. Wählen Sie das Sicherungslaufwerk auf der Seite Backup oder öffnen Sie ein eingestecktes Laufwerk mit seiner +-Schaltfläche.",
     "no_match": "Keine Dateien passen zum Filter.",
-    "edit_in_view": "In Ansehen bewerten und bearbeiten"
+    "edit_in_view": "In Ansehen bewerten und bearbeiten",
+    "sort_added": "Zuletzt hinzugefügt"
   }
 }

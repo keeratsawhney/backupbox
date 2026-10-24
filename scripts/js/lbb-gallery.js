@@ -173,11 +173,11 @@
 						this.reload(0);
 					}, 300);
 				});
-				const sort = el('select', { 'aria-label': T.sort_new, onchange: (e) => {
+				const sort = el('select', { 'aria-label': T.sort_added, onchange: (e) => {
 					s.sort = e.target.value;
 					save('sort', s.sort);
 					this.reload(0);
-				} }, [['', T.sort_new], ['old', T.sort_old], ['name', T.sort_name]].map(([value, label]) => el('option', { value: value, text: label, selected: s.sort === value })));
+				} }, [['', T.sort_added], ['new', T.sort_new], ['old', T.sort_old], ['name', T.sort_name]].map(([value, label]) => el('option', { value: value, text: label, selected: s.sort === value })));
 				const limit = el('select', { 'aria-label': T.per_page, onchange: (e) => {
 					s.limit = +e.target.value;
 					save('limit', s.limit);
@@ -272,7 +272,7 @@
 				this.grid.append(this.empty(s.all ? T.no_match : T.no_photos));
 			}
 
-			const grouped = this.full && s.sort !== 'name';
+			const grouped = this.full && (s.sort === 'new' || s.sort === 'old');
 			let day = '';
 			s.items.forEach((item, index) => {
 				const date = parseDate(item.date);
@@ -325,7 +325,7 @@
 				el('span', { class: 'lbb-g-thumb' }, [preview, badges]),
 				el('span', { class: 'lbb-g-caption' }, [
 					el('span', { class: 'lbb-g-name', text: item.name }),
-					el('span', { class: 'lbb-g-meta', text: date ? (this.full && this.state.sort !== 'name' ? formatTime(date) : formatShort(date)) + (item.size ? '  ·  ' + formatSize(item.size) : '') : '' }),
+					el('span', { class: 'lbb-g-meta', text: date ? (this.full && (this.state.sort === 'new' || this.state.sort === 'old') ? formatTime(date) : formatShort(date)) + (item.size ? '  ·  ' + formatSize(item.size) : '') : '' }),
 				]),
 			]);
 		}
