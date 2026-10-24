@@ -1091,6 +1091,7 @@
     "refresh": "Refresh",
     "no_drive": "No drive is open. Choose the backup drive on the Backup page, or open a plugged-in drive with its + button.",
     "no_match": "No files match the filter.",
-    "edit_in_view": "Rate and edit in View"
+    "edit_in_view": "Rate and edit in View",
+    "sort_added": "Recently added"
   }
 }

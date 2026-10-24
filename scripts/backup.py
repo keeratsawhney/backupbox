@@ -1586,7 +1586,7 @@ class backup(object):
 			# -ss before -i: jumps to the second instead of decoding up to it; scaled by ffmpeg, not saved full size first
 			for Second in ("00:00:01", "00:00:00"):
 				# second 0 for videos shorter than a second
-				Command	= ["/usr/bin/ffmpeg", "-loglevel", "error", "-y", "-ss", Second, "-i", os.path.join(Device.MountPoint, SourceFilePathName), "-frames:v", "1", "-vf", "scale='min(800,iw)':-2", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+				Command	= ["/usr/bin/ffmpeg", "-loglevel", "error", "-y", "-skip_frame", "nokey", "-ss", Second, "-i", os.path.join(Device.MountPoint, SourceFilePathName), "-frames:v", "1", "-vf", "scale='min(800,iw)':-2", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
 				try:
 					subprocess.run(Command, stdin=subprocess.DEVNULL)
 				except:

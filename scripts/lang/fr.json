@@ -1091,6 +1091,7 @@
     "refresh": "Actualiser",
     "no_drive": "Aucun disque ouvert. Choisissez le disque de sauvegarde sur la page Sauvegarde ou ouvrez un disque branché avec son bouton +.",
     "no_match": "Aucun fichier ne correspond au filtre.",
-    "edit_in_view": "Noter et modifier dans Afficher"
+    "edit_in_view": "Noter et modifier dans Afficher",
+    "sort_added": "Ajoutés récemment"
   }
 }

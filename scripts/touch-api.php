@@ -598,7 +598,8 @@
 	}
 
 	function touch_media_filter($constants, $files, $type, $query, $sort) {
-		# type: photo, raw, video ('' = all); query: part of the path; sort: new (default), old, name
+		# type: photo, raw, video ('' = all); query: part of the path;
+		# sort: '' added to the drive (newest first, as listed), new / old: date of the file, name
 		$lists	= array(
 			'raw'	=> explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']),
 			'video'	=> array_merge(explode(';', $constants['const_FILE_EXTENSIONS_LIST_VIDEO']), array('mov', 'mts', 'm4v', 'mkv', '3gp')),
@@ -615,8 +616,8 @@
 			}));
 		}
 
-		if ($sort == 'old') {
-			$files	= array_reverse($files);
+		if ($sort == 'new' or $sort == 'old') {
+			usort($files, function($a, $b) use ($sort) {return($sort == 'new' ? $b['time'] <=> $a['time'] : $a['time'] <=> $b['time']);});
 		} elseif ($sort == 'name') {
 			usort($files, function($a, $b) {return(strnatcasecmp(basename($a['path']), basename($b['path'])));});
 		}
@@ -677,13 +678,15 @@
 	}
 
 	function touch_media_files($constants, $key, $path, $refresh = false) {
-		# photos and videos on a drive, newest first, read from the file system (just copied files show at once).
+		# photos and videos on a drive, the ones added to the drive last first, read from the file system (just copied
+		# files show at once). 'time': date of the file (kept from the camera by the backup), 'added': when it was written
+		# to the drive (birth time; rsync writes every file new), the date of the file where the drive does not know it.
 		# Cached briefly per mounted file system: paging through a big drive should not list it again and again.
 		$stat	= @stat($path);
 		$id		= $stat ? $stat['dev'] . '-' . $stat['ino'] : '';
 		$cache	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-files-' . preg_replace('/[^A-Za-z0-9_-]/', '', str_replace(':', '-', $key)) . '.json';
 		$cached	= $refresh ? null : @json_decode((string)@file_get_contents($cache), true);
-		if (is_array($cached) and $cached['id'] === $id and time() - $cached['time'] < 15) {
+		if (is_array($cached) and $cached['id'] === $id and time() - $cached['time'] < 15 and isset($cached['version'])) {
 			return($cached['files']);
 		}
 
@@ -700,18 +703,22 @@
 
 		$lines	= array();
 		# without hidden files and folders (macOS "._name" metadata files, .Spotlight-V100, .Trashes, ...)
-		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' -not -path ' . escapeshellarg('*/.*') . ' ' . implode(' ', $banned) . " -printf '%T@\\t%P\\n' 2>/dev/null", $lines);
+		# stat in batches: find can not print the birth time
+		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' -not -path ' . escapeshellarg('*/.*') . ' ' . implode(' ', $banned) . " -print0 2>/dev/null | xargs -0 -r stat -c '%Y\t%W\t%n' 2>/dev/null", $lines);
 
+		$prefix	= rtrim($path, '/') . '/';
 		$files	= array();
 		foreach ($lines as $line) {
-			$parts	= explode("\t", $line, 2);
-			if (count($parts) == 2) {
-				$files[]	= array('path' => $parts[1], 'time' => (int)$parts[0]);
+			$parts	= explode("\t", $line, 3);
+			if (count($parts) == 3 and str_starts_with($parts[2], $prefix)) {
+				$time	= (int)$parts[0];
+				$born	= (int)$parts[1];
+				$files[]	= array('path' => substr($parts[2], strlen($prefix)), 'time' => $time, 'added' => $born > 0 ? $born : $time);
 			}
 		}
-		usort($files, function($a, $b) {return($b['time'] <=> $a['time']);});
+		usort($files, function($a, $b) {return(($b['added'] <=> $a['added']) ?: ($b['time'] <=> $a['time']));});
 
-		@file_put_contents($cache, json_encode(array('id' => $id, 'time' => time(), 'files' => $files)));
+		@file_put_contents($cache, json_encode(array('id' => $id, 'time' => time(), 'version' => 2, 'files' => $files)));
 		return($files);
 	}
 
@@ -751,13 +758,17 @@
 		$magick	= is_executable('/usr/bin/magick') ? '/usr/bin/magick' : '/usr/bin/convert';
 
 		if ($video) {
+			# keyframes only: no decoding of every frame up to the second (4K HEVC is slow to decode on a Pi)
+			$errors	= array();
 			foreach (array('1', '0') as $second) {
-				exec("timeout 30 ffmpeg -nostdin -loglevel error -ss $second -i $s -frames:v 1 -vf scale=480:-2 -y -f image2 $t 2>/dev/null");
+				$output	= array();
+				exec("timeout 60 ffmpeg -nostdin -loglevel error -skip_frame nokey -ss $second -i $s -an -sn -dn -frames:v 1 -vf scale=480:-2 -y -f image2 $t 2>&1", $output, $rc);
 				if (@filesize($thumb) > 0) {
-					return;
+					return(null);
 				}
+				$errors[]	= $rc == 124 ? 'timeout' : (end($output) ?: "exit $rc");
 			}
-			return;
+			return(implode('; ', $errors));
 		}
 
 		if (!$raw) {
@@ -1048,11 +1059,37 @@
 			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
 			@mkdir($dir, 0755, true);
 			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime']) . '.jpg';
+			# a preview that could not be made is not tried again for 10 minutes (the photo lists refresh often)
+			$failed	= $thumb . '.failed';
+			if (!is_file($thumb) and is_file($failed) and time() - filemtime($failed) < 600) {
+				touch_fail('no preview', 404);
+			}
 			if (!is_file($thumb)) {
-				touch_make_thumb($file, $thumb, touch_is_video($ext, $constants), in_array($ext, explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']), true));
+				# one preview per file at a time: tiles shown twice do not start a second ffmpeg
+				$lock	= fopen($thumb . '.lock', 'c');
+				if ($lock) {
+					flock($lock, LOCK_EX);
+				}
+				if (!is_file($thumb)) {
+					$error	= touch_make_thumb($file, $thumb, touch_is_video($ext, $constants), in_array($ext, explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']), true));
+					if (!is_file($thumb) or filesize($thumb) == 0) {
+						@unlink($thumb);
+						@touch($failed);
+						# why: tmp/touch-thumbs/errors.log (kept short)
+						$errorlog	= $dir . '/errors.log';
+						if (@filesize($errorlog) > 100000) {
+							@unlink($errorlog);
+						}
+						@file_put_contents($errorlog, date('Y-m-d H:i:s') . "\t" . $file . "\t" . ($error ?: 'no preview') . "\n", FILE_APPEND);
+					}
+				}
+				if ($lock) {
+					flock($lock, LOCK_UN);
+					fclose($lock);
+					@unlink($thumb . '.lock');
+				}
 			}
 			if (!is_file($thumb) or filesize($thumb) == 0) {
-				@unlink($thumb);
 				touch_fail('no preview', 404);
 			}
 

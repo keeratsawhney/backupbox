@@ -1091,6 +1091,7 @@
     "refresh": "Actualizar",
     "no_drive": "No hay ninguna unidad abierta. Elija la unidad de copia en la página Copia de seguridad o abra una unidad conectada con su botón +.",
     "no_match": "Ningún archivo coincide con el filtro.",
-    "edit_in_view": "Valorar y editar en Ver"
+    "edit_in_view": "Valorar y editar en Ver",
+    "sort_added": "Añadidos recientemente"
   }
 }
