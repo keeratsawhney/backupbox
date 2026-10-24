@@ -812,7 +812,8 @@
         "label": "Start the calibration program on the touchscreen.",
         "started": "The touchscreen calibration has been started. Please tap as precisely as possible in the center of the four successive markers. Note: The changes will only take effect after a reboot."
       }
-    }
+    },
+    "view_theme_sage": "sage"
   },
   "tools": {
     "tools": "Tools",

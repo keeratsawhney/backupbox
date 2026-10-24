@@ -27,7 +27,7 @@
 	include("sub-i18n-loader.php");
 	include_once("sub-touch-services.php");
 
-	$theme	= in_array($config['conf_THEME'], array('light', 'dark', 'sepia')) ? $config['conf_THEME'] : 'dark';
+	$theme	= in_array($config['conf_THEME'], array('light', 'dark', 'sepia', 'sage')) ? $config['conf_THEME'] : 'dark';
 
 	$strings	= array();
 	foreach ((new ReflectionClass('L'))->getConstants() as $key => $value) {
@@ -67,6 +67,7 @@
 		'light'	=> touch_text(L::config_view_theme_light),
 		'dark'	=> touch_text(L::config_view_theme_dark),
 		'sepia'	=> touch_text(L::config_view_theme_sepia),
+		'sage'	=> touch_text(L::config_view_theme_sage),
 	);
 ?>
 <!doctype html>
@@ -124,7 +125,7 @@
 
 	<div class="app">
 		<header class="topbar">
-			<span class="brand"><img src="img/icons/favicon-180.png" alt=""><span class="brand-name">Little Backup Box</span></span>
+			<span class="brand"><img src="img/icons/favicon-180.png" alt="Your Wedding Saga"><span class="brand-name">Backup Box</span></span>
 			<button class="pill power-pill" id="power-pill" aria-expanded="false" aria-controls="power-note" hidden><svg><use href="#i-bolt"/></svg><span id="power-pill-text"></span></button>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>
 			<span class="temp" id="temp"></span>

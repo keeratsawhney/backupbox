@@ -32,6 +32,20 @@
 	color-scheme: light;
 }
 
+/* sage: the Your Wedding Saga color #a9af90 as background, darker sage for text and buttons (readable) */
+:root[data-theme="sage"] {
+	--bg: #a9af90;
+	--surface: #f5f6f0;
+	--surface-2: #dfe2d3;
+	--border: #8f957a;
+	--text: #22261a;
+	--muted: #4e5441;
+	--accent: #555d40;
+	--accent-text: #ffffff;
+	--ok: #2f7d4f;
+	color-scheme: light;
+}
+
 :root[data-theme="sepia"] {
 	--bg: #f1e7d6;
 	--surface: #fbf4e8;

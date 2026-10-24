@@ -114,9 +114,9 @@ class backup_autorun(object):
 
 	def __display_hello(self):
 		if self.__setup.get_val('conf_DISP_COLOR_MODEL') == '1':
-			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/little-backup-box-mono.png'])
+			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/boot-mono.png'])
 		else:
-			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/little-backup-box-color.png'])
+			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/boot-color.png'])
 
 		lib_cron_ip.ip_info().display_ip()
 
