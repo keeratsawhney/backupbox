@@ -958,7 +958,10 @@
 		const info = $('sysinfo');
 		info.replaceChildren();
 		const add = (label, value) => info.append(el('div', { class: 'info' }, [el('small', { text: label }), el('b', { text: value })]));
-		add(T.ip, data.ips.length ? data.ips.join(', ') : T.no_network);
+		// the address to type in a browser: IPv4 (the IPv6 addresses many routers add only when there is no IPv4)
+		const ipv4 = data.ips.filter((ip) => !ip.includes(':'));
+		const ips = ipv4.length ? ipv4 : data.ips;
+		add(T.ip, ips.length ? ips.join(', ') : T.no_network);
 		add(T.temperature, data.temp !== null ? data.temp + ' °C' : '–');
 		add(T.uptime, formatUptime(data.uptime));
 		if (data.mem_total) add(T.memory, formatBytes(data.mem_total - data.mem_avail) + ' / ' + formatBytes(data.mem_total));

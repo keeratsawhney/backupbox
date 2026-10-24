@@ -1222,11 +1222,13 @@ svg {
 }
 
 .info b {
-	display: block;
+	/* long values (several addresses, the full model name) wrap to a second line */
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 	font-size: 14px;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .list {
