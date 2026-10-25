@@ -130,7 +130,8 @@ class ip_info(object):
 				self.__display.message([f'set:time={FrameTime}', f":{OnlineMessage}, IP:"] + self.__IPsFormatted, logging=False)
 
 		elif force and not self.__IPs:
-			self.__display.message(['set:clear', f":{self.__lan.l('box_cronip_offline')}"], logging=False)
+			# only for a moment: it must not replace the home screen
+			self.__display.message([f'set:clear,temp,time={FrameTime}', f":{self.__lan.l('box_cronip_offline')}"], logging=False)
 
 	def display_wifi_qr(self, FrameTime=None, force=False):
 

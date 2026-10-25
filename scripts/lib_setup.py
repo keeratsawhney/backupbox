@@ -248,6 +248,7 @@ class setup(object):
 					'conf_BACKUP_DEFAULT_TARGET':						{'value': 'none', 'type': 'str'},
 					'conf_BACKUP_DEFAULT_SOURCE2':						{'value': 'none', 'type': 'str'},
 					'conf_BACKUP_DEFAULT_TARGET2':						{'value': 'none', 'type': 'str'},
+					'conf_BACKUP_DEFAULT_MOVE_FILES':					{'value': False, 'type': 'bool'},
 					'conf_BACKUP_DEFAULT2_MOVE_FILES':					{'value': False, 'type': 'bool'},
 					'conf_BACKUP_CAMERA_FOLDER_MASK':					{'value': '*:DCIM', 'type': 'str'},
 					'conf_BACKUP_CLOUDS_TARGET_BASEDIR':				{'value': '', 'type': 'str'},

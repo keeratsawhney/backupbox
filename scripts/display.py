@@ -50,9 +50,11 @@
 # hidden:	markertext to write into const_DISPLAY_CONTENT_OLD_FILE
 # kill:		terminate display daemon
 
+import json
 import os
 import RPi.GPIO as GPIO
 import pathlib
+import re
 import shutil
 import signal
 import subprocess
@@ -61,6 +63,7 @@ import threading
 import time
 
 import lib_comitup
+import lib_language
 import lib_network
 import lib_setup
 import lib_system
@@ -74,6 +77,7 @@ from luma.lcd.device import st7735
 from PIL import Image, ImageDraw, ImageFont
 
 import displaymenu
+import lib_menu_render
 from lib_display import display_content_files
 
 # import lib_debug
@@ -235,6 +239,37 @@ class DISPLAY(object):
 		# power saving: unchanged frames are not sent again, the panel sleeps when idle
 		self.last_frame		= None
 		self.sleeping		= False
+		self.content_time	= time.time()
+
+		# backup drive (status bar, home screen)
+		self.drive_cache	= None
+		self.drive_info		= None
+		self.drive_time		= 0
+		self.drive_unmounted	= {}
+
+		# home screen (content marked hidden=READY): drawn as a picture with the backup drive
+		self.home_mode		= False
+		self.home_lines		= None		# its lines, to come back to after short messages
+		self.home_overlay	= False		# a message over the home screen: the home screen returns after a while
+		try:
+			self.home_no_drive	= lib_language.language().l('box_menu_no_drive')
+		except:
+			self.home_no_drive	= 'No drive'
+		self.home_render	= lib_menu_render.renderer(
+			width		= self.device.width,
+			height		= self.device.height,
+			mode		= self.device.mode,
+			color_text	= self.color_text,
+			color_high	= self.color_high,
+			color_bg	= self.color_bg,
+			color_alert	= self.color_alert,
+			font_path	= self.__const_FONT_PATH,
+		)
+
+		# display menu: draws its own screens while open (menu_show, menu_close)
+		self.menu_active	= False
+		self.menu_closed	= False
+		self.__lock			= threading.RLock()
 
 		# create folders
 		## ensure const_DISPLAY_CONTENT_PATH exists
@@ -264,7 +299,7 @@ class DISPLAY(object):
 		if self.__conf_MENU_ENABLED:
 			# start displaymenu as iternal background process
 			try:
-				thread	= threading.Thread(target=displaymenu.menu, args=(self.maxLines -1 if self.__conf_DISP_SHOW_STATUSBAR else self.maxLines, self.__setup, self.menu_controller))
+				thread	= threading.Thread(target=displaymenu.menu, args=(self.maxLines -1 if self.__conf_DISP_SHOW_STATUSBAR else self.maxLines, self.__setup, self.menu_controller, self))
 				thread.start()
 			except:
 				pass
@@ -338,7 +373,10 @@ class DISPLAY(object):
 				statusbar.append('WiFi')
 
 		if self.statusbar_toggle == 1:
-			#network traffic
+			# backup drive at a glance (how full, how big), else network traffic
+			drive	= self.__drive_status()
+			if drive:
+				return(drive)
 			statusbar	+=[self.traffic_monitor.get_traffic()]
 			return(statusbar)
 
@@ -364,7 +402,261 @@ class DISPLAY(object):
 
 		return(statusbar)
 
+	def __drive_status(self):
+		# the backup drive: NVMe first, then a backup target, then any drive mounted under /media;
+		# not mounted (drives are unmounted after a backup): the attached NVMe / USB drive, its fill read without mounting
+		# or remembered from when it was mounted
+		# ['NVMe 67%', '1.0T'] or None; looked up every 10 s
+		if time.time() - self.drive_time < 10:
+			return(self.drive_cache)
+		self.drive_time		= time.time()
+		self.drive_cache	= None
+
+		try:
+			Mounts	= []
+			with open('/proc/mounts', 'r') as f:
+				for Line in f:
+					Device, MountPoint	= Line.split()[:2]
+					MountPoint	= MountPoint.replace('\\040', ' ')
+					if Device.startswith('/dev/') and MountPoint.startswith('/media/'):
+						Mounts.append((Device, MountPoint))
+		except:
+			Mounts	= []
+
+		for Device, MountPoint in sorted(Mounts, key=lambda Mount: (0 if Mount[0].startswith('/dev/nvme') else 1 if 'target' in Mount[1] else 2)):
+			try:
+				st		= os.statvfs(MountPoint)
+				Total	= st.f_blocks * st.f_frsize
+				Free	= st.f_bavail * st.f_frsize
+			except:
+				continue
+			if Total <= 0:
+				continue
+
+			Used	= 1 - Free / Total
+			self.__drive_set(Device, self.__drive_label(Device, ''), Used, Total)
+			self.__drive_remember(Device, Used, Total)
+			return(self.drive_cache)
+
+		# not mounted
+		Drive	= self.__attached_drive()
+		if Drive:
+			Used, Total	= self.__drive_usage_unmounted(Drive)
+			self.__drive_set(Drive['path'], Drive['label'], Used, Total or Drive['size'])
+
+		return(self.drive_cache)
+
+	def __drive_set(self, Device, Label, Used, Total):
+		Kind	= 'NVMe' if Device.startswith('/dev/nvme') else 'USB' if Device.startswith('/dev/sd') else 'SD' if Device.startswith('/dev/mmcblk') else 'Disk'
+
+		Size	= Total
+		for Unit in ['B', 'K', 'M', 'G', 'T']:
+			if Size < 1000 or Unit == 'T':
+				break
+			Size	/= 1000
+		SizeText	= f'{Size:.1f}{Unit}' if Size < 10 else f'{Size:.0f}{Unit}'
+
+		self.drive_cache	= [f'{Kind} {100 * Used:.0f}%' if Used is not None else Kind, SizeText]
+		self.drive_info		= {'name': Label or Kind, 'used': Used, 'size': SizeText}
+
+	def __lsblk(self):
+		try:
+			return(json.loads(subprocess.check_output(['lsblk', '-J', '-b', '-o', 'PATH,TYPE,TRAN,FSTYPE,LABEL,UUID,SIZE,MOUNTPOINT,MODEL'], stderr=subprocess.DEVNULL, timeout=5).decode()).get('blockdevices', []))
+		except:
+			return([])
+
+	def __attached_drive(self):
+		# the largest partition with a file system on an NVMe or USB disk (not the system disk), NVMe first
+		Candidates	= []
+		for Disk in self.__lsblk():
+			Path	= Disk.get('path') or ''
+			if Path.startswith('/dev/mmcblk') or Disk.get('type') != 'disk':
+				continue
+			Parts		= Disk.get('children') or [Disk]
+			if any((Part.get('mountpoint') or '') in ['/', '/boot', '/boot/firmware'] for Part in Parts):
+				continue
+			Kind	= 0 if Path.startswith('/dev/nvme') else 1 if (Disk.get('tran') == 'usb' or Path.startswith('/dev/sd')) else 2
+			for Part in Parts:
+				if Part.get('fstype') and Part.get('fstype') not in ['swap', 'linux_raid_member'] and int(Part.get('size') or 0) > 0:
+					Candidates.append((Kind, -int(Part['size']), {
+						'path':		Part['path'],
+						'uuid':		Part.get('uuid') or Part['path'],
+						'fstype':	Part.get('fstype'),
+						'label':	Part.get('label') or (Disk.get('model') or '').strip(),
+						'size':		int(Part['size']),
+					}))
+		Candidates.sort(key=lambda Candidate: (Candidate[0], Candidate[1]))
+		return(Candidates[0][2] if Candidates else None)
+
+	def __sbin(self, Program):
+		# display.py starts at boot with a short PATH (no /usr/sbin): tune2fs and dump.exfat live there
+		for Folder in ['/usr/sbin', '/sbin', '/usr/bin', '/bin']:
+			if os.path.isfile(os.path.join(Folder, Program)):
+				return(os.path.join(Folder, Program))
+		return(Program)
+
+	def __drive_usage_file(self):
+		return(os.path.join(os.path.dirname(self.__const_DISPLAY_CONTENT_OLD_FILE), 'drive-usage.json'))
+
+	def __drive_remember(self, Device, Used, Total):
+		# fill of a mounted drive, by UUID: shown while it is not mounted
+		try:
+			UUID	= subprocess.check_output(['lsblk', '-n', '-d', '-o', 'UUID', Device], stderr=subprocess.DEVNULL, timeout=3).decode().strip()
+		except:
+			UUID	= ''
+		if not UUID:
+			return
+		Usage	= self.__drive_usage_load()
+		if Usage.get(UUID, {}).get('used') is not None and abs(Usage[UUID]['used'] - Used) < 0.001:
+			return
+		Usage[UUID]	= {'used': Used, 'total': Total, 'time': int(time.time())}
+		try:
+			with open(self.__drive_usage_file(), 'w') as f:
+				json.dump(Usage, f)
+		except:
+			pass
+
+	def __drive_usage_load(self):
+		try:
+			with open(self.__drive_usage_file(), 'r') as f:
+				return(json.load(f))
+		except:
+			return({})
+
+	def __drive_usage_unmounted(self, Drive):
+		# (used 0..1 or None, total bytes or None): read from the file system without mounting (ext*, exFAT),
+		# every 5 minutes at most (the drive is not woken up all the time), else remembered from the last mount
+		Key		= Drive['uuid']
+		Cached	= self.drive_unmounted.get(Key)
+		if Cached and time.time() - Cached[0] < 300:
+			return(Cached[1], Cached[2])
+
+		Used, Total	= None, None
+		try:
+			if Drive['fstype'] in ['ext2', 'ext3', 'ext4']:
+				Output	= subprocess.check_output([self.__sbin('tune2fs'), '-l', Drive['path']], stderr=subprocess.DEVNULL, timeout=10).decode()
+				Values	= {Key_.strip(): Value.strip() for Key_, Value in (Line.split(':', 1) for Line in Output.splitlines() if ':' in Line)}
+				Blocks, FreeBlocks, BlockSize	= int(Values['Block count']), int(Values['Free blocks']), int(Values['Block size'])
+				Used, Total	= 1 - FreeBlocks / Blocks, Blocks * BlockSize
+			elif Drive['fstype'] == 'exfat':
+				Output	= subprocess.check_output([self.__sbin('dump.exfat'), Drive['path']], stderr=subprocess.DEVNULL, timeout=10).decode()
+				Count	= re.search(r'Cluster Count:\s*(\d+)', Output)
+				Free	= re.search(r'Free Clusters?:\s*(\d+)', Output)
+				if Count and Free and int(Count.group(1)) > 0:
+					Used	= 1 - int(Free.group(1)) / int(Count.group(1))
+		except:
+			pass
+
+		if Used is None:
+			Remembered	= self.__drive_usage_load().get(Drive['uuid'])
+			if Remembered:
+				Used, Total	= Remembered.get('used'), Remembered.get('total')
+
+		self.drive_unmounted[Key]	= (time.time(), Used, Total)
+		return(Used, Total)
+
+	def __drive_label(self, Device, Fallback):
+		# the drive's label (or model) for the home screen
+		try:
+			Output	= subprocess.check_output(['lsblk', '-n', '-d', '-o', 'LABEL', Device], stderr=subprocess.DEVNULL, timeout=3).decode().strip()
+			return(Output or Fallback)
+		except:
+			return(Fallback)
+
+	def __home_image(self, Lines):
+		# Lines of the home screen: BACKUP BOX / state / IP / online state (lib_cron_ip.py)
+		Contents	= [Line.split(':', 1)[-1].strip() for Line in Lines if Line.split(':', 1)[-1].strip()]
+		Title		= Contents[0] if Contents else 'BACKUP BOX'
+		State		= Contents[1] if len(Contents) > 1 else ''
+		Rest		= Contents[2:]
+		IP			= next((Item for Item in Rest if re.match(r'^\d+\.\d+\.\d+\.\d+$', Item)), '')
+		Network		= next((Item for Item in Rest if Item != IP), '')
+
+		self.__drive_status()
+
+		try:
+			with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+				Temp	= float(f.read()) / 1000
+		except:
+			Temp	= None
+
+		return(self.home_render.home(
+			title	= Title,
+			state	= State,
+			ip		= IP,
+			network	= Network,
+			online	= bool(IP),
+			drive	= self.drive_info if self.drive_cache else None,
+			temp	= Temp,
+			no_drive	= self.home_no_drive,
+		))
+
+	def __screen_image(self, Lines):
+		# a message (comitup, backup progress, power off ...) under the home screen's title bar
+		Rows	= []
+		for Line in Lines:
+			Formatstring, Content	= Line.split(':', 1) if ':' in Line else ('s=h', Line)
+			Content	= Content.strip()
+			if not Content:
+				continue
+			Style	= 'h'
+			for Format in Formatstring.split(','):
+				if Format.startswith('s='):
+					Style	= Format[2:] or 'h'
+			Row	= {'text': Content, 'style': Style if Style in ['h', 'b', 'a', 'hc'] else 'h', 'progress': None}
+			if Content.startswith('PGBAR='):
+				try:
+					Row['progress']	= float(Content[6:])
+				except ValueError:
+					Row['progress']	= 0
+			Rows.append(Row)
+
+		# what a running task does (backup progress)
+		Task	= ''
+		try:
+			for TaskFile in sorted(os.listdir(self.__const_TASKS_PATH)):
+				if TaskFile.endswith('.txt'):
+					with open(os.path.join(self.__const_TASKS_PATH, TaskFile)) as f:
+						Task	= f.readline().strip()
+					break
+		except:
+			pass
+
+		self.__drive_status()
+
+		return(self.home_render.screen(title='BACKUP BOX', lines=Rows, temp=self.__temperature(), task=Task))
+
+	def __temperature(self):
+		try:
+			with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+				return(float(f.read()) / 1000)
+		except:
+			return(None)
+
 	def show(self, Lines, statusbar=None, new_content=True):
+		Image_	= None
+		if self.home_mode:
+			# the home screen as a picture (its own drive and temperature line instead of the status bar)
+			Image_	= self.__home_image(Lines)
+		elif Lines and ':IMAGE=' not in Lines[0]:
+			# every other text screen in the same design (QR codes and pictures stay full screen)
+			try:
+				Image_	= self.__screen_image(Lines)
+			except Exception as e:
+				print(f'Display: message screen failed, plain text instead: {e}', file=sys.stderr)
+
+		if Image_ is not None:
+			image	= Image_
+			if self.__unchanged(image, new_content):
+				return()
+			with self.__lock:
+				if self.menu_active:
+					self.last_frame	= None
+					return()
+				self.__display_image(image)
+			self.__save_image(image=image, new_content=new_content)
+			return()
+
 		# fill line count to const_DISPLAY_LINES_LIMIT
 		while len(Lines) < self.__const_DISPLAY_LINES_LIMIT:
 			Lines.append("s=b:")
@@ -387,8 +679,12 @@ class DISPLAY(object):
 			if self.__unchanged(image, new_content):
 				return()
 
-			# display image
-			self.__display_image(image)
+			# display image (not over the menu, it may have opened meanwhile)
+			with self.__lock:
+				if self.menu_active:
+					self.last_frame	= None
+					return()
+				self.__display_image(image)
 
 			# save image to file
 			self.__save_image(image=image, new_content=new_content)
@@ -541,15 +837,52 @@ class DISPLAY(object):
 			if self.__unchanged(image, new_content):
 				return()
 
-			# display image
-			self.__display_image(image)
+			# display image (not over the menu, it may have opened meanwhile)
+			with self.__lock:
+				if self.menu_active:
+					self.last_frame	= None
+					return()
+				self.__display_image(image)
 
 			# save image to file
 			self.__save_image(image=image, new_content=new_content)
 
 	def __display_image(self, image):
 		if self.hardware_ready:
-			self.device.display(image)
+			# the menu draws from its own thread
+			with self.__lock:
+				self.device.display(image)
+
+	def menu_show(self, image):
+		# a menu screen, shown at once (no message queue)
+		with self.__lock:
+			self.menu_active	= True
+			self.content_time	= time.time()
+			self.__panel(on=True)
+			self.__display_image(image)
+			self.last_frame	= None
+			self.__save_image(image=image, new_content=False)
+
+	def menu_close(self):
+		# the main loop shows the current screen again
+		with self.__lock:
+			self.menu_active	= False
+			self.menu_closed	= True
+			self.content_time	= time.time()
+
+	def wake(self):
+		# True if the display was off (the button press only wakes it)
+		with self.__lock:
+			self.content_time	= time.time()
+			if not self.sleeping:
+				return(False)
+			self.__panel(on=True)
+			return(True)
+
+	def sleep(self):
+		with self.__lock:
+			self.menu_active	= False
+			self.__panel(on=False)
 
 	def __unchanged(self, image, new_content):
 		# a statusbar refresh that draws the same picture again: skip sending and saving it
@@ -573,9 +906,12 @@ class DISPLAY(object):
 	def __busy(self):
 		# a backup or another task is running
 		try:
-			return(any(TaskFile.endswith('.txt') for TaskFile in os.listdir(self.__const_TASKS_PATH)))
+			if any(TaskFile.endswith('.txt') for TaskFile in os.listdir(self.__const_TASKS_PATH)):
+				return(True)
 		except:
-			return(False)
+			pass
+		# a backup that is still mounting or preparing (no task file yet)
+		return(subprocess.run(['pgrep', '-f', 'little-backup-box/backup.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
 
 	def __save_image(self, image, new_content=True):
 
@@ -609,14 +945,13 @@ class DISPLAY(object):
 
 	def main(self):
 		display_time	= time.time()
-		content_time	= time.time()
 		Lines 			= []
 
 		# start endless loop to display content
 		while(self.loop_continue):
 			import_old_file 		= True
 			temp_screen				= False
-			hidden_info				= ''
+			hidden_info				= []
 
 			# re-check for new files earlier than conf_DISP_FRAME_TIME, if no message was found
 			FrameTime = self.__conf_DISP_FRAME_TIME / 4
@@ -677,7 +1012,8 @@ class DISPLAY(object):
 								temp_screen		= True
 
 							if SettingType == 'hidden':
-								hidden_info		= SettingValue
+								if SettingValue and SettingValue not in hidden_info:
+									hidden_info.append(SettingValue)
 
 							if SettingType == 'time' and float(SettingValue) >= 0:
 								FrameTime		= float(SettingValue)
@@ -693,6 +1029,15 @@ class DISPLAY(object):
 
 				CF.close()
 
+				# a message over the home screen is shown on its own (the home screen's lines are not merged into it,
+				# further messages replace it); the home screen comes back after a while unless a task takes over
+				if (self.home_mode or self.home_overlay) and import_old_file:
+					import_old_file	= False
+					if not temp_screen:
+						self.home_overlay	= not self.__busy()
+				elif not temp_screen and 'READY' not in hidden_info:
+					self.home_overlay	= False
+
 				# read old lines
 				if import_old_file:
 					if len(Lines) < self.__const_DISPLAY_LINES_LIMIT and os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
@@ -701,12 +1046,15 @@ class DISPLAY(object):
 
 								Line = Line.strip()
 
+								# settings of the saved screen (set:hidden=...) are not text
+								if Line.startswith('set:'):
+									continue
+
 								if len(Lines) < self.__const_DISPLAY_LINES_LIMIT:
 									Line = Line.split(':',1)[-1]
 									if Line:
-										if not Line.startswith('set:'):
-											Line = "s=b:{}".format(Line)
-											Lines.append(Line)
+										Line = "s=b:{}".format(Line)
+										Lines.append(Line)
 
 			else:
 				# no new content file:
@@ -736,40 +1084,80 @@ class DISPLAY(object):
 
 				# display temp only:
 				if temp_screen and os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
-					shutil.copyfile(self.__const_DISPLAY_CONTENT_OLD_FILE, f'{ContentFile}')
+					# the screen before comes back as it was ("clear": without merging the saved screen into itself,
+					# which doubled its lines after every QR code and stacked "offline" lines)
+					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'r') as oCF:
+						OldContent	= oCF.read()
+					with open(ContentFile, 'w') as newCF:
+						newCF.write('set:clear\n' + OldContent)
 
 					if hidden_info:
 						with open(ContentFile, 'a') as newCF:
-							newCF.write(f"\nset:hidden={hidden_info}")
+							for hidden in hidden_info:
+								newCF.write(f"\nset:hidden={hidden}")
 
 				# move lines to old lines file
 				if not temp_screen:
 					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'w') as oCF:
 						oCF.write("\n".join(Lines))
 
-						if hidden_info:
-							oCF.write(f"\nset:hidden={hidden_info}")
+						for hidden in hidden_info:
+							oCF.write(f"\nset:hidden={hidden}")
 
-				self.__panel(on=True)
-				self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
-				display_time	= time.time()
-				content_time	= time.time()
+					self.home_mode	= 'READY' in hidden_info
+					if self.home_mode:
+						self.home_lines		= list(Lines)
+						self.home_overlay	= False
+				else:
+					self.home_mode	= False
+
+				# while the menu is open, news are kept and shown when it closes
+				if not self.menu_active:
+					self.__panel(on=True)
+					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
+				display_time		= time.time()
+				self.content_time	= time.time()
+			elif self.menu_closed:
+				self.menu_closed	= False
+				if not self.menu_active and not self.sleeping:
+					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
+					display_time	= time.time()
+			elif (
+				self.home_overlay and
+				self.home_lines and
+				not self.menu_active and
+				time.time() - self.content_time >= 8
+				):
+				# back to the home screen after a short message (comitup, VPN, IP ...), not over a task's screens
+				self.home_overlay	= False
+				if not self.__busy():
+					Lines	= list(self.home_lines)
+					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'w') as oCF:
+						oCF.write("\n".join(Lines))
+						oCF.write("\nset:hidden=READY")
+					self.home_mode	= True
+					if not self.sleeping:
+						self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
+						display_time	= time.time()
 			else:
 				# sleep after conf_DISP_SLEEP_MIN minutes without news, never while a task runs
 				if (
 					not self.sleeping and
+					not self.menu_active and
 					self.__conf_DISP_SLEEP_MIN > 0 and
-					time.time() - content_time >= self.__conf_DISP_SLEEP_MIN * 60
+					time.time() - self.content_time >= self.__conf_DISP_SLEEP_MIN * 60
 					):
 					if self.__busy():
-						content_time	= time.time()
+						self.content_time	= time.time()
 					else:
-						self.__panel(on=False)
+						with self.__lock:
+							self.__panel(on=False)
 
-				# statusbar
+				# refresh: temperature, drive and task line (all text screens are drawn with them now)
 				if (
 					not self.sleeping and
-					self.__conf_DISP_SHOW_STATUSBAR and
+					not self.menu_active and
+					(self.__conf_DISP_SHOW_STATUSBAR or self.home_mode or self.home_render is not None) and
 					time.time() - display_time >= self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC
 					):
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=False)
