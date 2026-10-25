@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- "sage" theme of the box (#a9af90) -->
+	<color name="sage">#A9AF90</color>
+	<color name="sage_dark">#7C826A</color>
+	<color name="ink">#1E2119</color>
+	<color name="paper">#F4F3EC</color>
+	<color name="muted">#5F6452</color>
+	<color name="card">#FFFFFF</color>
+	<color name="danger">#B5483B</color>
+</resources>

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/root"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="@color/paper">
+
+	<!-- the box's touch UI -->
+	<WebView
+		android:id="@+id/web"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:visibility="gone" />
+
+	<!-- find and choose a box -->
+	<ScrollView
+		android:id="@+id/connect"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:fillViewport="true">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:gravity="center_horizontal"
+			android:orientation="vertical"
+			android:padding="24dp">
+
+			<ImageView
+				android:layout_width="96dp"
+				android:layout_height="96dp"
+				android:layout_marginTop="24dp"
+				android:contentDescription="@string/app_name"
+				android:src="@drawable/logo" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="12dp"
+				android:text="@string/app_name"
+				android:textColor="@color/ink"
+				android:textSize="26sp"
+				android:textStyle="bold" />
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="4dp"
+				android:gravity="center"
+				android:text="@string/connect_hint"
+				android:textColor="@color/muted"
+				android:textSize="14sp" />
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="24dp"
+				android:gravity="center_vertical"
+				android:orientation="horizontal">
+
+				<ProgressBar
+					android:id="@+id/progress"
+					style="@android:style/Widget.Material.ProgressBar.Small"
+					android:layout_width="20dp"
+					android:layout_height="20dp"
+					android:layout_marginEnd="10dp" />
+
+				<TextView
+					android:id="@+id/status"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_weight="1"
+					android:text="@string/searching"
+					android:textColor="@color/ink"
+					android:textSize="15sp" />
+			</LinearLayout>
+
+			<!-- boxes found -->
+			<LinearLayout
+				android:id="@+id/boxes"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="12dp"
+				android:orientation="vertical" />
+
+			<Button
+				android:id="@+id/search"
+				android:layout_width="match_parent"
+				android:layout_height="52dp"
+				android:layout_marginTop="12dp"
+				android:background="@drawable/button"
+				android:text="@string/search_again"
+				android:textAllCaps="false"
+				android:textColor="@color/paper"
+				android:textSize="16sp" />
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="28dp"
+				android:orientation="horizontal">
+
+				<EditText
+					android:id="@+id/address"
+					android:layout_width="0dp"
+					android:layout_height="52dp"
+					android:layout_weight="1"
+					android:background="@drawable/field"
+					android:hint="@string/address_hint"
+					android:imeOptions="actionGo"
+					android:inputType="textUri"
+					android:paddingHorizontal="14dp"
+					android:singleLine="true"
+					android:textColor="@color/ink"
+					android:textColorHint="@color/muted" />
+
+				<Button
+					android:id="@+id/go"
+					android:layout_width="wrap_content"
+					android:layout_height="52dp"
+					android:layout_marginStart="8dp"
+					android:background="@drawable/button"
+					android:paddingHorizontal="20dp"
+					android:text="@string/connect"
+					android:textAllCaps="false"
+					android:textColor="@color/paper"
+					android:textSize="16sp" />
+			</LinearLayout>
+		</LinearLayout>
+	</ScrollView>
+</FrameLayout>

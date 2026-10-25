@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="app_name">Backup Box</string>
+	<string name="connect_title">Connect to your Backup Box</string>
+	<string name="connect_hint">Join the box\'s Wi-Fi (its hotspot) or the same network as the box.</string>
+	<string name="searching">Searching for your box …</string>
+	<string name="found_none">No box found. Is the phone on the box\'s Wi-Fi? You can also type its address (shown on the box\'s display).</string>
+	<string name="found_some">Tap your box to open it.</string>
+	<string name="search_again">Search again</string>
+	<string name="address_hint">Address, e.g. 192.168.1.20</string>
+	<string name="connect">Connect</string>
+	<string name="last_box">Last used</string>
+	<string name="hotspot_box">Box hotspot</string>
+	<string name="box_found">Backup Box</string>
+	<string name="box_password">Backup Box (password)</string>
+	<string name="login_title">Box password</string>
+	<string name="login_user">User name</string>
+	<string name="login_password">Password</string>
+	<string name="login_ok">Log in</string>
+	<string name="cancel">Cancel</string>
+	<string name="cert_changed_title">The box\'s certificate changed</string>
+	<string name="cert_changed_text">The box at %1$s presents a different certificate than before. If you renewed it on the box, trust the new one. Otherwise you may not be talking to your box.</string>
+	<string name="cert_trust">Trust new certificate</string>
+	<string name="load_failed">The box does not answer (%1$s).</string>
+	<string name="choose_box">Choose box</string>
+	<string name="retry">Retry</string>
+	<string name="downloading">Downloading %1$s …</string>
+	<string name="downloaded">Saved to %1$s</string>
+	<string name="download_failed">Download failed: %1$s</string>
+	<string name="leave_title">Leave the box?</string>
+	<string name="leave_text">Back to the box search.</string>
+	<string name="leave">Leave</string>
+</resources>
