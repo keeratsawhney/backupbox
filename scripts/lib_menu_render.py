@@ -452,3 +452,46 @@ class renderer(object):
 			self.text(draw, ((self.width - self.text_w(line, self.font_bold)) // 2, y), line, self.font_bold, self.fg)
 			y	+= self.text_h(self.font_bold) + 2
 		return(image)
+
+	def home(self, title, state, ip, network, online, drive, temp, no_drive='No drive'):
+		# the box's home screen (instead of text lines and the status bar):
+		#   title bar with the temperature, the state, IP and network state, the backup drive with a fill bar
+		# drive: dict name, used (0..1), size (text) or None
+		image, draw	= self.new()
+		self.header(draw, title, f'{temp:.0f}°C' if temp is not None else '')
+
+		# state, large, with a check mark
+		icon_w	= 8 * self.icon_px
+		y		= self.head_h + 2
+		big_h	= self.text_h(self.font_big)
+		self.icon(draw, 'check', 2, y + (big_h - icon_w) // 2, self.high)
+		self.text(draw, (2 + icon_w + 4, y), self.fit(state, self.font_big, self.width - icon_w - 8), self.font_big, self.high)
+		y	+= big_h + 3
+
+		# network: IP and online / offline
+		small_h	= self.text_h(self.font_small)
+		self.icon(draw, 'wifi' if online else 'ip', 2, y + (small_h - icon_w) // 2, self.fg)
+		network_w	= self.text_w(network, self.font_small) if network else 0
+		self.text(draw, (2 + icon_w + 4, y), self.fit(ip or network, self.font_small, self.width - icon_w - network_w - 12), self.font_small, self.fg)
+		if network and ip:
+			self.text(draw, (self.width - network_w - 2, y), network, self.font_small, self.fg)
+		y	+= small_h + 3
+
+		# backup drive: name, fill and size, bar
+		if drive:
+			self.icon(draw, 'drive', 2, y + (small_h - icon_w) // 2, self.fg)
+			value	= f"{100 * drive['used']:.0f}% · {drive['size']}"
+			value_w	= self.text_w(value, self.font_small)
+			self.text(draw, (2 + icon_w + 4, y), self.fit(drive['name'], self.font_small, self.width - icon_w - value_w - 12), self.font_small, self.fg)
+			self.text(draw, (self.width - value_w - 2, y), value, self.font_small, self.high)
+			bar_y	= min(self.height - 2, y + small_h + 2)
+			x0, x1	= 2 + icon_w + 4, self.width - 3
+			fill_w	= int((x1 - x0) * min(1, max(0, drive['used'])))
+			for x in range(x0 + fill_w, x1 + 1, 2):
+				draw.point((x, bar_y + 1), fill=self.fg)
+			if fill_w > 0:
+				draw.rectangle((x0, bar_y, x0 + fill_w, bar_y + 1), fill=self.high)
+		else:
+			self.icon(draw, 'drive', 2, y + (small_h - icon_w) // 2, self.fg)
+			self.text(draw, (2 + icon_w + 4, y), no_drive, self.font_small, self.fg)
+		return(image)

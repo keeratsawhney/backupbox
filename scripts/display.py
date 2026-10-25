@@ -53,6 +53,7 @@
 import os
 import RPi.GPIO as GPIO
 import pathlib
+import re
 import shutil
 import signal
 import subprocess
@@ -61,6 +62,7 @@ import threading
 import time
 
 import lib_comitup
+import lib_language
 import lib_network
 import lib_setup
 import lib_system
@@ -74,6 +76,7 @@ from luma.lcd.device import st7735
 from PIL import Image, ImageDraw, ImageFont
 
 import displaymenu
+import lib_menu_render
 from lib_display import display_content_files
 
 # import lib_debug
@@ -231,13 +234,33 @@ class DISPLAY(object):
 			self.comitup_state			= False
 			self.comitup_time			= 0
 			self.cpu_times				= None
-			self.drive_cache			= None
-			self.drive_time				= 0
 
 		# power saving: unchanged frames are not sent again, the panel sleeps when idle
 		self.last_frame		= None
 		self.sleeping		= False
 		self.content_time	= time.time()
+
+		# backup drive (status bar, home screen)
+		self.drive_cache	= None
+		self.drive_info		= None
+		self.drive_time		= 0
+
+		# home screen (content marked hidden=READY): drawn as a picture with the backup drive
+		self.home_mode		= False
+		try:
+			self.home_no_drive	= lib_language.language().l('box_menu_no_drive')
+		except:
+			self.home_no_drive	= 'No drive'
+		self.home_render	= lib_menu_render.renderer(
+			width		= self.device.width,
+			height		= self.device.height,
+			mode		= self.device.mode,
+			color_text	= self.color_text,
+			color_high	= self.color_high,
+			color_bg	= self.color_bg,
+			color_alert	= self.color_alert,
+			font_path	= self.__const_FONT_PATH,
+		)
 
 		# display menu: draws its own screens while open (menu_show, menu_close)
 		self.menu_active	= False
@@ -412,12 +435,63 @@ class DISPLAY(object):
 					break
 				Size	/= 1000
 
-			self.drive_cache	= [f'{Name} {100 * (1 - Free / Total):.0f}%', f'{Size:.1f}{Unit}' if Size < 10 else f'{Size:.0f}{Unit}']
+			SizeText			= f'{Size:.1f}{Unit}' if Size < 10 else f'{Size:.0f}{Unit}'
+			self.drive_cache	= [f'{Name} {100 * (1 - Free / Total):.0f}%', SizeText]
+			self.drive_info		= {'name': self.__drive_label(Device, Name), 'used': 1 - Free / Total, 'size': SizeText}
 			break
 
 		return(self.drive_cache)
 
+	def __drive_label(self, Device, Fallback):
+		# the drive's label (or model) for the home screen
+		try:
+			Output	= subprocess.check_output(['lsblk', '-n', '-d', '-o', 'LABEL', Device], stderr=subprocess.DEVNULL, timeout=3).decode().strip()
+			return(Output or Fallback)
+		except:
+			return(Fallback)
+
+	def __home_image(self, Lines):
+		# Lines of the home screen: BACKUP BOX / state / IP / online state (lib_cron_ip.py)
+		Contents	= [Line.split(':', 1)[-1].strip() for Line in Lines if Line.split(':', 1)[-1].strip()]
+		Title		= Contents[0] if Contents else 'BACKUP BOX'
+		State		= Contents[1] if len(Contents) > 1 else ''
+		Rest		= Contents[2:]
+		IP			= next((Item for Item in Rest if re.match(r'^\d+\.\d+\.\d+\.\d+$', Item)), '')
+		Network		= next((Item for Item in Rest if Item != IP), '')
+
+		self.__drive_status()
+
+		try:
+			with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+				Temp	= float(f.read()) / 1000
+		except:
+			Temp	= None
+
+		return(self.home_render.home(
+			title	= Title,
+			state	= State,
+			ip		= IP,
+			network	= Network,
+			online	= bool(IP),
+			drive	= self.drive_info if self.drive_cache else None,
+			temp	= Temp,
+			no_drive	= self.home_no_drive,
+		))
+
 	def show(self, Lines, statusbar=None, new_content=True):
+		if self.home_mode:
+			# the home screen as a picture (its own drive and temperature line instead of the status bar)
+			image	= self.__home_image(Lines)
+			if self.__unchanged(image, new_content):
+				return()
+			with self.__lock:
+				if self.menu_active:
+					self.last_frame	= None
+					return()
+				self.__display_image(image)
+			self.__save_image(image=image, new_content=new_content)
+			return()
+
 		# fill line count to const_DISPLAY_LINES_LIMIT
 		while len(Lines) < self.__const_DISPLAY_LINES_LIMIT:
 			Lines.append("s=b:")
@@ -709,7 +783,7 @@ class DISPLAY(object):
 		while(self.loop_continue):
 			import_old_file 		= True
 			temp_screen				= False
-			hidden_info				= ''
+			hidden_info				= []
 
 			# re-check for new files earlier than conf_DISP_FRAME_TIME, if no message was found
 			FrameTime = self.__conf_DISP_FRAME_TIME / 4
@@ -770,7 +844,8 @@ class DISPLAY(object):
 								temp_screen		= True
 
 							if SettingType == 'hidden':
-								hidden_info		= SettingValue
+								if SettingValue and SettingValue not in hidden_info:
+									hidden_info.append(SettingValue)
 
 							if SettingType == 'time' and float(SettingValue) >= 0:
 								FrameTime		= float(SettingValue)
@@ -833,15 +908,20 @@ class DISPLAY(object):
 
 					if hidden_info:
 						with open(ContentFile, 'a') as newCF:
-							newCF.write(f"\nset:hidden={hidden_info}")
+							for hidden in hidden_info:
+								newCF.write(f"\nset:hidden={hidden}")
 
 				# move lines to old lines file
 				if not temp_screen:
 					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'w') as oCF:
 						oCF.write("\n".join(Lines))
 
-						if hidden_info:
-							oCF.write(f"\nset:hidden={hidden_info}")
+						for hidden in hidden_info:
+							oCF.write(f"\nset:hidden={hidden}")
+
+					self.home_mode	= 'READY' in hidden_info
+				else:
+					self.home_mode	= False
 
 				# while the menu is open, news are kept and shown when it closes
 				if not self.menu_active:
@@ -868,11 +948,11 @@ class DISPLAY(object):
 						with self.__lock:
 							self.__panel(on=False)
 
-				# statusbar
+				# statusbar (and the home screen's drive and temperature)
 				if (
 					not self.sleeping and
 					not self.menu_active and
-					self.__conf_DISP_SHOW_STATUSBAR and
+					(self.__conf_DISP_SHOW_STATUSBAR or self.home_mode) and
 					time.time() - display_time >= self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC
 					):
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=False)
