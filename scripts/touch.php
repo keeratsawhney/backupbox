@@ -284,13 +284,15 @@
 		</div>
 	</div>
 
-	<!-- comitup: connect the box to a Wi-Fi (only while its hotspot is on) -->
+	<!-- Wi-Fi settings: networks nearby, saved networks; in hotspot mode comitup's page -->
 	<div class="sheet" id="wifi-sheet" role="dialog" hidden>
 		<div class="sheet-box sheet-frame">
 			<div class="sheet-head">
 				<span class="row-label"><b id="wifi-title"></b><small id="wifi-sub"></small></span>
+				<button class="btn btn-icon" id="wifi-scan"><svg><use href="#i-reboot"/></svg></button>
 				<button class="btn btn-icon" id="wifi-close"><svg><use href="#i-close"/></svg></button>
 			</div>
+			<div class="sheet-body wifi-body" id="wifi-body"></div>
 		</div>
 	</div>
 

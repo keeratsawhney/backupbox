@@ -970,30 +970,159 @@
 		if (data.model) add(T.model, data.model);
 		if (data.branch && data.branch !== 'main') add('Branch', data.branch);
 
-		$('btn-wifi').hidden = !data.wifi_setup;
+		// Wi-Fi settings: the button names the network the box is on
+		$('btn-wifi').hidden = !data.wifi;
+		$('wifi-label').textContent = data.wifi && data.wifi.connection ? T.wifi + ': ' + data.wifi.connection : T.wifi;
 
 		loadDrives();
 	}
 
-	// ---------- Wi-Fi (comitup) ----------
+	// ---------- Wi-Fi ----------
+
+	let wifiTimer = null;
+	let wifiConnecting = null;
 
 	function openWifi() {
-		// a new frame each time: its first page adds no history step (back closes the pop-up)
-		const frame = el('iframe', { id: 'wifi-frame', title: T.wifi });
-		frame.src = '/comitup/';
-		$('wifi-sheet').querySelector('.sheet-box').append(frame);
+		$('wifi-body').replaceChildren(el('p', { class: 'sheet-note', text: T.loading }));
+		$('wifi-sub').textContent = '';
 		$('wifi-sheet').hidden = false;
 		openOverlay(wifiBack);
+		loadWifi(false);
 	}
 
 	function closeWifi(fromBack) {
+		clearTimeout(wifiTimer);
 		$('wifi-sheet').hidden = true;
-		if ($('wifi-frame')) $('wifi-frame').remove();
+		$('wifi-body').replaceChildren();
 		if (!fromBack) closeOverlay(wifiBack);
+		if (state.page === 'system') loadSystem();
 	}
 
 	function wifiBack() {
 		closeWifi(true);
+	}
+
+	async function loadWifi(scan) {
+		clearTimeout(wifiTimer);
+		let data;
+		try {
+			data = await api('wifi', scan ? { scan: 1 } : null);
+		} catch (e) {
+			if ($('wifi-sheet').hidden) return;
+			if (wifiConnecting) {
+				// the box changed networks: the phone has to follow it
+				$('wifi-body').replaceChildren(el('p', { class: 'sheet-note warn', text: fill(T.wifi_lost, { ssid: wifiConnecting }) }));
+				wifiTimer = setTimeout(() => loadWifi(false), 4000);
+			} else {
+				$('wifi-body').replaceChildren(el('p', { class: 'sheet-note warn', text: e.message }));
+			}
+			return;
+		}
+		if ($('wifi-sheet').hidden) return;
+		renderWifi(data);
+	}
+
+	function wifiRow(iconName, title, sub, onClick, extra) {
+		const row = el(onClick ? 'button' : 'div', { class: 'row wifi-row' }, [
+			el('span', { class: 'drive-icon' }, icon(iconName)),
+			el('div', { class: 'row-label' }, [el('b', { text: title }), sub ? el('small', { text: sub }) : null]),
+			extra || (onClick ? icon('right') : null),
+		]);
+		if (onClick) row.addEventListener('click', onClick);
+		return row;
+	}
+
+	function renderWifi(data) {
+		const body = $('wifi-body');
+		body.replaceChildren();
+		$('wifi-scan').hidden = !data.available || data.hotspot;
+
+		if (!data.available) {
+			$('wifi-sub').textContent = '';
+			body.append(el('p', { class: 'sheet-note', text: T.wifi_unavailable }));
+			return;
+		}
+
+		if (data.hotspot) {
+			// the radio runs the hotspot and can not scan: comitup's page has the networks it saw before
+			$('wifi-sub').textContent = fill(T.wifi_hotspot, { ssid: data.hotspot_ssid });
+			body.append(el('p', { class: 'sheet-note', text: T.wifi_hotspot_hint }));
+			if (data.wifi_setup) {
+				// a new frame each time: its first page adds no history step (back closes the pop-up)
+				const frame = el('iframe', { id: 'wifi-frame', title: T.wifi });
+				frame.src = '/comitup/';
+				body.append(frame);
+			}
+			return;
+		}
+
+		const task = data.task;
+		$('wifi-sub').textContent = data.current ? fill(T.wifi_connected_to, { ssid: data.current.ssid }) + (data.ip ? '  ·  ' + data.ip : '') : T.wifi_not_connected;
+
+		if (task && task.running) {
+			body.append(el('p', { class: 'sheet-note', text: fill(T.wifi_connecting, { ssid: task.ssid }) }));
+			wifiTimer = setTimeout(() => loadWifi(false), 3000);
+		} else if (wifiConnecting && task && task.ssid === wifiConnecting) {
+			if (task.ok) toast(fill(T.wifi_connect_ok, { ssid: task.ssid }));
+			else body.append(el('p', { class: 'sheet-note warn', text: T.wifi_failed + (task.message ? ' ' + task.message.split('\n').pop() : '') }));
+			wifiConnecting = null;
+		}
+
+		body.append(el('h4', { text: T.wifi_networks }));
+		const list = el('div', { class: 'list' });
+		if (!data.networks.length) list.append(el('div', { class: 'empty' }, [icon('wifi'), el('span', { text: T.wifi_none })]));
+		data.networks.forEach((network) => {
+			const sub = [network.in_use ? T.wifi_connected : (network.saved ? T.wifi_saved_tag : ''), network.signal + ' %', network.security || T.wifi_open].filter(Boolean).join('  ·  ');
+			list.append(wifiRow('wifi', network.ssid, sub, network.in_use ? null : () => connectWifi(network)));
+		});
+		body.append(list);
+
+		if (data.saved.length) {
+			body.append(el('h4', { text: T.wifi_saved }));
+			const savedList = el('div', { class: 'list' });
+			data.saved.forEach((saved) => {
+				const forget = el('button', { class: 'btn btn-icon', 'aria-label': T.wifi_forget }, icon('trash'));
+				forget.addEventListener('click', () => forgetWifi(saved));
+				savedList.append(wifiRow('wifi', saved.ssid, saved.active ? T.wifi_connected : '', null, forget));
+			});
+			body.append(savedList);
+		}
+	}
+
+	async function connectWifi(network) {
+		let password = '';
+		const hint = fill(T.wifi_switch_hint, { ssid: network.ssid });
+		if (network.security && !network.saved) {
+			password = await confirmDialog(fill(T.wifi_password, { ssid: network.ssid }), hint, T.wifi_connect, 'btn-primary', '');
+			if (password === null) return;
+			if (password.length < 8 || password.length > 63) {
+				toast(T.wifi_password_length, true);
+				return;
+			}
+		} else if (!(await confirmDialog(fill(T.wifi_switch, { ssid: network.ssid }), hint, T.wifi_connect))) {
+			return;
+		}
+		try {
+			await api('wifi_connect', { ssid: network.ssid, password: password }, 'POST');
+		} catch (e) {
+			toast(e.message, true);
+			return;
+		}
+		wifiConnecting = network.ssid;
+		$('wifi-body').replaceChildren(el('p', { class: 'sheet-note', text: fill(T.wifi_connecting, { ssid: network.ssid }) }));
+		clearTimeout(wifiTimer);
+		wifiTimer = setTimeout(() => loadWifi(false), 3000);
+	}
+
+	async function forgetWifi(saved) {
+		if (!(await confirmDialog(fill(T.wifi_forget_confirm, { ssid: saved.ssid }), saved.active ? T.wifi_forget_active : '', T.wifi_forget, 'btn-danger'))) return;
+		try {
+			await api('wifi_forget', { name: saved.name }, 'POST');
+		} catch (e) {
+			toast(e.message, true);
+			return;
+		}
+		loadWifi(false);
 	}
 
 	// ---------- drives (system page) ----------
@@ -1253,9 +1382,9 @@
 		$('power-pill').title = T.power_warning;
 		$('classic-label').textContent = T.classic_ui;
 		$('wifi-label').textContent = T.wifi;
-		$('wifi-title').textContent = T.wifi_setup;
-		$('wifi-sub').textContent = T.wifi_setup_hint;
+		$('wifi-title').textContent = T.wifi;
 		$('wifi-close').setAttribute('aria-label', T.close);
+		$('wifi-scan').setAttribute('aria-label', T.wifi_scan);
 		$('reboot-label').textContent = T.reboot;
 		$('shutdown-label').textContent = T.shutdown;
 	}
@@ -1288,6 +1417,10 @@
 		$('sheet-close').addEventListener('click', () => closeDriveSheet());
 		$('btn-wifi').addEventListener('click', openWifi);
 		$('wifi-close').addEventListener('click', () => closeWifi());
+		$('wifi-scan').addEventListener('click', () => {
+			$('wifi-body').replaceChildren(el('p', { class: 'sheet-note', text: T.loading }));
+			loadWifi(true);
+		});
 
 		$('power-pill').addEventListener('click', (event) => {
 			event.stopPropagation();

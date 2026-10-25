@@ -18,8 +18,8 @@
 #######################################################################*/
 
 // JSON backend of the touchscreen UI (touch.php).
-// GET  ?action=status|services|recent|log|sysinfo
-// POST action=backup|stop|function|power|mount|umount  (header X-LBB-Touch required)
+// GET  ?action=status|services|recent|log|sysinfo|wifi
+// POST action=backup|stop|function|power|mount|umount|wifi_connect|wifi_forget  (header X-LBB-Touch required)
 
 	// included subs print html (doctype, comments), keep it out of the json
 	ob_start();
@@ -788,6 +788,68 @@
 		@unlink($tmp);
 	}
 
+	# ---------- Wi-Fi (NetworkManager) ----------
+
+	function touch_nmcli($args) {
+		# nmcli in terse mode: one array of fields per line ("\:" is a colon inside a field)
+		$rows	= array();
+		foreach (explode("\n", trim((string)shell_exec('sudo -n nmcli -t ' . $args . ' 2>/dev/null'))) as $line) {
+			if ($line === '') {
+				continue;
+			}
+			$rows[]	= array_map(function($field) {return(str_replace(array('\\:', '\\\\'), array(':', '\\'), $field));}, preg_split('/(?<!\\\\):/', $line));
+		}
+		return($rows);
+	}
+
+	function touch_wifi_device() {
+		# the first Wi-Fi interface: array(device, state, connection) or null
+		foreach (touch_nmcli('-f DEVICE,TYPE,STATE,CONNECTION device') as $row) {
+			if (count($row) >= 4 and $row[1] === 'wifi') {
+				return(array('device' => $row[0], 'state' => $row[2], 'connection' => $row[3] === '--' ? '' : $row[3]));
+			}
+		}
+		return(null);
+	}
+
+	function touch_wifi_connections() {
+		# saved Wi-Fi connections: name => array(ssid, mode) (mode 'ap': comitup's hotspot)
+		$connections	= array();
+		foreach (touch_nmcli('-f NAME,TYPE connection show') as $row) {
+			if (count($row) >= 2 and $row[1] === '802-11-wireless') {
+				$values	= array();
+				foreach (touch_nmcli('-f 802-11-wireless.ssid,802-11-wireless.mode connection show id ' . escapeshellarg($row[0])) as $field) {
+					$values[$field[0]]	= isset($field[1]) ? $field[1] : '';
+				}
+				$connections[$row[0]]	= array(
+					'ssid'	=> isset($values['802-11-wireless.ssid']) ? $values['802-11-wireless.ssid'] : $row[0],
+					'mode'	=> isset($values['802-11-wireless.mode']) ? $values['802-11-wireless.mode'] : '',
+				);
+			}
+		}
+		return($connections);
+	}
+
+	function touch_wifi_task_file($constants, $ext) {
+		return($constants['const_WEB_ROOT_LBB'] . '/tmp/touch-wifi.' . $ext);
+	}
+
+	function touch_wifi_task($constants) {
+		# the last connect request: array(ssid, running, ok, message) or null
+		$ssid	= @file_get_contents(touch_wifi_task_file($constants, 'ssid'));
+		if ($ssid === false) {
+			return(null);
+		}
+		$exit	= @file_get_contents(touch_wifi_task_file($constants, 'exit'));
+		$log	= trim((string)@file_get_contents(touch_wifi_task_file($constants, 'log')));
+		return(array(
+			'ssid'		=> $ssid,
+			'running'	=> $exit === false,
+			'ok'		=> $exit !== false && trim($exit) === '0',
+			'message'	=> $log,
+		));
+	}
+
 	$action	= isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
 	if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1135,8 +1197,8 @@
 				'mem_avail'	=> isset($meminfo['MemAvailable']) ? $meminfo['MemAvailable'] : null,
 				'branch'	=> isset($constants['const_SOFTWARE_BRANCH']) ? $constants['const_SOFTWARE_BRANCH'] : '',
 				'storages'	=> touch_storages($constants),
-				# comitup's Wi-Fi setup page runs while the box's hotspot is on
-				'wifi_setup'	=> trim((string)shell_exec('systemctl is-active comitup-web 2>/dev/null')) === 'active',
+				# Wi-Fi settings: the box's Wi-Fi interface and its connection
+				'wifi'		=> touch_wifi_device(),
 			));
 
 		case 'backup':
@@ -1345,6 +1407,142 @@
 
 		case 'disk_task':
 			touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
+
+		case 'wifi':
+			# Wi-Fi state, saved and (with scan=1 freshly scanned) available networks
+			$device	= touch_wifi_device();
+			if (!$device) {
+				touch_respond(array('ok' => true, 'available' => false));
+			}
+
+			$connections	= touch_wifi_connections();
+			$active			= $device['connection'];
+			$hotspot		= $active !== '' && isset($connections[$active]) && $connections[$active]['mode'] === 'ap';
+
+			$saved	= array();
+			foreach ($connections as $name => $connection) {
+				if ($connection['mode'] !== 'ap') {
+					$saved[]	= array('name' => $name, 'ssid' => $connection['ssid'], 'active' => $name === $active);
+				}
+			}
+
+			$networks	= array();
+			$current	= null;
+			if (!$hotspot) {
+				# while the box runs its hotspot, the radio can not scan: comitup's page lists the networks then
+				$rescan	= !empty($_REQUEST['scan']) ? 'yes' : 'auto';
+				$savedSsids	= array_column($saved, 'ssid');
+				foreach (touch_nmcli('-f IN-USE,SSID,SIGNAL,SECURITY device wifi list ifname ' . escapeshellarg($device['device']) . ' --rescan ' . $rescan) as $row) {
+					if (count($row) < 4 or $row[1] === '') {
+						continue;
+					}
+					$ssid	= $row[1];
+					$inUse	= trim($row[0]) === '*';
+					if (isset($networks[$ssid]) and $networks[$ssid]['signal'] >= (int)$row[2] and !$inUse) {
+						continue;
+					}
+					$networks[$ssid]	= array(
+						'ssid'		=> $ssid,
+						'signal'	=> (int)$row[2],
+						'security'	=> trim($row[3]) === '--' ? '' : trim($row[3]),
+						'in_use'	=> $inUse || (isset($networks[$ssid]) && $networks[$ssid]['in_use']),
+						'saved'		=> in_array($ssid, $savedSsids, true),
+					);
+				}
+				$networks	= array_values($networks);
+				usort($networks, function($a, $b) {return(($b['in_use'] <=> $a['in_use']) ?: ($b['saved'] <=> $a['saved']) ?: ($b['signal'] <=> $a['signal']));});
+
+				if ($active !== '' and isset($connections[$active])) {
+					$current	= array('name' => $active, 'ssid' => $connections[$active]['ssid'], 'signal' => null);
+					foreach ($networks as $network) {
+						if ($network['in_use']) {
+							$current['signal']	= $network['signal'];
+						}
+					}
+				}
+			}
+
+			$ip	= '';
+			foreach (touch_nmcli('-f IP4.ADDRESS device show ' . escapeshellarg($device['device'])) as $row) {
+				if (isset($row[1]) and $ip === '') {
+					$ip	= explode('/', $row[1])[0];
+				}
+			}
+
+			touch_respond(array(
+				'ok'			=> true,
+				'available'		=> true,
+				'device'		=> $device['device'],
+				'state'			=> $device['state'],
+				'hotspot'		=> $hotspot,
+				'hotspot_ssid'	=> $hotspot ? $connections[$active]['ssid'] : '',
+				'wifi_setup'	=> trim((string)shell_exec('systemctl is-active comitup-web 2>/dev/null')) === 'active',
+				'current'		=> $current,
+				'ip'			=> $ip,
+				'saved'			=> $saved,
+				'networks'		=> $networks,
+				'task'			=> touch_wifi_task($constants),
+			));
+
+		case 'wifi_connect':
+			# connect to a network; runs in the background: the phone may lose the box when it changes networks
+			if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+				touch_fail('POST required', 405);
+			}
+			$ssid		= isset($_POST['ssid']) ? (string)$_POST['ssid'] : '';
+			$password	= isset($_POST['password']) ? (string)$_POST['password'] : '';
+			$device		= touch_wifi_device();
+			if ($ssid === '' or strlen($ssid) > 32 or !$device) {
+				touch_fail(touch_text(L::touch_wifi_failed));
+			}
+			if ($password !== '' and (strlen($password) < 8 or strlen($password) > 63)) {
+				touch_fail(touch_text(L::touch_wifi_password_length));
+			}
+			$task	= touch_wifi_task($constants);
+			if ($task and $task['running']) {
+				touch_fail(touch_text(L::touch_wifi_busy));
+			}
+
+			# a saved network without a new password: start the saved connection
+			$savedName	= '';
+			foreach (touch_wifi_connections() as $name => $connection) {
+				if ($connection['ssid'] === $ssid and $connection['mode'] !== 'ap') {
+					$savedName	= $name;
+				}
+			}
+
+			if ($savedName !== '' and $password === '') {
+				$command	= 'nmcli --wait 45 connection up id ' . escapeshellarg($savedName);
+			} else {
+				# a new or changed password: the profile is made anew (a failed new one is removed again)
+				$command	= ($savedName !== '' ? 'nmcli connection delete id ' . escapeshellarg($savedName) . ' >/dev/null 2>&1; ' : '') .
+					'nmcli --wait 45 device wifi connect ' . escapeshellarg($ssid) .
+					($password !== '' ? ' password ' . escapeshellarg($password) : '') .
+					' ifname ' . escapeshellarg($device['device']);
+				$command	= '{ ' . $command . '; } || { rc=$?; nmcli connection delete id ' . escapeshellarg($ssid) . ' >/dev/null 2>&1; exit $rc; }';
+			}
+
+			$log	= touch_wifi_task_file($constants, 'log');
+			$exit	= touch_wifi_task_file($constants, 'exit');
+			@unlink($exit);
+			@file_put_contents($log, '');
+			file_put_contents(touch_wifi_task_file($constants, 'ssid'), $ssid);
+			# a moment first: the answer reaches the phone before the box may leave the network
+			shell_exec('sudo -n sh -c ' . escapeshellarg('sleep 1; ( ' . $command . ' ) > ' . escapeshellarg($log) . ' 2>&1; echo $? > ' . escapeshellarg($exit) . '; chown www-data ' . escapeshellarg($log) . ' ' . escapeshellarg($exit)) . ' > /dev/null 2>&1 &');
+
+			touch_respond(array('ok' => true, 'ssid' => $ssid));
+
+		case 'wifi_forget':
+			if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+				touch_fail('POST required', 405);
+			}
+			$name			= isset($_POST['name']) ? (string)$_POST['name'] : '';
+			$connections	= touch_wifi_connections();
+			if (!isset($connections[$name]) or $connections[$name]['mode'] === 'ap') {
+				touch_fail(touch_text(L::touch_wifi_failed));
+			}
+			shell_exec('sudo -n nmcli connection delete id ' . escapeshellarg($name) . ' > /dev/null 2>&1');
+			touch_respond(array('ok' => true));
 
 		case 'drive_action':
 			# one drive: unmount, photo maintenance, check, repair, format
