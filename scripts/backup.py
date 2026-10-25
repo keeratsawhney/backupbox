@@ -1476,6 +1476,28 @@ class backup(object):
 		#remove from ImagesList all items known in TIMSList
 		return(list(set(ImagesList) - set(TIMSList)))
 
+	def __exiftool(self):
+		# one exiftool kept running per thumbnail worker: starting exiftool takes longer than reading a file
+		if not hasattr(self, '_exiftool_local'):
+			self._exiftool_local	= threading.local()
+			self._exiftool_all		= []
+			self._exiftool_lock		= threading.Lock()
+		Tool	= getattr(self._exiftool_local, 'tool', None)
+		if Tool is None:
+			Tool	= lib_common.exiftool()
+			self._exiftool_local.tool	= Tool
+			with self._exiftool_lock:
+				self._exiftool_all.append(Tool)
+		return(Tool)
+
+	def __exiftool_close(self):
+		if hasattr(self, '_exiftool_all'):
+			with self._exiftool_lock:
+				for Tool in self._exiftool_all:
+					Tool.close()
+				self._exiftool_all.clear()
+			self._exiftool_local	= threading.local()
+
 	def __thumbnail_workers(self):
 		try:
 			MemTotal	= int(open('/proc/meminfo').readline().split()[1]) * 1024
@@ -1493,20 +1515,14 @@ class backup(object):
 	def __rawPreview(self, RawFile):
 		# the full size JPEG every camera embeds in its raw files: far faster than developing the raw data
 		for Tag in ('PreviewImage', 'JpgFromRaw'):
-			try:
-				Data	= subprocess.run(['/usr/bin/exiftool', '-b', f'-{Tag}', RawFile], capture_output=True, timeout=60).stdout
-			except:
-				Data	= b''
+			Data	= self.__exiftool().run(['-b', f'-{Tag}', RawFile])
 			if len(Data) > 20000 and Data[:2] == b'\xff\xd8':
 				return(Data)
 		return(None)
 
 	def __rawOrientation(self, RawFile):
 		# the embedded preview is stored unrotated: the raw file says how to turn it
-		try:
-			Orientation	= subprocess.check_output(['/usr/bin/exiftool', '-n', '-s3', '-Orientation', RawFile], stderr=subprocess.DEVNULL, timeout=30).decode().strip()
-		except:
-			Orientation	= ''
+		Orientation	= self.__exiftool().run(['-n', '-s3', '-Orientation', RawFile]).decode(errors='replace').strip()
 		return({'3': '180', '6': '90', '8': '270'}.get(Orientation, '0'))
 
 	def __generateThumbnail(self, Device, SourceFilePathName, DCRAW_EMU):
@@ -1681,6 +1697,9 @@ class backup(object):
 		# several files at once (the Pi has 4 cores); fewer with little memory or a weak power supply,
 		# full load draws more current and could make the drives disconnect
 		Workers	= self.__thumbnail_workers()
+		# one thread per ImageMagick: the workers already use the cores, more threads only cost switching
+		# and heat, and a core stays free for the web interface and the app
+		os.environ['MAGICK_THREAD_LIMIT']	= '1'
 		Pending	= list(MissingTIMSList)
 		with ThreadPoolExecutor(max_workers=Workers) as Pool:
 			Running	= set()
@@ -1697,6 +1716,8 @@ class backup(object):
 					except Exception as e:
 						print(f"Error: thumbnail: {e}", file=sys.stderr)
 					progress.progress()
+
+		self.__exiftool_close()
 
 		if self.__break_generateThumbnails:
 			return()

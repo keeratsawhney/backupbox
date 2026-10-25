@@ -863,6 +863,10 @@
 
 	switch ($action) {
 
+		case 'ping':
+			# the app's box search: an answer at once, also while a backup keeps the box busy
+			touch_respond(array('ok' => true, 'box' => 'backupbox'));
+
 		case 'status':
 			$display	= touch_display_lines($constants);
 			$running	= touch_backup_running();

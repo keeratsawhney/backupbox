@@ -67,17 +67,22 @@ class BoxFinder(private val connectivity: ConnectivityManager) {
 	companion object {
 		const val HOTSPOT	= "10.41.0.1"
 
-		/** Is a Backup Box at this address? (plain http on port 8080, short timeouts) */
+		/**
+		 * Is a Backup Box at this address? (plain http on port 8080, short timeouts)
+		 * "ping" answers at once, also while a backup keeps the box busy; older boxes answer it with
+		 * "unknown action" (400), which is a box as well.
+		 */
 		fun probe(address: String): Box? {
 			return try {
-				val connection	= URL("http://$address:8080/touch-api.php?action=status").openConnection() as HttpURLConnection
-				connection.connectTimeout	= 800
-				connection.readTimeout	= 2500
+				val connection	= URL("http://$address:8080/touch-api.php?action=ping").openConnection() as HttpURLConnection
+				connection.connectTimeout	= 1500
+				connection.readTimeout	= 6000
 				connection.instanceFollowRedirects	= false
 				connection.setRequestProperty("Cache-Control", "no-store")
 				val code	= connection.responseCode
 				val box	= when {
 					code == 200 && connection.inputStream.bufferedReader().use { it.readText() }.contains("\"ok\"") -> Box(address, false)
+					code == 400 && (connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "").contains("\"ok\"") -> Box(address, false)
 					// password protected box: Apache asks for it
 					code == 401 && (connection.getHeaderField("WWW-Authenticate") ?: "").contains("Basic") -> Box(address, true)
 					else -> null

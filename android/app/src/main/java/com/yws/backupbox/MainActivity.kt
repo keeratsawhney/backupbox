@@ -244,8 +244,12 @@ class MainActivity : Activity() {
 		connectView.visibility	= View.GONE
 		web.visibility	= View.VISIBLE
 		clearHistoryWhenLoaded	= true
+		fallback	= true
 		web.loadUrl("https://${box.address}/touch.php")
 	}
+
+	// https did not answer: plain http on port 8080, the address the box search found the box on
+	private var fallback = false
 
 	// the blank page shown while choosing a box must not stay in the history (back would show it)
 	private var clearHistoryWhenLoaded = false
@@ -270,7 +274,7 @@ class MainActivity : Activity() {
 
 	private inner class BoxClient : WebViewClient() {
 		override fun onPageFinished(view: WebView, url: String) {
-			if (clearHistoryWhenLoaded && url.startsWith("https://")) {
+			if (clearHistoryWhenLoaded && url.startsWith("http")) {
 				clearHistoryWhenLoaded	= false
 				view.clearHistory()
 			}
@@ -288,6 +292,8 @@ class MainActivity : Activity() {
 		override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
 			val host	= Uri.parse(error.url).host ?: ""
 			val certificate	= error.certificate.x509Certificate
+			// a refused certificate never falls back to plain http
+			fallback	= false
 			if (certificate == null || host != currentBox?.address) {
 				handler.cancel()
 				return
@@ -297,9 +303,10 @@ class MainActivity : Activity() {
 				null -> {
 					// first visit: trust this box's own certificate from now on
 					BoxTrust.pin(this@MainActivity, host, fingerprint)
+					fallback	= true
 					handler.proceed()
 				}
-				fingerprint -> handler.proceed()
+				fingerprint -> { fallback = true; handler.proceed() }
 				else -> {
 					handler.cancel()
 					AlertDialog.Builder(this@MainActivity)
@@ -327,6 +334,12 @@ class MainActivity : Activity() {
 
 		override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
 			if (request.isForMainFrame && web.visibility == View.VISIBLE) {
+				val box	= currentBox
+				if (fallback && box != null && request.url.scheme == "https") {
+					fallback	= false
+					view.loadUrl("http://${box.address}:8080/touch.php")
+					return
+				}
 				showConnect(getString(R.string.load_failed, error.description))
 				addRetry()
 			}

@@ -264,6 +264,8 @@ class Nearby(
 					reachable != null -> openBox(reachable)
 					// 2. the box's own hotspot: the app joins it (Android asks once), the phone keeps its internet
 					wifi.optString("ssid").isNotEmpty() -> joinHotspot(wifi.optString("ssid"), wifi.optString("pw"), wifi.optString("ip", BoxFinder.HOTSPOT))
+					// 3. no hotspot: the box is in a Wi-Fi network, open its address there (it may just be slow to answer)
+					addresses.isNotEmpty() -> openBox(Box(addresses.first(), false))
 					else -> toast(activity.getString(R.string.ble_no_wifi))
 				}
 			}
