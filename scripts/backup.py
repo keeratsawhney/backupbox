@@ -30,6 +30,7 @@ import sys
 import threading
 import time
 
+import background
 import lib_backup
 import lib_clean
 import lib_common
@@ -44,6 +45,7 @@ import lib_poweroff
 import lib_setup
 import lib_storage
 import lib_system
+import lib_thumbnails
 import lib_socialmedia
 import lib_view
 import lib_vpn
@@ -176,6 +178,7 @@ class backup(object):
 		self.TargetDevice				= None
 		self.__TIMSCopied				= False
 		self.__CopiedFiles				= [] # files copied by this run, relative to the target's mount point
+		self.__BackgroundMountPoint		= None # thumbnails and database follow in background.py on this drive
 		self.__mail_threads_started		= []
 		self.__break_generateThumbnails	= False
 
@@ -263,17 +266,40 @@ class backup(object):
 			# the functions thumbnails/database (web UI) process the whole drive
 			OnlyFiles	= None if self.SourceStorageType in ['thumbnails', 'database', 'exif', 'rename'] else self.__CopiedFiles
 
-			# sync database
-			if self.ForceSyncDatabase or self.__TIMSCopied:
-				self.syncDatabase(OnlyFiles=OnlyFiles)
+			# a backup to a local drive reports done right after copying: thumbnails and database follow in the
+			# background (background.py). Not when the box powers off after the backup, a secondary backup follows
+			# or EXIF updates need the database first.
+			Background	= (
+				OnlyFiles is not None and
+				self.TargetDevice and self.TargetDevice.isLocal and
+				self.DoGenerateThumbnails_primary and
+				not self.DoUpdateEXIF and
+				not self.PowerOff and
+				not self.SecondaryBackupFollows
+			)
+			if Background:
+				try:
+					background.queue_add(self.TargetDevice.MountPoint, self.get_OnlyFilesMedia(self.TargetDevice, OnlyFiles))
+					# also files left by an earlier backup (power off before its thumbnails were done)
+					if background.queue_read(self.TargetDevice.MountPoint):
+						self.__BackgroundMountPoint	= self.TargetDevice.MountPoint
+				except OSError as e:
+					# the list can not be written to the drive: everything now, as before
+					self.__log.message(f"background: {e}")
+					Background	= False
 
-			# update exif
-			if self.TargetDevice and self.DoUpdateEXIF:
-				self.updateEXIF()
+			if not Background:
+				# sync database
+				if self.ForceSyncDatabase or self.__TIMSCopied:
+					self.syncDatabase(OnlyFiles=OnlyFiles)
 
-			# generate thumbnails
-			if self.TargetDevice and self.DoGenerateThumbnails_primary:
-					self.generateThumbnails(Device=self.TargetDevice, OnlyFiles=OnlyFiles)
+				# update exif
+				if self.TargetDevice and self.DoUpdateEXIF:
+					self.updateEXIF()
+
+				# generate thumbnails
+				if self.TargetDevice and self.DoGenerateThumbnails_primary:
+						self.generateThumbnails(Device=self.TargetDevice, OnlyFiles=OnlyFiles)
 
 		self.finish()
 
@@ -1476,206 +1502,8 @@ class backup(object):
 		#remove from ImagesList all items known in TIMSList
 		return(list(set(ImagesList) - set(TIMSList)))
 
-	def __exiftool(self):
-		# one exiftool kept running per thumbnail worker: starting exiftool takes longer than reading a file
-		if not hasattr(self, '_exiftool_local'):
-			self._exiftool_local	= threading.local()
-			self._exiftool_all		= []
-			self._exiftool_lock		= threading.Lock()
-		Tool	= getattr(self._exiftool_local, 'tool', None)
-		if Tool is None:
-			Tool	= lib_common.exiftool()
-			self._exiftool_local.tool	= Tool
-			with self._exiftool_lock:
-				self._exiftool_all.append(Tool)
-		return(Tool)
-
-	def __exiftool_close(self):
-		if hasattr(self, '_exiftool_all'):
-			with self._exiftool_lock:
-				for Tool in self._exiftool_all:
-					Tool.close()
-				self._exiftool_all.clear()
-			self._exiftool_local	= threading.local()
-
-	def __thumbnail_workers(self):
-		try:
-			MemTotal	= int(open('/proc/meminfo').readline().split()[1]) * 1024
-		except:
-			MemTotal	= 0
-		if MemTotal and MemTotal < 1024 ** 3:
-			return(1)
-		try:
-			Throttled	= int(subprocess.check_output(['/usr/bin/vcgencmd', 'get_throttled'], stderr=subprocess.DEVNULL).decode().split('=')[1], 16)
-		except:
-			Throttled	= 0
-		# under-voltage now or since boot
-		return(2 if Throttled & 0x10001 else min(3, os.cpu_count() or 1))
-
-	def __rawPreview(self, RawFile):
-		# the full size JPEG every camera embeds in its raw files: far faster than developing the raw data
-		for Tag in ('PreviewImage', 'JpgFromRaw'):
-			Data	= self.__exiftool().run(['-b', f'-{Tag}', RawFile])
-			if len(Data) > 20000 and Data[:2] == b'\xff\xd8':
-				return(Data)
-		return(None)
-
-	def __rawOrientation(self, RawFile):
-		# the embedded preview is stored unrotated: the raw file says how to turn it
-		Orientation	= self.__exiftool().run(['-n', '-s3', '-Orientation', RawFile]).decode(errors='replace').strip()
-		return({'3': '180', '6': '90', '8': '270'}.get(Orientation, '0'))
-
-	def __generateThumbnail(self, Device, SourceFilePathName, DCRAW_EMU):
-		# thumbnail (tims) of one file; returns files to process as well (converted HEIC images)
-		Extra	= []
-
-		#extract Extension from filename
-		SourceFilePathName	= SourceFilePathName.strip('/')
-		try:
-			SourceFilePathNameExt	= SourceFilePathName.rsplit('.',1)[1].lower()
-		except:
-			SourceFilePathNameExt	= ''
-
-		# generate thumbnails
-		TIMS_Dir				= os.path.join(os.path.dirname(SourceFilePathName), 'tims')
-		pathlib.Path(Device.MountPoint, TIMS_Dir).mkdir(parents=True, exist_ok=True)
-
-		FileName				= os.path.basename(SourceFilePathName)
-		TIMS_SubpathFilename	= os.path.join(TIMS_Dir, f"{FileName}.JPG")
-
-		if SourceFilePathNameExt in f"{self.const_FILE_EXTENSIONS_LIST_WEB_IMAGES};{self.const_FILE_EXTENSIONS_LIST_TIF}".split(';'):
-			# file-types: jpeg, tif image
-			# jpeg:size: JPEGs are decoded at a reduced size (at least twice the thumbnail), not with all their megapixels
-			Command	= ["/usr/bin/convert", "-define", "jpeg:size=1600x1600", f"{os.path.join(Device.MountPoint, SourceFilePathName)}[0]", "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_HEIC.split(';'):
-
-			# file-type: heic/heif
-			# convert heif to jpg
-			Command	= ['/usr/bin/heif-convert', os.path.join(Device.MountPoint, SourceFilePathName), os.path.join(Device.MountPoint, f'{SourceFilePathName}.JPG')]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			# transfer exif from heif to jpg
-			Command	= ['/usr/bin/exiftool', '-overwrite_original', '-ignoreMinorErrors', '-TagsFromFile', os.path.join(Device.MountPoint, SourceFilePathName), os.path.join(Device.MountPoint, f'{SourceFilePathName}.JPG')]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			# create tims file
-			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, f"{SourceFilePathName}.JPG"), "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			conf_VIEW_CONVERT_HEIC				= self.__setup.get_val('conf_VIEW_CONVERT_HEIC')
-
-			if conf_VIEW_CONVERT_HEIC:
-				MissingTIMSList.append(f"{SourceFilePathName}.JPG")
-			else:
-				Command	= ["/usr/bin/rm", os.path.join(Device.MountPoint, f"{SourceFilePathName}.JPG")]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_RAW.split(';'):
-			# file-type: raw-image
-			RawFile	= os.path.join(Device.MountPoint, SourceFilePathName)
-			Preview	= self.__rawPreview(RawFile)
-			if Preview:
-				# the JPEG preview of the camera, turned like the photo
-				Command	= ["/usr/bin/convert", "-define", "jpeg:size=1600x1600", "jpg:-", "-rotate", self.__rawOrientation(RawFile), "-strip", "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command, input=Preview)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-			else:
-				# no preview: develop the raw data (slow)
-				SourceCommand	= [DCRAW_EMU, "-w", "-Z", "-", RawFile]
-				FilterCommand	= ["/usr/bin/convert", "-", "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					lib_common.pipe(SourceCommand,FilterCommand)
-				except:
-					print(f"Error: {' '.join(SourceCommand) + ' | ' + ' '.join(FilterCommand)}",file=sys.stderr)
-
-		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_VIDEO.split(';'):
-			# file-type: video
-			# -ss before -i: jumps to the second instead of decoding up to it; scaled by ffmpeg, not saved full size first
-			for Second in ("00:00:01", "00:00:00"):
-				# second 0 for videos shorter than a second
-				Command	= ["/usr/bin/ffmpeg", "-loglevel", "error", "-y", "-skip_frame", "nokey", "-ss", Second, "-i", os.path.join(Device.MountPoint, SourceFilePathName), "-frames:v", "1", "-vf", "scale='min(800,iw)':-2", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command, stdin=subprocess.DEVNULL)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-				if os.path.isfile(os.path.join(Device.MountPoint, TIMS_SubpathFilename)) and os.path.getsize(os.path.join(Device.MountPoint, TIMS_SubpathFilename)) > 0:
-					break
-
-			Command	=["/usr/bin/composite", "-gravity", "center", f"{self.__WORKING_DIR}/img/play.png", os.path.join(Device.MountPoint, TIMS_SubpathFilename), os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_AUDIO.split(';'):
-			Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/audio.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_TEXT.split(';'):
-			Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/text.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-		if not os.path.isfile(os.path.join(Device.MountPoint, TIMS_SubpathFilename)):
-			self.__log.message(f"ERROR: TIMS of '{os.path.join(Device.MountPoint, SourceFilePathName)}' ('{os.path.join(Device.MountPoint, TIMS_SubpathFilename)}') not regular created.")
-
-			Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/unknown.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-			try:
-				subprocess.run(Command)
-			except:
-				print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-		return(Extra)
-
 	def __generateThumbnailsFor(self, Device, MissingTIMSList):
-		if os.path.isfile('/usr/lib/libraw/dcraw_emu'):
-			DCRAW_EMU	= '/usr/lib/libraw/dcraw_emu'
-		else:
-			try:
-				DCRAW_EMU	= subprocess.check_output(['/usr/bin/whereis', 'dcraw_emu']).decode().strip().split('\n')[0].split(' ')[1]
-			except:
-				DCRAW_EMU	= 'dcraw_emu'
+		Thumbnails	= lib_thumbnails.thumbnails(self.__setup, self.__log)
 
 		#prepare loop to create thumbnails
 		FilesToProcess	= len(MissingTIMSList)
@@ -1694,19 +1522,15 @@ class backup(object):
 			TaskNote		= self.__lan.l('box_backup_mode_thumbnails')
 		)
 
-		# several files at once (the Pi has 4 cores); fewer with little memory or a weak power supply,
-		# full load draws more current and could make the drives disconnect
-		Workers	= self.__thumbnail_workers()
-		# one thread per ImageMagick: the workers already use the cores, more threads only cost switching
-		# and heat, and a core stays free for the web interface and the app
-		os.environ['MAGICK_THREAD_LIMIT']	= '1'
+		# several files at once
+		Workers	= Thumbnails.workers()
 		Pending	= list(MissingTIMSList)
 		with ThreadPoolExecutor(max_workers=Workers) as Pool:
 			Running	= set()
 			while Pending or Running:
 				# allow to stop process remote (when running as thread)
 				while Pending and len(Running) < Workers * 2 and not self.__break_generateThumbnails:
-					Running.add(Pool.submit(self.__generateThumbnail, Device, Pending.pop(0), DCRAW_EMU))
+					Running.add(Pool.submit(Thumbnails.generate, Device.MountPoint, Pending.pop(0)))
 				if not Running:
 					break
 				Done, Running	= wait(Running, return_when=FIRST_COMPLETED)
@@ -1717,7 +1541,7 @@ class backup(object):
 						print(f"Error: thumbnail: {e}", file=sys.stderr)
 					progress.progress()
 
-		self.__exiftool_close()
+		Thumbnails.close()
 
 		if self.__break_generateThumbnails:
 			return()
@@ -1793,7 +1617,13 @@ class backup(object):
 		# Set the PWR LED ON to indicate that the backup has finished
 		lib_system.rpi_leds(led='PWR', trigger='none', brightness=1)
 
-		lib_storage.umount(self.__setup,'all')
+		if self.__BackgroundMountPoint:
+			# the drive of the background job stays mounted until it is done
+			for MountPoint in lib_storage.get_mountPoints(self.__setup, ['all'], True):
+				if os.path.normpath(MountPoint) != os.path.normpath(self.__BackgroundMountPoint):
+					lib_storage.umount(self.__setup, MountPoint)
+		else:
+			lib_storage.umount(self.__setup,'all')
 
 		if self.__reporter is None:
 			display_summary	= []
@@ -1802,6 +1632,9 @@ class backup(object):
 			display_summary	= self.__reporter.display_summary
 
 		self.__cleanup()
+
+		if self.__BackgroundMountPoint:
+			background.start(self.__BackgroundMountPoint)
 
 		if self.SecondaryBackupFollows:
 			self.__display.message(display_summary)

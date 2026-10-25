@@ -1079,6 +1079,8 @@
     "files_count": "files",
     "run": "Run",
     "power_short": "Low power",
+    "background_short": "Previews",
+    "background_note": "Making previews and the photo database in the background. The backup is done and the card can be removed. If the box is switched off now, the rest follows with the next backup.",
     "drives": "Drives",
     "drive_actions": "Drive",
     "task_busy": "Another drive task is still running.",
