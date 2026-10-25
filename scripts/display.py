@@ -117,6 +117,7 @@ class DISPLAY(object):
 		self.__conf_DISP_COLOR_BACKGROUND			= self.__setup.get_val('conf_DISP_COLOR_BACKGROUND')
 		self.__conf_DISP_FONT_SIZE					= self.__setup.get_val('conf_DISP_FONT_SIZE')
 		self.__conf_DISP_FRAME_TIME					= self.__setup.get_val('conf_DISP_FRAME_TIME')
+		self.__conf_DISP_SLEEP_MIN					= self.__setup.get_val('conf_DISP_SLEEP_MIN')
 		self.__conf_DISP_SHOW_STATUSBAR				= self.__setup.get_val('conf_DISP_SHOW_STATUSBAR')
 		self.__conf_DISP_BACKLIGHT_PIN				= self.__setup.get_val('conf_DISP_BACKLIGHT_PIN')
 		self.__conf_DISP_BACKLIGHT_ENABLED			= self.__setup.get_val('conf_DISP_BACKLIGHT_ENABLED')
@@ -227,6 +228,13 @@ class DISPLAY(object):
 			self.traffic_monitor		= lib_network.traffic_monitor()
 			self.statusbar_toggle		= 0
 			self.statusbar_toggle_time	= 0
+			self.comitup_state			= False
+			self.comitup_time			= 0
+			self.cpu_times				= None
+
+		# power saving: unchanged frames are not sent again, the panel sleeps when idle
+		self.last_frame		= None
+		self.sleeping		= False
 
 		# create folders
 		## ensure const_DISPLAY_CONTENT_PATH exists
@@ -315,7 +323,11 @@ class DISPLAY(object):
 				self.statusbar_toggle	= 1
 
 		#comitup
-		comitup_status	= lib_comitup.comitup().get_status()['state']
+		# comitup-cli is a python program: asking it every frame cost more CPU than everything else
+		if time.time() - self.comitup_time >= 30:
+			self.comitup_time	= time.time()
+			self.comitup_state	= lib_comitup.comitup().get_status()['state']
+		comitup_status	= self.comitup_state
 
 		match comitup_status:
 			case 'HOTSPOT':
@@ -330,21 +342,22 @@ class DISPLAY(object):
 			statusbar	+=[self.traffic_monitor.get_traffic()]
 			return(statusbar)
 
-		# if sill not retuned: CPU usage
+		# if sill not retuned: CPU usage since the last look (read directly, no processes started)
 		try:
-			vmstat	= subprocess.check_output(['/usr/bin/vmstat']).decode().strip().split('\n')
+			with open('/proc/stat', 'r') as f:
+				cpu_fields	= [int(field) for field in f.readline().split()[1:]]
+			cpu_times	= (sum(cpu_fields), cpu_fields[3] + cpu_fields[4])
+			if self.cpu_times and cpu_times[0] > self.cpu_times[0]:
+				busy	= 1 - (cpu_times[1] - self.cpu_times[1]) / (cpu_times[0] - self.cpu_times[0])
+				statusbar.append(f'{100 * busy:.0f}%')
+			self.cpu_times	= cpu_times
 		except:
-			vmstat	= []
-
-		if vmstat:
-			vmstat_fields	= vmstat[-1].split()
-
-			if len(vmstat_fields) >= 14:
-				statusbar.append(f'{100-float(vmstat_fields[14]):.0f}%')
+			pass
 
 		# temperature
 		try:
-			temp_c	= float(subprocess.check_output(['/usr/bin/cat', '/sys/class/thermal/thermal_zone0/temp']).decode()) / 1000
+			with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+				temp_c	= float(f.read()) / 1000
 			statusbar.append(f'{temp_c:.0f}°C')
 		except:
 			pass
@@ -369,6 +382,9 @@ class DISPLAY(object):
 			try:
 				image = Image.open(ImageFilename).convert(self.device.mode).resize((self.device.width, self.device.height))
 			except:
+				return()
+
+			if self.__unchanged(image, new_content):
 				return()
 
 			# display image
@@ -522,6 +538,9 @@ class DISPLAY(object):
 						(x + 1, y + self.line_height + y_space, x + 1 + right - left, y + self.line_height + y_space),
 						fill=fg_fill, width=1)
 
+			if self.__unchanged(image, new_content):
+				return()
+
 			# display image
 			self.__display_image(image)
 
@@ -531,6 +550,32 @@ class DISPLAY(object):
 	def __display_image(self, image):
 		if self.hardware_ready:
 			self.device.display(image)
+
+	def __unchanged(self, image, new_content):
+		# a statusbar refresh that draws the same picture again: skip sending and saving it
+		frame	= image.tobytes()
+		if not new_content and frame == self.last_frame:
+			return(True)
+		self.last_frame	= frame
+		return(False)
+
+	def __panel(self, on):
+		# switch the panel (and an LCD backlight) off when idle: less power, heat and OLED burn-in
+		if self.sleeping != (not on) and self.hardware_ready:
+			try:
+				self.device.show() if on else self.device.hide()
+				if self.__conf_DISP_DRIVER.startswith('ST7735') and self.__conf_DISP_BACKLIGHT_ENABLED:
+					self.device.backlight(on)
+			except:
+				pass
+		self.sleeping	= not on
+
+	def __busy(self):
+		# a backup or another task is running
+		try:
+			return(any(TaskFile.endswith('.txt') for TaskFile in os.listdir(self.__const_TASKS_PATH)))
+		except:
+			return(False)
 
 	def __save_image(self, image, new_content=True):
 
@@ -564,6 +609,7 @@ class DISPLAY(object):
 
 	def main(self):
 		display_time	= time.time()
+		content_time	= time.time()
 		Lines 			= []
 
 		# start endless loop to display content
@@ -704,11 +750,25 @@ class DISPLAY(object):
 						if hidden_info:
 							oCF.write(f"\nset:hidden={hidden_info}")
 
+				self.__panel(on=True)
 				self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
 				display_time	= time.time()
+				content_time	= time.time()
 			else:
+				# sleep after conf_DISP_SLEEP_MIN minutes without news, never while a task runs
+				if (
+					not self.sleeping and
+					self.__conf_DISP_SLEEP_MIN > 0 and
+					time.time() - content_time >= self.__conf_DISP_SLEEP_MIN * 60
+					):
+					if self.__busy():
+						content_time	= time.time()
+					else:
+						self.__panel(on=False)
+
 				# statusbar
 				if (
+					not self.sleeping and
 					self.__conf_DISP_SHOW_STATUSBAR and
 					time.time() - display_time >= self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC
 					):

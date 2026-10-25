@@ -380,6 +380,7 @@ conf_DISP_FRAME_TIME=$conf_DISP_FRAME_TIME
 conf_DISP_FRAME_TIME_IP=$conf_DISP_FRAME_TIME_IP
 conf_DISP_IP_REPEAT=$conf_DISP_IP_REPEAT
 conf_DISP_SHOW_STATUSBAR=$conf_DISP_SHOW_STATUSBAR
+conf_DISP_SLEEP_MIN=$conf_DISP_SLEEP_MIN
 conf_MENU_ENABLED=$conf_MENU_ENABLED
 conf_MENU_BUTTON_COMBINATION='$conf_MENU_BUTTON_COMBINATION'
 conf_MENU_BUTTON_ROTATE='$conf_MENU_BUTTON_ROTATE'
@@ -976,6 +977,15 @@ CONFIGDATA;
 									$display_frame_times_ip_array=array('1', '1.5', '2', '2.5', '3', '4', '5', '7', '10');
 									foreach($display_frame_times_ip_array as $display_frame_time_ip) {
 										echo "<option value='" . $display_frame_time_ip . "' " . ($config["conf_DISP_FRAME_TIME_IP"] == $display_frame_time_ip?" selected":"") . ">" . $display_frame_time_ip . "</option>";
+									}
+								?>
+							</select>
+						<br />
+						<label for="conf_DISP_SLEEP_MIN"><?php echo L::config_display_sleep_label; ?></label><br />
+							<select name="conf_DISP_SLEEP_MIN" id="conf_DISP_SLEEP_MIN">
+								<?php
+									foreach(array(0, 1, 2, 5, 10, 15, 30, 60) as $display_sleep_min) {
+										echo "<option value='" . $display_sleep_min . "' " . (($config["conf_DISP_SLEEP_MIN"] ?? 10) == $display_sleep_min?" selected":"") . ">" . ($display_sleep_min == 0 ? L::config_display_sleep_never : $display_sleep_min) . "</option>";
 									}
 								?>
 							</select>

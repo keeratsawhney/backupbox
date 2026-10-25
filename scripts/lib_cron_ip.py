@@ -59,27 +59,63 @@ class ip_info(object):
 		self.__IPs		= lib_network.get_IPs().split('\n')
 		self.__IPs[:]	= [element for element in self.__IPs if element]
 
-	def display_ip(self, FrameTime=None, force=False):
+	def __shown(self):
+		try:
+			with open(self.__const_DISPLAY_CONTENT_OLD_FILE,'r') as f:
+				return(f.read())
+		except:
+			return('')
 
-		if not self.__conf_DISP_IP_REPEAT and not force:
-			return()
+	def __online_message(self, OnlineStatus):
+		return(self.__lan.l('box_cronip_online') if OnlineStatus else self.__lan.l('box_cronip_offline'))
+
+	def __ready_lines(self, OnlineMessage):
+		# home screen after start: BACKUP BOX / Ready / IP / online state (marked hidden=READY)
+		return(['set:clear,hidden=READY', ':BACKUP BOX', f":{self.__lan.l('touch_idle')}"] + [f':{IP}' for IP in self.__IPs[:1]] + [f':{OnlineMessage}'])
+
+	def ready_screen(self):
+		self.get_IPs()
+		self.__display.message(self.__ready_lines(self.__online_message(self.__IPs and lib_network.get_internet_status())), logging=False)
+		return(self.__IPs[0] if self.__IPs else '')
+
+	def display_ip(self, FrameTime=None, force=False):
 
 		FrameTime	= self.__conf_DISP_FRAME_TIME_IP if FrameTime is None else FrameTime
 
 		self.get_IPs()
 
-		if self.__IPs:
+		DisplayContentOld	= self.__shown()
+
+		if 'hidden=READY' in DisplayContentOld and not force:
+			# the home screen shows the address: nothing to do while it is current
+			# (no QR every minute, which kept the display and the CPU busy)
+			OnlineStatus	= bool(self.__IPs) and lib_network.get_internet_status()
+			OnlineMessage	= self.__online_message(OnlineStatus)
+			if all(IP in DisplayContentOld for IP in self.__IPs[:1]) and OnlineMessage in DisplayContentOld:
+				return()
+
+			self.__display.message(self.__ready_lines(OnlineMessage), logging=False)
+
+			if not self.__conf_DISP_IP_REPEAT:
+				return()
+
+			# a new address: show its QR once
+			IPs					= self.__IPs[:1]
 			DisplayContentOld	= ''
-			if os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
-				with open(self.__const_DISPLAY_CONTENT_OLD_FILE,'r') as f:
-					DisplayContentOld	= f.read()
+		else:
+			if not self.__conf_DISP_IP_REPEAT and not force:
+				return()
 
-			self.__IPsFormatted	= []
+			IPs	= self.__IPs
 
-			OnlineStatus	= lib_network.get_internet_status()
-			OnlineMessage	= self.__lan.l('box_cronip_online') if OnlineStatus else self.__lan.l('box_cronip_offline')
+			if IPs:
+				OnlineStatus	= lib_network.get_internet_status()
+				OnlineMessage	= self.__online_message(OnlineStatus)
 
-			for IP in self.__IPs:
+		self.__IPsFormatted	= []
+
+		if IPs:
+			for IP in IPs:
 				IP	= IP.strip()
 
 				if IP and ((IP not in DisplayContentOld) or (OnlineMessage not in DisplayContentOld) or force):
@@ -237,9 +273,6 @@ class ip_info(object):
 	)
 
 if __name__ == "__main__":
-	# create new WIFI QR
-	lib_comitup.comitup().create_wifi_link_qr_image()
-
 	# argument based actions
 	parser = argparse.ArgumentParser(
 		description	= 'This library handles the output of the IP on the display and by email.',
@@ -265,6 +298,8 @@ if __name__ == "__main__":
 		ip	= ip_info()
 
 		if args['display']:
+			# create new WIFI QR (once a minute with --display, not with every --mail check)
+			lib_comitup.comitup().create_wifi_link_qr_image()
 			ip.display_wifi_qr()
 			ip.display_ip()
 		if args['mail']:

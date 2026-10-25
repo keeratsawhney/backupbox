@@ -286,6 +286,8 @@
       "offset_x_label": "Desplazamiento de la pantalla horizontalmente (en píxeles)",
       "offset_y_label": "Desplazamiento de la pantalla verticalmente (en píxeles)",
       "frame_time_ip_label": "Tiempo mínimo de visualización de la IP en segundos",
+      "sleep_label": "Apagar la pantalla en reposo (minutos)",
+      "sleep_never": "nunca",
       "statusbar": {
         "label": "Mostrar barra de estado"
       },

@@ -9,6 +9,7 @@
 	// the box's small screens show one page without scrolling, phones and tablets a scrolling grid
 	const PHOTOS_PER_PAGE = window.matchMedia('(min-height: 600px)').matches ? 24 : 8;
 	const STATUS_INTERVAL_MS = 2000;
+	const STATUS_IDLE_INTERVAL_MS = 5000;
 
 	const $ = (id) => document.getElementById(id);
 
@@ -440,7 +441,8 @@
 				$('state-pill').classList.add('offline');
 			}
 		}
-		statusTimer = setTimeout(pollStatus, state.failures ? Math.min(10000, STATUS_INTERVAL_MS * (state.failures + 1)) : STATUS_INTERVAL_MS);
+		// idle: every 5 s is enough (actions refresh at once), every 2 s while a backup runs
+		statusTimer = setTimeout(pollStatus, state.failures ? Math.min(10000, STATUS_INTERVAL_MS * state.failures) : (state.running ? STATUS_INTERVAL_MS : STATUS_IDLE_INTERVAL_MS));
 	}
 
 	function refreshStatusSoon() {

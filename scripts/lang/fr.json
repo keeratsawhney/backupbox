@@ -286,6 +286,8 @@
       "offset_x_label": "Décalage d'affichage horizontal (en pixels)",
       "offset_y_label": "Décalage d'affichage vertical (en pixels)",
       "frame_time_ip_label": "Temps d'affichage minimum de l'IP en secondes",
+      "sleep_label": "Éteindre l'écran au repos (minutes)",
+      "sleep_never": "jamais",
       "statusbar": {
         "label": "Afficher la barre d'état"
       },

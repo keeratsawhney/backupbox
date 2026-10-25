@@ -105,6 +105,9 @@ function startIframeRefresh(iframeId, src, intervalMs) {
 	});
 
 	function refresh() {
+		// background tab: no reloads
+		if (document.hidden && iframe.src) return;
+
 		saveScroll();
 
 		iframe.style.opacity = "0";

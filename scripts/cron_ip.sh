@@ -22,6 +22,9 @@ WORKING_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # run directly
 python3 ${WORKING_DIR}/lib_cron_ip.py --display --mail
 
+# mail checks only when IP mails are configured (each check starts python)
+grep -qi "^conf_MAIL_IP=['\"]\?\(true\|1\)\b" "${WORKING_DIR}/config.cfg" 2>/dev/null || exit 0
+
 # run in seconds 15, 30 and 45
 for n in {1..3}; do
 	sleep 15

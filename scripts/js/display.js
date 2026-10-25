@@ -15,11 +15,14 @@ function refreshDisplay() {
 		return;
 	}
 
-	// Get the original src without query parameters
-	let originalSrc = display.src.split('?')[0];
+	// background tab: no reloads (saves the box's CPU and the phone's battery)
+	if (!document.hidden) {
+		// Get the original src without query parameters
+		let originalSrc = display.src.split('?')[0];
 
-	// Append a timestamp to bust the cache
-	display.src = originalSrc + '?t=' + new Date().getTime();
+		// Append a timestamp to bust the cache
+		display.src = originalSrc + '?t=' + new Date().getTime();
+	}
 
 	if (DisplayInterval === 'undefined') {
 		// Schedule next refresh

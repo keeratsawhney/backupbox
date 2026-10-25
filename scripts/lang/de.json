@@ -286,6 +286,8 @@
       "offset_x_label": "Display-Verschiebung horizontal (in Pixeln)",
       "offset_y_label": "Display-Verschiebung vertikal (in Pixeln)",
       "frame_time_ip_label": "Minimale Anzeigedauer der IP in Sekunden",
+      "sleep_label": "Display bei Leerlauf ausschalten (Minuten)",
+      "sleep_never": "nie",
       "statusbar": {
         "label": "Statusleiste einblenden"
       },

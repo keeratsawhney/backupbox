@@ -15,7 +15,9 @@ function refreshLogMonitor() {
 		return;
 	}
 
-	if (!(logmonitor === document.activeElement)) {
+	if (document.hidden) {
+		// background tab: no reloads
+	} else if (!(logmonitor === document.activeElement)) {
 
 		logmonitor.contentWindow.location.reload();
 
