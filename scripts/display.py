@@ -488,6 +488,13 @@ class DISPLAY(object):
 		Candidates.sort(key=lambda Candidate: (Candidate[0], Candidate[1]))
 		return(Candidates[0][2] if Candidates else None)
 
+	def __sbin(self, Program):
+		# display.py starts at boot with a short PATH (no /usr/sbin): tune2fs and dump.exfat live there
+		for Folder in ['/usr/sbin', '/sbin', '/usr/bin', '/bin']:
+			if os.path.isfile(os.path.join(Folder, Program)):
+				return(os.path.join(Folder, Program))
+		return(Program)
+
 	def __drive_usage_file(self):
 		return(os.path.join(os.path.dirname(self.__const_DISPLAY_CONTENT_OLD_FILE), 'drive-usage.json'))
 
@@ -527,12 +534,12 @@ class DISPLAY(object):
 		Used, Total	= None, None
 		try:
 			if Drive['fstype'] in ['ext2', 'ext3', 'ext4']:
-				Output	= subprocess.check_output(['tune2fs', '-l', Drive['path']], stderr=subprocess.DEVNULL, timeout=10).decode()
+				Output	= subprocess.check_output([self.__sbin('tune2fs'), '-l', Drive['path']], stderr=subprocess.DEVNULL, timeout=10).decode()
 				Values	= {Key_.strip(): Value.strip() for Key_, Value in (Line.split(':', 1) for Line in Output.splitlines() if ':' in Line)}
 				Blocks, FreeBlocks, BlockSize	= int(Values['Block count']), int(Values['Free blocks']), int(Values['Block size'])
 				Used, Total	= 1 - FreeBlocks / Blocks, Blocks * BlockSize
 			elif Drive['fstype'] == 'exfat':
-				Output	= subprocess.check_output(['dump.exfat', Drive['path']], stderr=subprocess.DEVNULL, timeout=10).decode()
+				Output	= subprocess.check_output([self.__sbin('dump.exfat'), Drive['path']], stderr=subprocess.DEVNULL, timeout=10).decode()
 				Count	= re.search(r'Cluster Count:\s*(\d+)', Output)
 				Free	= re.search(r'Free Clusters?:\s*(\d+)', Output)
 				if Count and Free and int(Count.group(1)) > 0:

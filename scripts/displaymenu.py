@@ -413,7 +413,12 @@ class menu(object):
 			rows.append({'icon': 'drive', 'label': Name, 'value': f"{100 * (1 - free / total):.0f}% · {self.human(total)}", 'bar': 1 - free / total})
 
 		if not drives:
-			rows.append({'icon': 'drive', 'label': self.t('box_menu_no_drive'), 'value': ''})
+			# not mounted: the drive the display found (fill read without mounting or remembered)
+			Drive	= getattr(self.screen, 'drive_info', None) if self.screen is not None else None
+			if Drive and getattr(self.screen, 'drive_cache', None):
+				rows.append({'icon': 'drive', 'label': Drive['name'], 'value': f"{100 * Drive['used']:.0f}% · {Drive['size']}" if Drive.get('used') is not None else Drive['size'], 'bar': Drive.get('used')})
+			else:
+				rows.append({'icon': 'drive', 'label': self.t('box_menu_no_drive'), 'value': ''})
 
 		IPs	= [IP for IP in lib_network.get_IPs().split('\n') if IP and ':' not in IP]
 		rows.append({'icon': 'ip', 'label': 'IP', 'value': IPs[0] if IPs else '–'})
