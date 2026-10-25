@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the box is on the local network: its search uses plain http (port 8080); the app itself uses https,
+     where the box's own certificate is trusted on first use and pinned (BoxTrust) -->
+<network-security-config>
+	<base-config cleartextTrafficPermitted="true">
+		<trust-anchors>
+			<certificates src="system" />
+		</trust-anchors>
+	</base-config>
+</network-security-config>
