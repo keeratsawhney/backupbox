@@ -6,6 +6,12 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#30](https://github.com/keeratsawhney/backupbox/pull/30) Backups report done right after copying; thumbnails and database in the background**
+  - `background.py` makes the thumbnails and the database entries at low priority. The list of files to do is kept on the drive, so a power off only interrupts it.
+  - The app's top bar shows a *Previews 312/2418* pill while it works.
+  - Not used when the box powers off after the backup, a cloud backup follows, or EXIF updates are on: then everything runs before "done", as before.
+  - Thumbnails in their own module (`lib_thumbnails.py`): JPEGs decoded at about 1/4 size (about 2× faster), turned while scaling.
+  - Fix: converted HEIC images were not queued for thumbnails (wrong list name).
 - **[#29](https://github.com/keeratsawhney/backupbox/pull/29) Fan at full speed from 60 °C** (Raspberry Pi 5 Active Cooler; the default reaches full speed at 75 °C): `install-fan.sh`, run by the installer and the update.
 - **[#28](https://github.com/keeratsawhney/backupbox/pull/28) App finds the box on a home Wi-Fi during backups, faster thumbnails**
   - The app's box search uses a quick check that the box answers at once, also while a backup keeps it busy (the full status took too long, so the box was not found).

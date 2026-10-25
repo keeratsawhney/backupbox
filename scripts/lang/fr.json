@@ -1079,6 +1079,8 @@
     "files_count": "fichiers",
     "run": "Lancer",
     "power_short": "Tension faible",
+    "background_short": "Aperçus",
+    "background_note": "Création des aperçus et de la base de photos en arrière-plan. La sauvegarde est terminée, la carte peut être retirée. Si la box est éteinte maintenant, le reste suivra avec la prochaine sauvegarde.",
     "drives": "Disques",
     "drive_actions": "Disque",
     "task_busy": "Une autre tâche disque est encore en cours.",

@@ -1079,6 +1079,8 @@
     "files_count": "Dateien",
     "run": "Ausführen",
     "power_short": "Unterspannung",
+    "background_short": "Vorschauen",
+    "background_note": "Vorschauen und Fotodatenbank werden im Hintergrund erstellt. Die Sicherung ist fertig, die Karte kann entfernt werden. Wird die Box jetzt ausgeschaltet, folgt der Rest mit der nächsten Sicherung.",
     "drives": "Laufwerke",
     "drive_actions": "Laufwerk",
     "task_busy": "Eine andere Laufwerksaufgabe läuft noch.",

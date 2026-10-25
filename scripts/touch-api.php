@@ -237,6 +237,22 @@
 		return(array('undervoltage' => (bool)($flags & 0x1), 'undervoltage_since_boot' => (bool)($flags & 0x10000)));
 	}
 
+	function touch_background($constants) {
+		# thumbnails and database made after a backup (background.py): files done of all, or null
+		$done	= 0;
+		$total	= 0;
+		foreach (glob($constants['const_WEB_ROOT_LBB'] . '/tmp/background/*.json') ?: array() as $file) {
+			$data	= @json_decode((string)@file_get_contents($file), true);
+			# a job ended by a power off leaves its file behind
+			if (!is_array($data) or !isset($data['pid']) or !file_exists('/proc/' . (int)$data['pid'])) {
+				continue;
+			}
+			$done	+= (int)$data['done'];
+			$total	+= (int)$data['total'];
+		}
+		return($total > 0 ? array('done' => $done, 'total' => $total) : null);
+	}
+
 	function touch_copying($constants) {
 		# names of the files being copied (written by lib_backup.progressmonitor while copying)
 		$file	= $constants['const_WEB_ROOT_LBB'] . '/tmp/backup-files.json';
@@ -879,6 +895,7 @@
 				'storages'	=> $storages,
 				'flow'		=> touch_flow($config, $constants, $storages, $running),
 				'power'		=> touch_power($constants),
+				'background'	=> touch_background($constants),
 				'copying'	=> $running ? touch_copying($constants) : null,
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),

@@ -1079,6 +1079,8 @@
     "files_count": "archivos",
     "run": "Ejecutar",
     "power_short": "Tensión baja",
+    "background_short": "Vistas previas",
+    "background_note": "Creando vistas previas y la base de datos de fotos en segundo plano. La copia ha terminado y la tarjeta se puede retirar. Si la caja se apaga ahora, el resto se hará con la próxima copia.",
     "drives": "Unidades",
     "drive_actions": "Unidad",
     "task_busy": "Otra tarea de unidad sigue en curso.",

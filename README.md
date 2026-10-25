@@ -60,7 +60,13 @@ EXIF, thumbnails) is still at the heart of the box. This repository adds:
   - lighter background jobs;
   - a display that sleeps;
   - under-voltage shown at once.
-- **Faster previews:** thumbnails from the camera's embedded previews, several at a time; videos get a frame.
+- **Backups finish sooner:** the box reports done as soon as the files are copied (and checked).
+  - Thumbnails and the photo database follow in the background, shown as a *Previews* pill in the app's top bar.
+  - Remove the card at once. If you switch the box off before the previews are done, the next backup to that drive finishes them.
+- **Faster previews:**
+  - thumbnails from the camera's embedded previews, several at a time;
+  - JPEGs decoded at a reduced size;
+  - videos get their first frame.
 
 ## Original vs now
 
