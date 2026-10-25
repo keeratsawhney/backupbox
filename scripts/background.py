@@ -71,8 +71,11 @@ def queue_remove(MountPoint, Done):
 		pass
 
 def start(MountPoint):
-	# detached: keeps running when backup.py ends
-	subprocess.Popen(['/usr/bin/python3', os.path.abspath(__file__), MountPoint], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+	# detached: keeps running when backup.py ends; its errors in tmp/background/errors.log
+	LogDir	= os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', 'background')
+	os.makedirs(LogDir, exist_ok=True)
+	with open(os.path.join(LogDir, 'errors.log'), 'a') as Log:
+		subprocess.Popen(['/usr/bin/python3', os.path.abspath(__file__), MountPoint], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=Log, start_new_session=True, close_fds=True)
 
 def backup_running():
 	return(subprocess.run(['pgrep', '-f', f'{os.path.dirname(os.path.abspath(__file__))}/backup.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
@@ -133,6 +136,7 @@ def run(MountPoint):
 				for Index in range(0, len(Files), CHUNK):
 					if not os.path.ismount(MountPoint):
 						# drive removed: the list stays on the drive for the next backup
+						print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {MountPoint} not mounted any more, {len(Files) - Index} files left for the next backup", file=sys.stderr)
 						return()
 
 					Chunk	= Files[Index:Index + CHUNK]
