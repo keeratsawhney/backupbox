@@ -82,7 +82,12 @@
 		$slideshow_publish,
 		$slideshow_timer
 	) {
+		ob_start();
+
 		if ($view_mode == "grid") {
+			// orientation
+			$page	= (int)ceil(($select_offset + 2) / $filter_images_per_page);
+			$pages	= (int)ceil($imagecount / $filter_images_per_page);
 			?>
 <!-- 			outer navigation pannel -->
 			<div class="card" style="margin-top: 2em; display: inline-block; width: 100%">
@@ -92,23 +97,27 @@
 					<div style="float:left; padding: 5px;">
 						<?php
 						// navigation left
-							echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_FIRST}'><svg width='24' height='24'><use href='#icon-move-first' /></a>";
-							echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_PRE}' style='margin-left: 3ch;'><svg width='24' height='24'><use href='#icon-move-left' /></a>";
-							// save
-							echo "<br />";
-							echo "<button type='submit' name='ID' value='${IMAGE_ID_PRE}' title='" . L::view_ratings_save_button . "'><svg width='24' height='24'><use href='#icon-move-left' /></svg></button>";
+							if ($page > 1) {
+								echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_FIRST}'><svg width='24' height='24'><use href='#icon-move-first' /></a>";
+								echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_PRE}' style='margin-left: 3ch;'><svg width='24' height='24'><use href='#icon-move-left' /></a>";
+								// save
+								echo "<br />";
+								echo "<button type='submit' name='ID' value='${IMAGE_ID_PRE}' title='" . L::view_ratings_save_button . "'><svg width='24' height='24'><use href='#icon-move-left' /></svg></button>";
+							}
 						?>
 					</div>
 
 <!-- 				right pannel -->
 					<div style="float:right; padding: 5px; text-align: right;">
 						<?php
-							// navigation right
-							echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_POST}'><svg width='24' height='24'><use href='#icon-move-right' /></a>";
-							echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_LAST}' style='margin-left: 3ch;'><svg width='24' height='24'><use href='#icon-move-last' /></a>";
-							// save
-							echo "<br />";
-							echo "<button type='submit' name='ID' value='${IMAGE_ID_POST}' title='" . L::view_ratings_save_button . "'><svg width='24' height='24'><use href='#icon-move-right' /></button>";
+							if ($page < $pages) {
+								// navigation right
+								echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_POST}'><svg width='24' height='24'><use href='#icon-move-right' /></a>";
+								echo "<a href='${GET_PARAMETER}&ID=${IMAGE_ID_LAST}' style='margin-left: 3ch;'><svg width='24' height='24'><use href='#icon-move-last' /></a>";
+								// save
+								echo "<br />";
+								echo "<button type='submit' name='ID' value='${IMAGE_ID_POST}' title='" . L::view_ratings_save_button . "'><svg width='24' height='24'><use href='#icon-move-right' /></button>";
+							}
 						?>
 					</div>
 
@@ -155,8 +164,6 @@
 							echo "<a href='${link_order}' style='margin-left: 3ch; margin-right: 3ch;'>${link_order_text}</a>";
 
 							// pages
-							$page	= intval(($select_offset + 2) / $filter_images_per_page) + 1;
-							$pages	= intval($imagecount / $filter_images_per_page) + 1;
 							echo L::view_images_page . '&nbsp;' . $page . '/' . $pages;
 						?>
 					</div>
@@ -253,6 +260,8 @@
 			</div>
 			<?php
 		}
+
+		return ob_get_clean();
 	}
 
 	function rating_radio($IMAGE_ID, $IMAGE_RATING) {
@@ -559,17 +568,20 @@
 		}
 	}
 
-	#auto-set filter_medium
-	if ($filter_medium == "-") {
-		$mounted_devices_array	= array();
-		exec("df -h", $mounted_devices_array);
+	function lbb_view_preview_fallback($medium, $IMAGE) {
+		# missing thumbnail: try a preview made on demand (touch-api.php), only then the placeholder picture
+		$preview	= '/touch-api.php?action=thumb&medium=' . rawurlencode($medium) . '&path=' . rawurlencode(ltrim($IMAGE['Directory'] . '/' . $IMAGE['File_Name'], '/'));
+		return htmlspecialchars("if (!this.dataset.preview) {this.dataset.preview = 1; this.src = '$preview';} else {this.onerror = null; this.src = '/img/unknown.JPG';}", ENT_QUOTES);
+	}
 
-		$mounted_devices	= implode("|",$mounted_devices_array);
-		if (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_USB_TARGET'])) {$filter_medium="target_usb";}
-		elseif (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_USB_SOURCE'])) {$filter_medium="source_usb";}
-		elseif (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_NVME_TARGET'])) {$filter_medium="target_nvme";}
-		elseif (strpos($mounted_devices,$constants['const_MEDIA_DIR'] . '/' . $constants['const_MOUNTPOINT_NVME_SOURCE'])) {$filter_medium="source_nvme";}
-		else {$filter_medium="internal";}
+	#auto-set filter_medium: mount an attached NVMe/USB drive (backups unmount it) and prefer media with files
+	if ($filter_medium == "-") {
+		include_once("sub-dashboard.php");
+		$media	= lbb_dashboard_media($constants);
+		if (lbb_dashboard_automount($constants, $media)) {
+			$media	= lbb_dashboard_media($constants);
+		}
+		list($filter_medium, $medium_path)	= lbb_dashboard_detect_medium($constants, $media);
 	}
 
 	#generate WHEREs for filter options
@@ -931,7 +943,7 @@
 	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
 	<?php
 		include "${WORKING_DIR}/sub-display.php";
-		display();
+		display(true, L::mainmenue_view);
 		if (isset($saved_message)) {print ($saved_message);}
 
 	include("${WORKING_DIR}/sub-view-icons.php")
@@ -950,7 +962,7 @@
 					<div style="float:left;padding: 5px;">
 						<label for="filter_medium"><?php echo L::view_filter_medium; ?></label><br>
 
-							<select name="filter_medium" id="filter_medium" onchange="this.form.submit()">
+							<select name="filter_medium" id="filter_medium">
 								<option value="target_usb" <?php echo ($filter_medium == "target_usb"?" selected":""); ?>><?php echo L::view_filter_medium_target_usb; ?></option>
 								<option value="source_usb" <?php echo ($filter_medium == "source_usb"?" selected":""); ?>><?php echo L::view_filter_medium_source_usb; ?></option>
 								<?php
@@ -967,7 +979,7 @@
 
 					<div style="float:right;padding: 5px;">
 						<label for="filter_images_per_page"><?php echo L::view_filter_images_per_page; ?></label><br>
-							<select name="filter_images_per_page" id="filter_images_per_page" onchange="this.form.submit()">
+							<select name="filter_images_per_page" id="filter_images_per_page">
 							<?php
 								foreach ($IMAGES_PER_PAGE_OPTIONS as $IMAGES_PER_PAGE_OPTION) {
 									echo "<option value=\"$IMAGES_PER_PAGE_OPTION\" " . ($filter_images_per_page == $IMAGES_PER_PAGE_OPTION?" selected":"") . ">$IMAGES_PER_PAGE_OPTION</option>";
@@ -982,7 +994,7 @@
 
 						<div style="float:left;padding: 5px;">
 							<label for="filter_date"><?php echo L::view_filter_date; ?></label><br>
-								<select name="filter_date" id="filter_date" onchange="this.form.submit()">
+								<select name="filter_date" id="filter_date">
 									<option value="all" <?php echo ($filter_date == "all"?" selected":""); ?>>-</option>
 									<?php
 										while ($DATE = $DATES->fetchArray(SQLITE3_ASSOC)) {
@@ -994,7 +1006,7 @@
 
 						<div style="float:right;padding: 5px;">
 							<label for="filter_rating"><?php echo L::view_filter_rating; ?></label><br>
-								<select name="filter_rating" id="filter_rating" onchange="this.form.submit()">
+								<select name="filter_rating" id="filter_rating">
 									<option value="all" <?php echo ($filter_rating == "all"?" selected":""); ?>><?php echo L::view_filter_rating_all; ?></option>
 									<?php
 										while ($RATING = $RATINGS->fetchArray(SQLITE3_ASSOC)) {
@@ -1008,7 +1020,7 @@
 					<div style="display: flow-root">
 							<div style="float:left;padding: 5px;">
 								<label for="filter_file_type"><?php echo L::view_filter_file_type; ?></label><br>
-									<select name="filter_file_type" id="filter_file_type" onchange="this.form.submit()">
+									<select name="filter_file_type" id="filter_file_type">
 										<option value="all" <?php echo ($filter_file_type == "all"?" selected":""); ?>>-</option>
 										<?php
 											while ($FILE_TYPE = $FILE_TYPES->fetchArray(SQLITE3_ASSOC)) {
@@ -1020,7 +1032,7 @@
 
 							<div style="float:left;padding: 5px;">
 								<label for="filter_file_type_extension"><?php echo L::view_filter_file_type_extension; ?></label><br>
-									<select name="filter_file_type_extension" id="filter_file_type_extension" onchange="this.form.submit()">
+									<select name="filter_file_type_extension" id="filter_file_type_extension">
 										<option value="all" <?php echo ($filter_file_type_extension == "all"?" selected":""); ?>>-</option>
 										<?php
 											while ($FILE_TYPE_EXTENSION = $FILE_TYPE_EXTENSIONS->fetchArray(SQLITE3_ASSOC)) {
@@ -1032,7 +1044,7 @@
 
 							<div style="float:right;padding: 5px;">
 								<label for="filter_camera_model_name"><?php echo L::view_filter_camera_model_name; ?></label><br>
-									<select name="filter_camera_model_name" id="filter_camera_model_name" onchange="this.form.submit()">
+									<select name="filter_camera_model_name" id="filter_camera_model_name">
 										<option value="all" <?php echo ($filter_camera_model_name == "all"?" selected":""); ?>>-</option>
 										<?php
 											while ($CAMERA_MODEL_NAME = $CAMERA_MODEL_NAMES->fetchArray(SQLITE3_ASSOC)) {
@@ -1048,7 +1060,7 @@
 					<div style="display: flow-root">
 							<div style="float:left;padding: 5px;">
 								<label for="filter_directory"><?php echo L::view_filter_directory; ?></label><br>
-									<select name="filter_directory" id="filter_directory" onchange="this.form.submit()">
+									<select name="filter_directory" id="filter_directory">
 										<option value="<?php echo str_replace("=","+",base64_encode('all')); ?>" <?php echo ($filter_directory == "all"?" selected":""); ?>>/</option>
 										<?php
 											while ($DIRECTORY = $DIRECTORIES->fetchArray(SQLITE3_ASSOC)) {
@@ -1062,7 +1074,7 @@
 					<div style="display: flow-root">
 							<div style="float:left;padding: 5px;">
 								<label for="filter_social_publish"><?php echo L::view_filter_social_publish; ?></label><br>
-									<select name="filter_social_publish" id="filter_social_publish" onchange="this.form.submit()">
+									<select name="filter_social_publish" id="filter_social_publish">
 										<option value="all" <?php echo ($filter_social_publish == "all"?" selected":""); ?>>-</option>
 										<?php
 											while ($SOCIAL_PUBLISH = $SOCIAL_PUBLISHS->fetchArray(SQLITE3_ASSOC)) {
@@ -1075,7 +1087,7 @@
 
 							<div style="float:right;padding: 5px;">
 								<label for="filter_social_published"><?php echo L::view_filter_social_published; ?></label><br>
-									<select name="filter_social_published" id="filter_social_published" onchange="this.form.submit()">
+									<select name="filter_social_published" id="filter_social_published">
 										<option value="all" <?php echo ($filter_social_published == "all"?" selected":""); ?>>-</option>
 										<?php
 											while ($SOCIAL_PUBLISHED = $SOCIAL_PUBLISHEDS->fetchArray(SQLITE3_ASSOC)) {
@@ -1090,7 +1102,7 @@
 					<div style="display: flow-root">
 						<div style="float:left;padding: 5px;">
 							<label for="filter_variable_field"><?php echo L::view_filter_variable; ?></label><br>
-								<select name="filter_variable_field" id="filter_variable_field" onchange="this.form.submit()">
+								<select name="filter_variable_field" id="filter_variable_field">
 									<option value="" <?php echo ($filter_variable_field == ""?" selected":""); ?>>-</option>
 									<?php
 										$FIELDS_ARRAY=array();
@@ -1106,7 +1118,7 @@
 								<?php
 									if (isset($VAR_VALUES)) {
 										?>
-										<select name="filter_variable_value" id="filter_variable_value" onchange="this.form.submit()">
+										<select name="filter_variable_value" id="filter_variable_value">
 											<option value="">-</option>
 											<?php
 												while ($VALUE = $VAR_VALUES->fetchArray(SQLITE3_ASSOC)) {
@@ -1117,6 +1129,12 @@
 										<?php
 									}
 								?>
+						</div>
+					</div>
+
+					<div style="display: flow-root">
+						<div style="float:right;padding: 5px;">
+							<button type='submit' name='filter'><?php echo(L::view_filter_apply); ?></button>
 						</div>
 					</div>
 
@@ -1132,7 +1150,7 @@
 
 		<?php
 			echo $HIDDEN_INPUTS;
-			navigator(
+			$navigator_panel	= navigator(
 				$view_mode,
 				$imagecount,
 				$gridcolumns,
@@ -1153,6 +1171,7 @@
 				true,
 				$slideshow_timer
 			);
+			echo ($navigator_panel);
 		?>
 
 		<div class="card" style="margin-top: 2em;display: inline-block">
@@ -1205,7 +1224,7 @@
 											}
 										?>
 										<a href="<?php echo $GET_PARAMETER . '&view_mode=single&ID=' . ($IMAGE['ID']); ?>">
-											<img style="max-width: 100%; border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" <?php echo empty($IMAGE['Comment'])?"title='" . $IMAGE['File_Name'] . "'":"title='" . $IMAGE['File_Name'] . PHP_EOL . $IMAGE['Comment'] . "'"; ?> src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="this.src='/img/unknown.JPG';">
+											<img style="max-width: 100%; border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" <?php echo empty($IMAGE['Comment'])?"title='" . $IMAGE['File_Name'] . "'":"title='" . $IMAGE['File_Name'] . PHP_EOL . $IMAGE['Comment'] . "'"; ?> src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="<?php echo lbb_view_preview_fallback($filter_medium, $IMAGE); ?>">
 										</a>
 									</div>
 
@@ -1344,7 +1363,7 @@
 												</audio>
 											</div>
 
-											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>">
+											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="<?php echo lbb_view_preview_fallback($filter_medium, $IMAGE); ?>">
 
 											<audio width="100%" class="rating<?php echo $IMAGE['LbbRating']; ?>" controls <?php if ($slideshow_timer == '-') {echo "autoplay";}?>>
 												<source src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME); ?>" type="audio/<?php echo $IMAGE_FILENAME_PARTS['extension']; ?>">">
@@ -1363,7 +1382,7 @@
 												<img class="slideshow-content" src="<?php echo urlencode_keep_slashes($FILENAME_DISPLAY); ?>">
 											</div>
 
-											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>">
+											<img style="max-width: 100%;border-radius: 5px;" class="rating<?php echo $IMAGE['LbbRating']; ?>" src="<?php echo urlencode_keep_slashes($IMAGE_FILENAME_TIMS); ?>" onerror="<?php echo lbb_view_preview_fallback($filter_medium, $IMAGE); ?>">
 
 										</div>
 
@@ -1402,27 +1421,9 @@
 
 		</div>
 
-		<?php navigator(
-			$view_mode,
-			$imagecount,
-			$gridcolumns,
-			$filter_images_per_page,
-			$select_offset,
-			$filter_rating,
-			$IMAGE_ID_PRE,
-			$IMAGE_ID,
-			$IMAGE_ID_POST,
-			$IMAGE_ID_FIRST,
-			$IMAGE_ID_LAST,
-			$GET_PARAMETER,
-			$order_by,
-			$order_dir,
-			L::view_filter_order_by_filename,
-			L::view_filter_order_by_creationdate,
-			L::view_filter_order_by_id,
-			false,
-			$slideshow_timer
-		); ?>
+		<?php
+			echo ($navigator_panel);
+		?>
 
 	</form>
 

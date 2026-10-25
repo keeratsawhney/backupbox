@@ -10,7 +10,14 @@ let LogMonitorInterval = 'undefined';
 function refreshLogMonitor() {
 	var logmonitor = document.getElementById("logmonitor");
 
-	if (!(logmonitor === document.activeElement)) {
+	// page without log monitor (e.g. cmd.php before a command runs)
+	if (!logmonitor) {
+		return;
+	}
+
+	if (document.hidden) {
+		// background tab: no reloads
+	} else if (!(logmonitor === document.activeElement)) {
 
 		logmonitor.contentWindow.location.reload();
 

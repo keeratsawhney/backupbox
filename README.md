@@ -1,226 +1,241 @@
-<h1 style="display: inline-block;"><img src="https://github.com/outdoorbits/little-backup-box/raw/main/scripts/img/icons/favicon-180.png" alt="favicon" style="height: 1em; vertical-align: middle;"> Little Backup Box</h1>
-<img src="https://github.com/outdoorbits/little-backup-box/raw/main/scripts/img/little-backup-box-color.png" alt="Little Backup Box" style="height: 4em;">
+<p align="center">
+  <img src="scripts/img/brand/logo-sage.png" alt="Backup Box" height="110">
+</p>
 
-<a href="#installation"><b>Jump to installation instructions</b></a>
-<h2>About</h2>
-Little Backup Box turns a Raspberry Pi into a powerful, mobile backup and media management hub - ideal for photographers, travelers, and professionals working on the go.
+<h1 align="center">Backup Box</h1>
 
-It can automatically back up files from cameras, smartphones, and storage devices to local drives, or a wide range of cloud services - including Google Drive, Dropbox, OneDrive, Nextcloud, WebDAV, and many others. Acting as a central hub, Little Backup Box aggregates media from multiple sources and can automatically forward them for further processing, archiving, or publishing.
+<p align="center">
+  <b>A pocket backup station for photographers.</b><br>
+  Copy memory cards to an SSD on location, without a computer.<br>
+  Control it from the box's display, any browser, or the Android app.
+</p>
 
-For remote and secure workflows, Little Backup Box supports VPN integration, allowing cloud synchronization and management through encrypted connections - ideal when operating over public or mobile networks.
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#original-vs-now">Original vs now</a> ·
+  <a href="#the-app-view-touch-ui">App view</a> ·
+  <a href="#oled-display-and-joystick">OLED</a> ·
+  <a href="#android-app">Android app</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-Through its responsive web interface, users can view, rate, and filter backed-up photos and videos directly on the device. Selected media can then be automatically uploaded to the cloud or shared on social networks, enabling efficient and flexible media handling anywhere.
+---
 
-Little Backup Box is designed to operate autonomously and efficiently - no external computer required - making it a versatile solution for travel, field work, and event photography workflows.
+Backup Box runs on a Raspberry Pi. You plug in a camera card and an SSD, and the box copies the photos and
+videos, checks them, makes previews, and shows you what it has. It runs on its own in the field: it has its own
+Wi-Fi hotspot, Bluetooth for the phone, a small OLED display with a joystick, and it never needs internet.
 
-Depending on your needs and options, little-backup-box can be operated in a simple housing, with a display (possibly with buttons for the display menu) or even with a touchscreen. <br />
-Thanks to the web interface, functionality is fully guaranteed in any case.<br /><br />
-<img src="https://raw.githubusercontent.com/outdoorbits/media/main/little-backup-box/lbb-orange.jpg"  align="left" title="Little Backup Box in its 3D printed case"><BR CLEAR="all">
-Little Backup Box in its <a href="https://github.com/outdoorbits/case-for-little-backup-box">3D printed case</a><br /><br />
-<a href="https://youtu.be/qAEebY8UlRc">
-<img src="https://raw.githubusercontent.com/outdoorbits/media/main/little-backup-box/youtube-lbb-desktop-variant.png"  align="left" title="Little Backup Box in a touchscreen housing"><BR CLEAR="all">
-Little Backup Box in a touchscreen housing - watch Dave's video on YouTube</a><br /><br />
-<a href="https://github.com/outdoorbits/case-for-little-backup-box/tree/main/Raspberry_Pi_zero_2W">
-<img src="https://raw.githubusercontent.com/outdoorbits/case-for-little-backup-box/main/Raspberry_Pi_zero_2W/Tiny_case/images/lbb_tiny_icon.jpg"  align="left" title="Housing for Raspberry Pi zero 2W"><BR CLEAR="all">
-Little Backup Box in a tiny protected housing for Raspberry Pi zero 2W</a><br /><br />
-<a href="https://github.com/outdoorbits/case-for-little-backup-box/tree/main/Raspberry_Pi_5_SSD">
-<img src="https://raw.githubusercontent.com/outdoorbits/case-for-little-backup-box/main/Raspberry_Pi_5_SSD/images/little_backup_box_raspberry_finished.jpg"  align="left" title="Housing for Raspberry Pi 5, SSD included"><BR CLEAR="all">
-Little Backup Box with integrated SSD and improved power supply.</a><br /><br />
+This project builds on **[Little Backup Box](https://github.com/outdoorbits/little-backup-box)** by Stefan Saam
+(outdoorbits). Its proven backup engine (rsync, cameras over gPhoto2, cloud targets with rclone, databases,
+EXIF, thumbnails) is still at the heart of the box. This repository adds:
+- a new interface on every screen, from the 1.3" OLED to phones and desktops;
+- an Android app with Bluetooth;
+- copy-only safety;
+- power saving;
+- many fixes found on a Raspberry Pi 5.
 
-<table>
-	<tr>
-		<td>
-			<img src="https://raw.githubusercontent.com/outdoorbits/media/main/little-backup-box/flag_us.png" width="50px" align="center">
-		</td>
-		<td>
-			<img src="https://raw.githubusercontent.com/outdoorbits/media/main/little-backup-box/flag_france.png" width="50px" align="center">
-		</td>
-		<td>
-			<img src="https://raw.githubusercontent.com/outdoorbits/media/main/little-backup-box/flag_spain.png" width="50px" align="center">
-		</td>
-		<td>
-			<img src="https://raw.githubusercontent.com/outdoorbits/media/main/little-backup-box/flag_germany.png" width="50px" align="center">
-		</td>
-	</tr>
-</table>
-These languages are already available. Do you want to maintain or create a translation?<br /><br />
-<br />
-<a href="changelog.md">Changelog</a><br />
-<a href="gallery.md">Have a look at the gallery</a><br />
-<a href="resources.md">Web resources</a><br /><br />
-<h2>Features</h2>
-Some of the features of the box and the web user interface are
-<ul>
-	<li>
-		<b>automate backup from</b>
-		<ul>
-			<li>usb storage</li>
-			<li>camera</li>
-			<li>internal storage</li>
-			<li>NVMe SSD storage</li>
-			<li>cloud storage</li>
-		</ul>
-		<b>to</b>
-		<ul>
-			<li>usb storage</li>
-			<li>internal storage</li>
-			<li>NVMe SSD storage</li>
-			<li>rsync server</li>
-			<li>cloud storage</li>
-			<li>
-				<b>social media:</b>
-				<ul>
-					<li>Mastodon</li>
-					<li>Bluesky</li>
-					<li>Telegram</li>
-					<li>Matrix</li>
-				</ul>
-			</li>
-		</ul>
-	</li>
-	<li>
-		<b>Tools for memory management</b>
-		<ul>
-			<li>manual mount local and cloud storages</li>
-			<li>check disk integrity</li>
-			<li>format disks</li>
-			<li>check USB device for authenticity</li>
-		</ul>
-	</li>
-	<li><b>Email information about the backup success</b></li>
-	<li><b>Preview and rate images</b></li>
-	<li><b>Manage files by file manager</b></li>
-	<li><b>Convenient configuration via web interface</b></li>
-</ul>
-It's your swiss army knife for reliably performing, checking and managing backups on the go.
+## Highlights
 
-<h2>Development status</h2>
-Little Backup Box has reached a largely stable and functional stage.
-While new features are still being added from time to time - which may initially require some fine-tuning - the established core functions are now highly reliable.
+- **App view (touch UI):** one interface for the box's touchscreen, phones and tablets.
+  - Start a backup in two taps.
+  - See the latest photos and browse every drive.
+  - Manage drives: check, repair, format, thumbnails, database, EXIF.
+  - Wi-Fi settings and a sage theme.
+- **Full web interface:** the original pages, redesigned and tidy at every width. The gallery works like the app's.
+- **OLED display with joystick:**
+  - a home screen with the backup drive's fill level;
+  - a graphic menu (start, choose source and target, status, network, power);
+  - backup progress with a real progress bar;
+  - it sleeps when idle.
+- **Android app:**
+  - finds the box nearby over Bluetooth and pairs it like headphones;
+  - shows its state and starts or stops a backup;
+  - opens the touch UI over Wi-Fi, joining the box's hotspot by itself;
+  - downloads photos into the phone's gallery.
+- **Copy only from the box's buttons and the app:** a button press never deletes anything on the card.
+- **Field-ready networking:**
+  - the box's hotspot works without forced sign-in pages;
+  - the box's address opens the app if it is installed.
+- **Power and heat:**
+  - lighter background jobs;
+  - a display that sleeps;
+  - under-voltage shown at once.
+- **Faster previews:** thumbnails from the camera's embedded previews, several at a time; videos get a frame.
 
-Nevertheless, thorough testing after installation is still recommended, especially on new hardware configurations.
-Please continue to report any issues, translation errors, or suggestions for improvement - but also share your positive experiences, ideally including details of your setup.
+## Original vs now
 
-Regular updates are strongly recommended to benefit from ongoing refinements and fixes.
+**Start page in a browser**
 
-<h2>Please mind the wiki!</h2>
-As there is no manual available anymore, the github-wiki should replace it one day: <a href="https://github.com/outdoorbits/little-backup-box/wiki">https://github.com/outdoorbits/little-backup-box/wiki</a>. It's not particularly detailed yet, but it can certainly help with the most common questions.
+![Original and new start page on a desktop](docs/screenshots/compare-web-desktop.png)
 
-<h2 id="installation">Installation</h2>
-<ol>
-	<li>
-		Create a bootable SD card with <b>Raspberry Pi OS (Trixie)</b> for use with Little Backup Box. If you don't plan to use a graphic environment on a regular monitor, you are recommended to use the lite version.<br />
-An easy way is to use <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>. Please select "Raspberry Pi OS (other)" > "Raspberry Pi OS Lite (32-bit)" or "Raspberry Pi OS Lite (64-bit)".<br />
-In Raspberry Pi Imager you can define options for your image. Shift+Ctrl+x opens the options-dialog. Here you can ...
-		<ul>
-			<li>enable ssh (obligatory!)</li>
-			<li>set a password for user pi (obligatory!)</li>
-			<li>define wifi settings (optional)</li>
-		</ul>
-	</li>
-	<li><b>Keep user pi!!!</b></li>
-	<li><b>Do not change any more settings (language!).</b></li>
-	<li>Make sure that your Raspberry Pi is connected to the internet.</li>
-	<li>Login to your Raspberry Pi. If you are using ssh, there is a report about problems using WINSCP. While WINSCP itself uses putty, it's reported to work with native putty.</li>
-	<li>
-		Run the following command on the Raspberry Pi:<br />
-		<code>branch='main'; curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/${branch}/install-little-backup-box.sh | bash -s -- ${branch} 2> install-error.log</code><br /><br />
-		Errors are reported into ./install-error.log.
-	</li>
-	<li>
-		You will be asked for the default backup mode.<br />
-		This is the action started automatically after boot.
-	</li>
-	<li>
-		You will be asked if you want to install <a href="https://davesteele.github.io/comitup/">comitup</a>.<br />
-		The comitup service establishes wifi connectivity for a headless Linux system, using wifi as the only access mechanism to the system. Access the box by its own wifi hotspot or connect it to a local wifi access point.
-	</li>
-	<li>
-		<b><u>Optional Display Driver Setup</u></b><br />
-		If you have opted for the desktop version of Raspberry Pi OS, please note the following:<br />
-		<br />
-		To support graphical displays for desktop environment, the installer can optionally download and run a third-party script collection from https://github.com/goodtft/LCD-show.<br />
-		<br />
-		<ul>
-			<li>These scripts are maintained by a third party and <b>are not part of this project</b>.</li>
-			<li>They are <b>not redistributed</b> but downloaded directly from the GitHub source repository during installation.</li>
-			<li>Because no license is attached to the script collection, it must be treated as <b>proprietary</b>. Use at your own discretion.</li>
-		</ul>
-		<br />
-		After downloading, the installer will prompt you to select your display model.<br />
-		A temporary modification is applied to prevent automatic reboot, but the original scripts remain unchanged.
-	</li>
-	<li>
-		<b>Don't worry:</b> Please note this in case you installed via wifi/ssh and decided to install comitup. If your installation-screen scrolls down and seems to freeze at something like <i>Setting up python3-networkmanager (2.2-1) ...</i>, this doesn't mean anything went wrong. Comitup is installed at the end of the process and when it's coming up, it changes your wifi-network. Your ssh-session is broken and you will not get any more information. In the background the installation finishes and a few seconds later the pi reboots. What you can't see anymore is a short information, how to access Little Backup Box. In your setting, this would be the information you need:<br />
-		<br />
-		******************************************************************************************<br />
-		*** How to proceed:<br />
-		***<br />
-		*** Your raspberrys wifi-configuration has been removed by comitup now. Because comitup has no<br />
-		*** access-data for your wifi yet, it can't connect to it and will start as a wifi-hotspot:<br />
-		*** ssid=little-backup-box-nnnn (nnnn is a random number).<br />
-		***<br />
-		*** Please connect your mobile or notebook to this wifi.<br />
-		***<br />
-		*** There are two options now:<br />
-		***<br />
-		*** 1. If you want to configure comitup now, navigate to <b>http</b>://10.41.0.1 (http, not https!)<br />
-		*** and connect your lbb to your wifi.<br />
-		*** Connect your mobile or notbook to the same wifi. If you use a display on your lbb, it will<br />
-		*** tell you its new IP. Connect to lbb:<br />
-		*** <b>https</b>://IP.IN.YOUR.WIFI (secure, certificate can't be verified automatically, please confirm it)<br />
-		*** <b>http</b>://IP.IN.YOUR.WIFI:8080 (insecure)<br />
-		***<br />
-		*** 2. Alternatively can reach the web UI of Little Backup Box when you are connected to its<br />
-		*** hotspot as follows:<br />
-		***<br />
-		*** <b>https</b>://10.41.0.1 (secure, certificate can't be verified automatically, please confirm it)<br />
-		*** <b>http</b>://10.41.0.1:8080 (insecure)<br />
-		***<br />
-		*** Please use the settings of the web UI to optimally adapt the Little Backup Box for you.<br />
-		***<br />
-		*** If you have further questions, please check the wiki first:<br />
-		*** https://github.com/outdoorbits/little-backup-box/wiki <br />
-		***<br />
-		*** We are always happy to receive your feedback!<br />
-		******************************************************************************************<br />
-		<br />
-	</li>
-</ol>
+**On a phone:** the original page and the new app view
 
-<h2>Start</h2>
-If everything went well, it's done! Open a browser and enter https://IP.OF.YOUR.BOX, http://IP.OF.YOUR.BOX:8080 or even https://lbb.local or http://lbb.local <br />Have fun!
+<p align="center"><img src="docs/screenshots/compare-phone.png" alt="Original and new start page on a phone" width="600"></p>
 
-<h2 id="update">Update</h2>
-<ul>
-	<li>Updates can be carried out quickly and easily via the WebUI. Just follow the instructions in the <a href="https://github.com/outdoorbits/little-backup-box/wiki/03.-Installation#update">wiki</a>.</li>
-	<li>Alternatively just login via ssh and execute the installation-command from above. It will run in update-mode.</li>
-</ul>
+**Gallery**
 
-<h2>Contribute</h2>
-<ul>
-	<li>If you've found a bug or have suggestions for improvements, open an issue in the <a href="https://github.com/outdoorbits/little-backup-box/issues">Issues section</a>.</li>
-	<li>If you could spend a bit of time and add a new language - great, just tell me, it's easy!</li>
-	<li>To add new features or fix issues yourself, follow the following steps.</li>
-</ul>
+![Original and new gallery](docs/screenshots/compare-gallery.png)
 
-<ol>
-	<li>Open an issue to discuss your idea.</li>
-	<li>Fork the project's repository.</li>
-	<li>Create a feature branch using the <code>git checkout -b new-feature</code> command.</li>
-	<li>Add your new feature or fix bugs and run the <code>git commit -am 'Add a new feature'</code> command to commit changes.</li>
-	<li>Push changes using the <code>git push origin new-feature</code> command.</li>
-	<li>Submit a pull request (in your fork at github.com).</li>
-</ol>
+**OLED display:** the same moments, drawn by the box's old and new display code
 
-<h2>Authors</h2>
-The project now is maintained by Stefan Saam. Founder is Dmitri Popov.
+<p align="center"><img src="docs/screenshots/compare-oled.png" alt="Original and new OLED screens" width="760"></p>
 
-<h2>Contributors</h2>
-<ul>
-	<li><a href="https://github.com/munecito">munecito</a> (corrections of the Spanish translation)</li>
-</ul>
+## The app view (touch UI)
 
-<h2>License</h2>
+It is made for fingers: on the box's own touchscreen, on phones and in the Android app. Open the box's address
+(`http://<box>/`) and you are there. The full web interface is one tap away.
 
-The <a href="http://www.gnu.org/licenses/gpl-3.0.en.html">GNU General Public License version 3</a>
+| Home | Photos | Files | Backup |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/touch-phone-home.png" width="200"> | <img src="docs/screenshots/touch-phone-photos.png" width="200"> | <img src="docs/screenshots/touch-phone-files.png" width="200"> | <img src="docs/screenshots/touch-phone-backup.png" width="200"> |
+| **Ready at a glance:** backup drive, source, the OLED mirrored, the latest files | **Latest files from every drive:** photos, RAW, videos, newest first, full-screen viewer with download | **Browse any drive:** long-press to select, rename or delete | **Choose source and target**, options, live progress |
+
+| System | One drive | Wi-Fi |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/touch-phone-system.png" width="200"> | <img src="docs/screenshots/touch-phone-drive.png" width="200"> | <img src="docs/screenshots/touch-phone-wifi.png" width="200"> |
+| **The box:** address, temperature, drives, theme, update, power | **Per drive:** use as backup drive, open, thumbnails, database, EXIF, rename, check, repair, format (asks twice) | **Networks nearby:** connect, forget saved ones; in hotspot mode the box's Wi-Fi setup |
+
+**On the box's own 480×320 touchscreen**
+
+| Home | Photos | System |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/touch-box-home.png" width="280"> | <img src="docs/screenshots/touch-box-photos.png" width="280"> | <img src="docs/screenshots/touch-box-system.png" width="280"> |
+
+Themes: dark, light, sepia and **sage**. Under-voltage (a weak power supply) shows as a pill in the top bar,
+and a tap explains it.
+
+## Full web interface
+
+All the original pages: backup, gallery, files, tools, settings and system, now with a tidy layout from phone to
+desktop. The source and target pickers are compact, there's a maintenance table per drive, and the gallery
+works like the app's.
+
+| Backup | Gallery | Settings |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/classic-home.png" width="280"> | <img src="docs/screenshots/classic-gallery.png" width="280"> | <img src="docs/screenshots/classic-settings.png" width="280"> |
+
+## OLED display and joystick
+
+Made for the **Waveshare 1.3" OLED HAT** (SH1106, 128×64), and it also works on other displays the box supports.
+
+<p align="center"><img src="docs/screenshots/oled-screens.png" alt="OLED screens" width="900"></p>
+
+- **Home screen:**
+  - state, IP address and online state, temperature;
+  - the backup drive with its fill and size, also while it is not mounted (read without mounting it).
+- **Messages** (comitup, backup progress, power off and so on) use the same title bar.
+  - QR codes for the address and the Wi-Fi stay full screen so phones can scan them.
+  - The home screen comes back by itself: 8 s after a message, 60 s after a backup so you can read the result, never while a backup runs.
+- **Menu** (any joystick direction opens it):
+  - **Start backup:** the default backup, copy only, with a confirm screen.
+  - **Backup:** choose a source, then a target.
+  - **Stop backup:** only while one runs.
+  - **Status:** state, drives with fill, IP, temperature, power supply.
+  - **Network:** IP QR, Wi-Fi QR, reset Wi-Fi.
+  - **Power:** display off, reboot, power off. Risky actions start on *Cancel*.
+- **Joystick:**
+  - up and down to move (hold to scroll);
+  - right or press to select;
+  - left to go back, hold left to close;
+  - the menu closes after 15 s.
+- **Display sleep** after 10 idle minutes (Settings → Display); the first press only wakes it.
+- **Boot:** your logo, the IP QR code once, then the home screen.
+
+## Android app
+
+**Download:** [BackupBox.apk](https://github.com/keeratsawhney/backupbox/releases/download/android/BackupBox.apk)
+(built by GitHub on every change, see [android/](android/)).
+
+<p align="center"><img src="docs/screenshots/app-connect.png" alt="Backup Box app: the paired box over Bluetooth, box search" width="300"></p>
+
+- **Pair a nearby box** through Android's own device popup, like earbuds. Type the 6-digit code shown on the OLED.
+- **Status card over Bluetooth**, with no Wi-Fi needed:
+  - Ready or backup running, with what the OLED shows;
+  - drive fill and size;
+  - **Start backup** (copy only), **Stop**, **Power off**.
+- **Open box:** the touch UI over Wi-Fi.
+  - The app finds the box on your current network, or joins the box's hotspot by itself (Android asks once).
+  - Your phone keeps mobile data for everything else.
+  - Previews and downloads always go over Wi-Fi, which is fast.
+- **Finds boxes** on the Wi-Fi or at the hotspot address (`10.41.0.1`), or by address.
+- **Security:**
+  - HTTPS with the box's own certificate, trusted the first time and pinned;
+  - a changed certificate is reported;
+  - the box's password is remembered.
+- **Downloads** go to *Pictures / Movies › Backup Box*.
+- **Links:** the box's address or its QR code opens the app if it is installed, otherwise the browser.
+
+Signing: the repository is public, so the app's signing key is **never committed**. GitHub reads it from
+repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+`ANDROID_KEY_PASSWORD`). Without them, builds are signed with a temporary debug key.
+
+## Networking in the field
+
+- **Hotspot without a sign-in trap:** phones see "no internet" and stay connected; `http://10.41.0.1` opens the box.
+- **Wi-Fi setup:** in the app (System › Wi-Fi), or comitup's page at `/comitup/`.
+- **Bluetooth Low Energy** carries only state and commands; files always go over Wi-Fi.
+
+## Safety
+
+- Backups started from the **OLED menu or the Android app's Bluetooth card always copy**: nothing is deleted from
+  the card. Moving files has to be chosen on purpose: in the web interfaces' backup options, or for the default
+  backup at boot in Settings (off unless you switch it on).
+- Formatting a drive asks twice. Risky menu actions start on *Cancel*.
+- The Wi-Fi password and the box's commands over Bluetooth need pairing with the code on the box's display.
+- The installer no longer prints the box's TLS private key.
+
+## Power and heat
+
+- **The display loop no longer starts processes every couple of seconds.** It caches the Wi-Fi state and skips redrawing unchanged frames.
+- **The IP job runs much lighter:** no QR code every minute, mail checks only when IP mails are set up.
+- **The display sleeps** after idle minutes (configurable).
+- **Browser pages poll less:** every 5 s instead of 2 s when idle, and not at all in background tabs.
+- **Fewer thumbnail workers** when the power supply is weak (under-voltage) or memory is low.
+
+## Hardware
+
+Developed and tested on:
+- Raspberry Pi 5;
+- Waveshare 1.3" OLED HAT (SH1106, joystick);
+- a USB SSD (exFAT) as backup drive;
+- a USB-C PD power supply.
+
+Other Little Backup Box hardware (other displays, Raspberry Pi models, touchscreens) keeps working.
+
+## Install
+
+1. Flash **Raspberry Pi OS (Trixie)**, Lite is fine, with Raspberry Pi Imager. Enable SSH and set a user and password.
+2. Connect the Pi to the internet and log in over SSH.
+3. Run:
+   ```bash
+   branch='main'; curl -sSL https://raw.githubusercontent.com/keeratsawhney/backupbox/${branch}/install-little-backup-box.sh | bash -s -- ${branch} 2> install-error.log
+   ```
+   The installer asks for the default backup (started after boot) and whether to install comitup (the box's own Wi-Fi hotspot).
+
+### Update
+
+Use the **Update** button (app view › System, or the full web interface), or run this on the box:
+```bash
+cd ~ && rm -rf backupbox && git clone --depth 1 --branch main https://github.com/keeratsawhney/backupbox.git && cd backupbox && ./install-touch-ui.sh
+sudo reboot
+```
+
+### Checks
+
+```bash
+./touch-selftest.sh                          # web UI, display, drives
+systemctl status lbb-ble --no-pager          # Bluetooth for the app
+journalctl -u lbb-ble --no-pager | tail -30
+```
+
+## Changelog
+
+Every change went in through a pull request with its own description. See **[CHANGELOG.md](CHANGELOG.md)**.
+
+## Credits and license
+
+Based on [Little Backup Box](https://github.com/outdoorbits/little-backup-box) by Stefan Saam and its
+contributors; their wiki covers the backup engine, cloud services and hardware in depth. Hotspot and Wi-Fi setup
+by [comitup](https://davesteele.github.io/comitup/).
+
+Licensed under the **GNU General Public License v3.0**, see [LICENSE](LICENSE).

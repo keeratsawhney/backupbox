@@ -21,6 +21,7 @@
 // sub expects from calling script:
 // - included language
 // - $config
+// - $constants
 // - $WORKING_DIR
 
     $HTTP_HOST	= $_SERVER['SERVER_PORT']==80?$_SERVER['HTTP_HOST'] . ":80":$_SERVER['HTTP_HOST'];
@@ -53,12 +54,12 @@
 	</symbol>
 </svg>
 
-<nav class="navbar navbar-expand-sm <?php echo $nav_theme_class; ?>">
+<nav class="navbar navbar-expand-lg <?php echo $nav_theme_class; ?>">
 	<div class="container-fluid">
 
 		<a class="lbb-brand" href="/index.php">
-			<img src="/img/little-backup-box-color.png" alt="Little Backup Box logo">
-			<span class="hidden-mobile">Little Backup Box</span>
+			<img src="/img/icons/favicon-180.png" alt="Your Wedding Saga">
+			<span>Backup Box</span>
 		</a>
 
 		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,6 +69,7 @@
 		<div class="collapse navbar-collapse" id="navbarSupportedContent">
 			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="index.php"?" active":""; ?>" href="/index.php"><?php echo L::mainmenue_main; ?></a></li>
+				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="gallery.php"?" active":""; ?>" href="/gallery.php"><?php echo L::gallery_title; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="view.php"?" active":""; ?>" href="/view.php"><?php echo L::mainmenue_view; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="files"?" active":""; ?>" href="/frame.php?page=files"><?php echo L::mainmenue_filebrowser; ?></a></li>
 				<li class="nav-item"><a class="nav-link<?php echo $scriptname=="tools.php"?" active":""; ?>" href="/tools.php"><?php echo L::mainmenue_tools; ?></a></li>
@@ -78,6 +80,13 @@
 							<li class="nav-item<?php echo $scriptname=="comitup"?" active":""; ?>"><a class="nav-link<?php echo $comitup_hotspot?'':' disabled'; ?>" href="/frame.php?page=comitup">comitup</a></li>
 						<?php
 					}
+
+					if (is_file($constants['const_NETWORK_PORTAL_PAGE_LINK_FILE']) && filesize($constants['const_NETWORK_PORTAL_PAGE_LINK_FILE']) > 0) {
+						?>
+							<li class="nav-item"><a class="nav-link<?php echo $scriptname=="captive_portal"?" active":""; ?>" href="/frame.php?page=captive_portal"><?php echo L::mainmenue_captive_portal; ?></a></li>
+						<?php
+					}
+
 				?>
 			</ul>
 
@@ -90,6 +99,11 @@
 					}
 				?>
 				<li class="nav-item"><a class="nav-link<?php echo in_array($scriptname, ["setup.php", "rclone_gui"])?" active":""; ?>" href="/setup.php"><?php echo L::mainmenue_config; ?></a></li>
+				<?php
+					// touch UI: on the box's own screen the way back, on phones the app view
+					$touch_label	= in_array($_SERVER['REMOTE_ADDR'] ?? '', array('127.0.0.1', '::1'), true) ? L::touch_home : L::touch_app_view;
+				?>
+				<li class="nav-item"><a class="nav-link" href="/touch.php"><?php echo $touch_label; ?></a></li>
 				<li class="nav-item dropdown">
 					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdownPower" role="button" data-bs-toggle="dropdown" aria-expanded="false">
 						<svg width="1em" height="1em" style="vertical-align: middle;">
@@ -107,4 +121,24 @@
 
 	</div>
 </nav>
+<script>
+	// one row only while all entries fit (comitup, Wi-Fi portal, update and long translations add entries), else the menu button
+	(function () {
+		const nav = document.currentScript.previousElementSibling;
+		const row = nav.querySelector('.container-fluid');
+		const overflows = () => row.scrollWidth > row.clientWidth + 1;
+		function fit() {
+			nav.classList.remove('lbb-nav-menu', 'lbb-nav-tight');
+			nav.classList.add('navbar-expand-lg');
+			if (window.innerWidth < 992 || !overflows()) return;
+			nav.classList.add('lbb-nav-tight');
+			if (!overflows()) return;
+			nav.classList.remove('navbar-expand-lg', 'lbb-nav-tight');
+			nav.classList.add('lbb-nav-menu');
+		}
+		fit();
+		window.addEventListener('resize', fit);
+		if (document.fonts) document.fonts.ready.then(fit);
+	})();
+</script>
 

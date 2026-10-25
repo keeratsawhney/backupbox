@@ -37,10 +37,11 @@
 	}
 
 	$framed_pages	= array(
-		'comitup'		=> '/comitup/',
-		'sysinfo'		=> '/sysinfo.php',
-		'files'			=> '/files',
-		'rclone_gui'	=> '/rclone/'
+		'comitup'			=> '/comitup/',
+		'captive_portal'	=> '/portalpage/',
+		'sysinfo'			=> '/sysinfo.php',
+		'files'				=> '/files',
+		'rclone_gui'		=> '/rclone/'
 	);
 
 	$frame_index	= '';
@@ -70,11 +71,18 @@
 	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
 	<?php
 		include "${WORKING_DIR}/sub-display.php";
-		display();
+		$frame_titles	= array(
+			'comitup'			=> 'Comitup',
+			'captive_portal'	=> strip_tags(L::mainmenue_captive_portal),
+			'sysinfo'			=> L::mainmenue_sysinfo,
+			'files'				=> L::mainmenue_filebrowser,
+			'rclone_gui'		=> 'rclone'
+		);
+		display(true, $frame_titles[$frame_index]);
 	?>
 
- 		<div style="width: 100vw; height: 60vh; margin-left: calc(-50vw + 50%); border: none;">
- 			<iframe id="pageframe" src="<?php echo $framed_pages[$frame_index]; ?>" style="width: 100%; height: 100%; border: none;"></iframe>
+		<div class="lbb-frame lbb-frame-<?php echo $frame_index; ?>">
+			<iframe id="pageframe" src="<?php echo $framed_pages[$frame_index]; ?>"></iframe>
 		</div>
 
 		<?php

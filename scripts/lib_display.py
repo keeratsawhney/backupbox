@@ -58,7 +58,13 @@ class display(object):
 		if self.conf_DISP == 'display' and subprocess.run(f'/usr/bin/pgrep -fa "{self.WORKING_DIR}/display.p[y]" | /usr/bin/grep -v "pgrep"', shell=True, stdout=subprocess.DEVNULL).returncode != 0:
 			# grep: returncode=1 if no matches found
 			try:
-				subprocess.run(f"/usr/bin/sh -c '{self.python} {self.WORKING_DIR}/display.py &'", shell=True)
+				# the display hardware (SPI/I2C/GPIO) needs root: callers like the web UI run as www-data
+				command	= [self.python, f"{self.WORKING_DIR}/display.py"]
+				if os.geteuid() != 0:
+					command	= ['/usr/bin/sudo', '-n'] + command
+
+				# detach completely: an inherited stdout would block callers waiting for output (php shell_exec, check_output)
+				subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 			except:
 				print('Error: Display daemon not started', file=sys.stderr)
 

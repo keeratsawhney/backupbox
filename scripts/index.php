@@ -1,3 +1,30 @@
+<?php
+	// the box's address (http://IP/, the box's own touchscreen) opens the app view (touch UI);
+	// this page stays at /index.php ("Full web interface" in the app, the menu of all classic pages)
+	if (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) === '/') {
+		$Scheme		= (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+		$Host		= $_SERVER['HTTP_HOST'] ?? '';
+		$Agent		= $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+		// Android phones (QR code on the box's display, a link, the typed address): the Backup Box app if it is
+		// installed, else this browser goes on to the touch UI (Chrome and Samsung Internet know intent: links)
+		if (
+			preg_match('/^[\w.:\[\]-]+$/', $Host) and
+			str_contains($Agent, 'Android') and
+			(str_contains($Agent, 'Chrome/') or str_contains($Agent, 'SamsungBrowser/')) and
+			!str_contains($Agent, 'BackupBoxApp') and
+			!str_contains($Agent, '; wv)')
+		) {
+			$Box		= preg_replace('/:\d+$/', '', $Host);
+			$Fallback	= "$Scheme://$Host/touch.php";
+			header('Location: intent://' . $Box . '#Intent;scheme=backupbox;package=com.yws.backupbox;S.browser_fallback_url=' . rawurlencode($Fallback) . ';end');
+			exit();
+		}
+
+		header('Location: /touch.php');
+		exit();
+	}
+?>
 <!doctype html>
 
 <!--
@@ -54,6 +81,7 @@
 	include("sub-popup.php");
 
 	include("sub-common.php");
+	include_once("sub-dashboard.php");
 	$NVMe_available	= get_nvme_available(WORKING_DIR: $WORKING_DIR, constants: $constants, ignore_fs: false);
 	$CloudServices	= get_cloudservices($constants);
 
@@ -158,24 +186,18 @@
 		}
 	</script>
 
-	<?php display(false); ?>
-	<div style="clear: both;"></div>
-
-	<?php
-		include "${WORKING_DIR}/sub-dashboard.php";
-		render_dashboard($constants, $config, $WORKING_DIR);
-	?>
+	<?php display(false, 'Backup Box'); ?>
 
 	<form class="text-center" style="margin-top: 1em;" method="POST">
 
 		<input type="hidden" name="form_sent" value="1">
 
-		<details class="card lbb-backup-panel" id="backup">
-			<summary class="lbb-panel-summary"><?php echo L::main_source . " &rarr; " . L::main_target; ?></summary>
+		<div class="card lbb-backup-panel" id="backup">
 			<div class="row" style="width:100%; float: left; display: block;">
 				<div class="column" style="display: block;">
 					<?php
-						print("<h3>" . l::main_source . "</h3>" . l::main_source_select);
+						// collapsed to the chosen source; opening it lists all sources
+						print("<details class='lbb-picker' id='picker-source'><summary><span class='lbb-picker-title'>" . l::main_source . "</span><span class='lbb-picker-value' id='picker-source-value'>" . l::main_source_select . "</span></summary><div class='lbb-picker-list'>");
 						foreach($SourceServices as $ButtonClass => $Group) {
 							print("<div class='radio-$ButtonClass'>");
 								foreach($Group as $Storage) {
@@ -209,11 +231,13 @@
 								}
 							print("</div>");
 						}
+						print("</div></details>");
 					?>
 				</div>
 				<div class="column" style="display: block;">
 					<?php
-						print("<h3>" . l::main_target . "</h3>" . l::main_target_execute);
+						// a target button starts the backup
+						print("<details class='lbb-picker' id='picker-target'><summary><span class='lbb-picker-title'>" . l::main_target . "</span><span class='lbb-picker-value'>" . L::touch_start . "</span></summary><div class='lbb-picker-list'>");
 						foreach($TargetServices as $ButtonClass => $Group) {
 							print("<div class='backup-buttons'>");
 							foreach($Group as $Storage) {
@@ -256,19 +280,15 @@
 							}
 							print("</div>");
 						}
+						print("</div></details>");
 					?>
 				</div>
 			</div>
 
-			<div class='backupsection'>
-				<button name="stopbackup" class="danger"><?php echo L::main_stopbackup_button; ?>
-			</div>
-		</details>
-
-		<div class="card" style="margin-top: 3em;">
-
-			<details>
-				<summary style="letter-spacing: 1px; text-transform: uppercase;"><?php echo L::main_backup_modifications; ?></summary>
+			<?php
+				// options of the backup started with a target button (were "Modifications" below)
+				print("<details class='lbb-picker lbb-picker-options' id='picker-options'><summary><span class='lbb-picker-title'>" . L::touch_options . "</span><span class='lbb-picker-value'>" . L::main_backup_modifications . "</span></summary><div class='lbb-picker-list'>");
+			?>
 
 				<div class='backupsection'>
 					<h4><?php echo L::main_backup_general; ?></h4>
@@ -395,44 +415,6 @@
 					</table>
 				</div>
 
-			</details>
-
-			<details>
-				<summary style="letter-spacing: 1px; text-transform: uppercase;"><?php echo L::main_view_database; ?></summary>
-
-				<div class='backupsection'>
-					<h3><?php echo L::main_thumbnails_header; ?></h3>
-					<button name="backup_function" value="thumbnails_usb" class="usb"><?php echo L::right_arrow . L::main_usb_button; ?></button>
-					<button name="backup_function" value="thumbnails_internal" class="usb"><?php echo L::right_arrow . L::main_internal_button; ?></button>
-					<?php if ($NVMe_available) {echo('<button name="backup_function" value="thumbnails_nvme" class="usb">'.L::right_arrow.L::main_nvme_button.'</button>');} ?>
-				</div>
-
-				<div class='backupsection'>
-					<h3><?php echo L::main_database_header; ?></h3>
-					<button name="backup_function" value="database_usb" class="usb"><?php echo L::right_arrow . L::main_usb_button; ?></button>
-					<button name="backup_function" value="database_internal" class="usb"><?php echo L::right_arrow . L::main_internal_button; ?></button>
-					<?php if ($NVMe_available) {echo('<button name="backup_function" value="database_nvme" class="usb">'.L::right_arrow.L::main_nvme_button.'</button>');} ?>
-				</div>
-
-				<div class='backupsection'>
-					<h3><?php echo L::main_exif_header; ?></h3>
-					<button name="backup_function" value="exif_usb" class="usb"><?php echo L::right_arrow . L::main_usb_button; ?></button>
-					<button name="backup_function" value="exif_internal" class="usb"><?php echo L::right_arrow . L::main_internal_button; ?></button>
-					<?php if ($NVMe_available) {echo('<button name="backup_function" value="exif_nvme" class="usb">'.L::right_arrow.L::main_nvme_button.'</button>');} ?>
-				</div>
-			</details>
-
-			<details>
-				<summary style="letter-spacing: 1px; text-transform: uppercase;"><?php echo L::main_file_operations; ?></summary>
-
-				<div class='backupsection'>
-					<h3><?php echo L::main_backup_rename_checkbox_label; ?> <a title="<?php echo L::config_backup_rename_warning; ?>">&#x1F6C8;</a></h3>
-					<button name="backup_function" value="rename_usb" class="usb"><?php echo L::right_arrow . L::main_usb_button; ?></button>
-					<button name="backup_function" value="rename_internal" class="usb"><?php echo L::right_arrow . L::main_internal_button; ?></button>
-					<?php if ($NVMe_available) {echo('<button name="backup_function" value="rename_nvme" class="usb">'.L::right_arrow.L::main_nvme_button.'</button>');} ?>
-				</div>
-			</details>
-
 			<?php if (in_array('social:telegram', $SocialServices_configured)) { ?>
 				<details>
 					<summary style="letter-spacing: 1px; text-transform: uppercase;"><?php echo L::main_telegram_telegram; ?></summary>
@@ -457,10 +439,93 @@
 						</div>
 				</details>
 			<?php } ?>
+			<?php print("</div></details>"); ?>
 
+			<?php
+				// stop: only while a backup runs (or this request starts one); kept current by the script below
+				$backup_running	= lbb_dashboard_backup_running($constants) || isset($_POST['TargetDevice']) || isset($_POST['backup_function']);
+			?>
+			<div class='backupsection' id='stop-section'<?php echo $backup_running ? '' : ' hidden'; ?>>
+				<button name="stopbackup" class="danger"><?php echo L::main_stopbackup_button; ?></button>
+			</div>
 		</div>
 
+		<script>
+			// source picker: shows the chosen source; choosing one closes it and opens the targets
+			(function () {
+				const source = document.getElementById('picker-source');
+				const target = document.getElementById('picker-target');
+				const value = document.getElementById('picker-source-value');
+				function show() {
+					const checked = source.querySelector('input[type=radio]:checked');
+					const label = checked && source.querySelector('label[for="' + checked.id + '"]');
+					if (label) {
+						value.textContent = label.textContent;
+						source.classList.add('chosen');
+					}
+				}
+				// stop button only while a backup runs
+				const stop = document.getElementById('stop-section');
+				async function checkRunning() {
+					try {
+						const data = await (await fetch('/touch-api.php?action=copying', { cache: 'no-store' })).json();
+						stop.hidden = !data.running;
+					} catch (e) { /* keep as it is */ }
+				}
+				setInterval(() => { if (!document.hidden) checkRunning(); }, 4000);
+
+				source.querySelectorAll('input[type=radio]').forEach((radio) => radio.addEventListener('change', () => {
+					show();
+					source.open = false;
+					target.open = true;
+				}));
+				show();
+			})();
+		</script>
+
+		<div class="card">
+			<details class="lbb-maintenance">
+				<summary><?php echo L::touch_maintenance; ?></summary>
+
+				<?php // thumbnails, database, EXIF and renaming for one drive: choose the drive once, then run a task ?>
+				<div class="lbb-maint-drive">
+					<span><?php echo L::touch_storage; ?></span>
+					<span class="lbb-seg">
+						<input type="radio" name="maintenance_drive" value="usb" id="maint_usb" checked><label for="maint_usb"><?php echo L::main_usb_button; ?></label>
+						<input type="radio" name="maintenance_drive" value="internal" id="maint_internal"><label for="maint_internal"><?php echo L::main_internal_button; ?></label>
+						<?php if ($NVMe_available) { ?><input type="radio" name="maintenance_drive" value="nvme" id="maint_nvme"><label for="maint_nvme"><?php echo L::main_nvme_button; ?></label><?php } ?>
+					</span>
+				</div>
+
+				<table class="lbb-maint">
+					<tr>
+						<td><b><?php echo L::main_thumbnails_header; ?></b></td>
+						<td><button name="backup_function" value="thumbnails" class="usb"><?php echo L::touch_run; ?></button></td>
+					</tr>
+					<tr>
+						<td><b><?php echo L::main_database_header; ?></b></td>
+						<td><button name="backup_function" value="database" class="usb"><?php echo L::touch_run; ?></button></td>
+					</tr>
+					<tr>
+						<td><b><?php echo L::main_exif_header; ?></b></td>
+						<td><button name="backup_function" value="exif" class="usb"><?php echo L::touch_run; ?></button></td>
+					</tr>
+					<tr>
+						<td><b><?php echo L::main_backup_rename_checkbox_label; ?></b><br><small><?php echo L::config_backup_rename_warning; ?></small></td>
+						<td><button name="backup_function" value="rename" class="usb"><?php echo L::touch_run; ?></button></td>
+					</tr>
+				</table>
+			</details>
+		</div>
+
+
 	</form>
+
+	<?php
+		// newest photos and videos of the backup drive and source, like the touch UI shows them
+		include "${WORKING_DIR}/sub-gallery.php";
+		gallery_section('compact', 12);
+	?>
 
 	<?php include "sub-logmonitor.php";
 		logmonitor($sourcefile=$constants['const_LOGFILE'], $title=L::log_logmonitor, $allow_logfile_operations=true);
@@ -504,7 +569,7 @@
 		if (isset($_POST['backup_function'])) {
 			$FunctionValues	= explode('_', $_POST['backup_function'], 2);
 			$Function	= $FunctionValues[0];
-			$Target		= $FunctionValues[1];
+			$Target		= $FunctionValues[1] ?? (in_array($_POST['maintenance_drive'] ?? '', array('usb', 'internal', 'nvme'), true) ? $_POST['maintenance_drive'] : 'usb');
 
 			$sync_database	= 'False';
 			if ($Function == 'thumbnails') {

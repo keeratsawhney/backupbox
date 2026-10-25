@@ -18,18 +18,12 @@
 #######################################################################*/
 
 // Usage:
-// 1. in the beginning of the main script load the library:
-// 		include("sub-virtual-keyboard.php");
-//
-// 2. in the html head integrate the css:
-// 		<?php virtual_keyboard_css();
-//
 //$WORKING_DIR and $constants must be defined in main script.-->
 ?>
 
 <div class="footer">
-	<form action="shutdown.php" class="text-center" style="margin-top: 1em;" method="POST">
-			<div class="card" style="margin-top: 3em;">
+	<form action="shutdown.php" method="POST">
+			<div class="card lbb-power">
 				<button type="submit" name="reboot" value="1" class="danger"><?php echo L::main_reboot_button; ?></button>
 				<button type="submit" name="shutdown" value="1" class="danger"><?php echo L::main_shutdown_button; ?></button>
 			</div>
@@ -57,7 +51,7 @@
 	}
 
 	if ($info_box != '') {
-		echo('<div class="card" style="margin-top: 3em;">' . $info_box . '</div>');
+		echo('<div class="card lbb-info">' . $info_box . '</div>');
 	}
 
 ?>

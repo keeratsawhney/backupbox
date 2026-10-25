@@ -19,17 +19,26 @@
 
 # Provides a menu for the display.
 # It can be used by hardware-buttons. Please read the Wiki at https://github.com/outdoorbits/little-backup-box/wiki/02a.-Displaymenu.
+#
+# The menu draws its screens itself (lib_menu_render.py) and hands them to the display process
+# (display.py, "screen"): no delay by the message queue, the home screen comes back when it closes.
+#
+# Buttons (buttons.cfg): up, down, left (back), right (open/select), ok (select), back, home (close the menu).
+# The first press opens the menu (or only wakes a display that is off), holding up/down scrolls,
+# holding left closes the menu.
 
 import configparser
 from gpiozero import Button
-import sys
-import time
+import json
 import os
 import subprocess
+import sys
+import threading
+import time
 
 import lib_cron_ip
-import lib_display
 import lib_language
+import lib_menu_render
 import lib_network
 import lib_setup
 import lib_socialmedia
@@ -48,20 +57,17 @@ class MENU_CONTROLLER(object):
 
 class menu(object):
 
-	def __init__(self, DISPLAY_LINES, setup, menu_controller):
+	def __init__(self, DISPLAY_LINES, setup, menu_controller, screen=None):
 
-		self.DISPLAY_LINES	= DISPLAY_LINES;
-
-		self.__display			= lib_display.display()
 		self.__setup			= setup
 		self.__lan				= lib_language.language()
+		self.__texts			= {}
+		self.screen				= screen
+		self.lock				= threading.RLock()
 
 		self.WORKING_DIR = os.path.dirname(__file__)
 
-		self.board_model_number							= lib_system.get_pi_model(number_only=True)
-
 		self.const_MEDIA_DIR							= self.__setup.get_val('const_MEDIA_DIR')
-		self.conf_DISP_FRAME_TIME						= self.__setup.get_val('conf_DISP_FRAME_TIME')
 		self.conf_DISP_FRAME_TIME_IP					= self.__setup.get_val('conf_DISP_FRAME_TIME_IP')
 		self.conf_RSYNC_SERVER							= self.__setup.get_val('conf_RSYNC_SERVER')
 		self.conf_RSYNC_PORT							= self.__setup.get_val('conf_RSYNC_PORT')
@@ -75,32 +81,101 @@ class menu(object):
 		self.conf_MENU_BUTTON_BOUNCETIME 				= self.__setup.get_val('conf_MENU_BUTTON_BOUNCETIME')
 		self.GPIO_MENU_BUTTON_EDGE_DETECTION_RISING 	= self.__setup.get_val('conf_MENU_BUTTON_EDGE_DETECTION') == 'RISING'
 		self.GPIO_MENU_BUTTON_RESISTOR_PULL_UP 			= self.__setup.get_val('conf_MENU_BUTTON_RESISTOR_PULL') == 'UP'
-		self.const_MENU_FRAME_TIME						= self.__setup.get_val('const_MENU_FRAME_TIME')
+		self.const_MENU_TIMEOUT_SEC						= self.__setup.get_val('const_MENU_TIMEOUT_SEC')
 
 		self.RCLONE_CONFIG_FILE							= f"{self.const_MEDIA_DIR}/{self.__setup.get_val('const_RCLONE_CONFIG_FILE')}"
-		self.const_MENU_TIMEOUT_SEC						= self.__setup.get_val('const_MENU_TIMEOUT_SEC')
 
 		self.buttons	= {}
 
-		## menu-types:
-		#
-		# menu
-		# item: action is a confirmitem or as shell
-		# confirmitem: Asks for confirmation, defines the action
-		# shell: action contains the shell-command-array, title is ignored
-		# info: displays an information
+		if self.screen is not None:
+			self.render	= lib_menu_render.renderer(
+				width		= self.screen.device.width,
+				height		= self.screen.device.height,
+				mode		= self.screen.device.mode,
+				color_text	= self.screen.color_text,
+				color_high	= self.screen.color_high,
+				color_bg	= self.screen.color_bg,
+				color_alert	= self.screen.color_alert,
+				font_path	= self.__setup.get_val('const_FONT_PATH'),
+			)
 
-		kill_backup_process	= [f'{self.WORKING_DIR}/stop_backup.sh']
-		start_backup_trunk	= ['/usr/bin/python3',f'{self.WORKING_DIR}/backup.py']
+		self.kill_backup_process	= [f'{self.WORKING_DIR}/stop_backup.sh']
+		self.start_backup_trunk		= ['/usr/bin/python3', f'{self.WORKING_DIR}/backup.py']
 
+		self.MENU_MAIN	= self.build_menu()
+
+		# menu state
+		self.active			= False		# menu on screen
+		self.stack			= []		# open menus: dicts title, items, pos, first
+		self.dialog			= None		# confirm dialog: dict item, choice
+		self.page			= None		# info page: dict title, rows (function), first
+		self.message_until	= 0			# a short message is shown until then
+		self.last_input		= 0
+		self.page_drawn		= 0
+
+		self.GPIO_init()
+
+		# internal loop: closes the menu after a while without input, refreshes info pages
+		while menu_controller.proceed:
+			time.sleep(0.5)
+			with self.lock:
+				if not self.active:
+					continue
+				now	= time.time()
+				if self.message_until:
+					if now >= self.message_until:
+						self.close()
+				elif now - self.last_input >= self.const_MENU_TIMEOUT_SEC:
+					self.close()
+				elif self.page and now - self.page_drawn >= 2:
+					self.draw()
+
+	# ---------- texts ----------
+
+	def t(self, key):
+		# translations, cached (every lookup starts php)
+		if key not in self.__texts:
+			self.__texts[key]	= self.__lan.l(key)
+		return(self.__texts[key])
+
+	def service_name(self, service):
+		Type, ServiceName	= lib_storage.extractService(service)
+		if Type == 'cloud':
+			return(ServiceName)
+		if Type == 'social':
+			return(self.t(f'box_menu_backup_mode_{ServiceName}'))
+		return(self.t(f'box_menu_backup_mode_{Type}'))
+
+	def service_icon(self, service):
+		Type, ServiceName	= lib_storage.extractService(service)
+		return({
+			'anyusb':		'drive',
+			'usb':			'drive',
+			'nvme':			'drive',
+			'internal':		'card',
+			'camera':		'camera',
+			'cloud':		'cloud',
+			'cloud_rsync':	'cloud',
+			'ftp':			'cloud',
+			'social':		'cloud',
+		}.get(Type, 'backup'))
+
+	# ---------- menu structure ----------
+	# items: label, icon, and one of
+	#   submenu:	list of items (or a function returning it)
+	#   command:	list of commands (all but the last are waited for), with confirm text and done message
+	#   page:		function returning the rows of an info page
+	#   run:		function, called after the menu closed (IP and Wi-Fi QR screens)
+	#   visible:	function, the item is shown only if it returns True
+
+	def build_menu(self):
 		# local backups
-		local_services	= ['anyusb', 'usb', 'internal','camera']
+		local_services	= ['anyusb', 'usb', 'internal', 'camera']
 
 		## NVMe available?
 		if lib_storage.get_available_partitions(StorageType='nvme'):
 			local_services.append('nvme')
 
-		# backups
 		cloudservices	= []
 
 		## rsyncserver
@@ -110,32 +185,20 @@ class menu(object):
 		## rclone services
 		cfg = configparser.ConfigParser()
 		cfg.read(self.RCLONE_CONFIG_FILE)
-		rclone_cloudservices = cfg.sections()
-
-		for i in range(len(rclone_cloudservices)):
-			cloudservices.append(f'cloud:{rclone_cloudservices[i]}')
+		for rclone_cloudservice in cfg.sections():
+			cloudservices.append(f'cloud:{rclone_cloudservice}')
 
 		## ftp
 		cloudservices.append('ftp')
 
 		## social media
-		socialservices	= lib_socialmedia.socialmedia().get_social_services_configured()
-		socialservices	= [f'social:{socialservice}' for socialservice in socialservices]
+		socialservices	= [f'social:{socialservice}' for socialservice in lib_socialmedia.socialmedia().get_social_services_configured()]
 
-		# generate menues
-		BACKUP_SOURCES_MENU		= []
-
+		BACKUP_SOURCES_MENU	= []
 		for source in (local_services + cloudservices):
+			sourceName	= self.service_name(source)
+
 			BACKUP_SOURCE_MENU	= []
-
-			# format service parameters
-			SourceType, SourceServiceName		= lib_storage.extractService(source)
-
-			if SourceType == 'cloud':
-				sourceName	= SourceServiceName
-			else:
-				sourceName	= self.__lan.l(f'box_menu_backup_mode_{SourceType}')
-
 			for target in (local_services + cloudservices + socialservices):
 
 				# check for invalid combinations of Source and Target
@@ -150,152 +213,244 @@ class menu(object):
 				if target.startswith('social:') and (source in ['anyusb', 'camera', 'cloud_rsync', 'ftp'] or source.startswith('cloud:')):
 					continue
 
-				# format service parameters
-				targetType, targetServiceName		= lib_storage.extractService(target)
+				targetName	= self.service_name(target)
 
-				if targetType == 'cloud':
-					targetName	= targetServiceName
-				elif targetType == 'social':
-					targetName	= self.__lan.l(f'box_menu_backup_mode_{targetServiceName}')
-				else:
-					targetName	= self.__lan.l(f'box_menu_backup_mode_{targetType}')
+				BACKUP_SOURCE_MENU.append({
+					'label':	f'→ {targetName}',
+					'icon':		self.service_icon(target),
+					'backup':	['--SourceName', source, '--TargetName', target],
+					'title':	self.t('box_menu_start_default'),
+					'confirm':	f'{sourceName} → {targetName}',
+					'ok':		self.t('box_menu_start'),
+					'done':		self.t('box_menu_backup_started'),
+				})
 
-				# add to submenu
-				BACKUP_SOURCE_MENU.append(
-					{
-						'type':		'item',
-						'title':	self.__lan.l('box_menu_to') + '|' + targetName,
-						'action':	self.create_confirmed_shell_action(
-										title	= sourceName + '|' + self.__lan.l('box_menu_to') + '|' + targetName,
-										command	= [ kill_backup_process, start_backup_trunk + ['--SourceName', source, '--TargetName', target] ]
-									),
-					}
-				)
+			if BACKUP_SOURCE_MENU:
+				BACKUP_SOURCES_MENU.append({
+					'label':	sourceName,
+					'title':	f'{sourceName} →',
+					'icon':		self.service_icon(source),
+					'submenu':	BACKUP_SOURCE_MENU,
+				})
 
-			# combine BACKUP_SOURCE_MENU to BACKUP_SOURCES_MENU
-			menutitle	= self.__lan.l(f'box_menu_backup_mode_{SourceType}') if SourceType != 'cloud' else sourceName
-			BACKUP_SOURCES_MENU.append(
-				{
-					'type':		'menu',
-					'title':	menutitle + ' ' + self.__lan.l('box_menu_to'),
-					'action':	BACKUP_SOURCE_MENU
-				}
-			)
 
-		# create menu
-		MENU_BACKUP	= [
+		STOP_BACKUP	= {
+			'label':	self.t('box_menu_backup_stop'),
+			'icon':		'stop',
+			'command':	[self.kill_backup_process],
+			'confirm':	self.t('box_menu_confirm_stop'),
+			'ok':		self.t('box_menu_stop'),
+			'danger':	True,
+			'done':		self.t('box_menu_backup_stopped'),
+			'visible':	self.backup_running,
+		}
+
+		MENU_NETWORK	= [
 			{
-				'type':		'menu',
-				'title':	self.__lan.l('box_menu_backup_backup'),
-				'action':	BACKUP_SOURCES_MENU
+				'label':	self.t('box_menu_ip'),
+				'icon':		'ip',
+				'run':		lambda: lib_cron_ip.ip_info().display_ip(FrameTime=self.conf_DISP_FRAME_TIME_IP * 2, force=True),
 			},
-
 			{
-				'type':		'menu',
-				'title':	self.__lan.l('box_menu_backup_stop'),
-				'action':	self.create_confirmed_shell_action(
-								title	= self.__lan.l('box_menu_backup_stop'),
-								command	= [kill_backup_process]
-							)
+				'label':	self.t('box_menu_wifi'),
+				'icon':		'qr',
+				'run':		lambda: lib_cron_ip.ip_info().display_wifi_qr(FrameTime=self.conf_DISP_FRAME_TIME_IP * 3, force=True),
 			},
-		]
-
-		self.MENU_NETWORK	= [
 			{
-				'type':		'item',
-				'title':	self.__lan.l('box_menu_ip'),
-				'action':	[
-								{
-									'type':		'info',
-									'title':	self.__lan.l('box_menu_ip'),
-									'action':	'ip',
-								}
-							],
+				'label':	self.t('box_menu_comitup_reset'),
+				'icon':		'reset',
+				'command':	[[f'{self.WORKING_DIR}/comitup-reset.sh']],
+				'confirm':	self.t('box_menu_confirm_comitup'),
+				'danger':	True,
+				'visible':	lambda: os.path.isfile('/usr/sbin/comitup-cli') or os.path.isfile('/usr/bin/comitup-cli'),
 			},
-
 			{
-				'type':		'item',
-				'title':	self.__lan.l('box_menu_wifi'),
-				'action':	[
-								{
-									'type':		'info',
-									'title':	self.__lan.l('box_menu_wifi'),
-									'action':	'wifi_qr',
-								}
-							],
-			},
-
-			{
-				'type':		'item',
-				'title':	self.__lan.l('box_menu_comitup_reset'),
-				'action':	self.create_confirmed_shell_action(
-								title	= self.__lan.l('box_menu_comitup_reset'),
-								command	= [[f'{self.WORKING_DIR}/comitup-reset.sh']]
-							),
-			},
-
-			{
-				'type':		'item',
-				'title':	self.__lan.l('box_menu_vpn_stop'),
-				'action':	self.create_confirmed_shell_action(
-								title	= self.__lan.l('box_menu_vpn_stop'),
-								command	= [['/usr/bin/python3', f"{self.WORKING_DIR}/lib_vpn.py", 'stop']]
-							),
+				'label':	self.t('box_menu_vpn_stop'),
+				'icon':		'vpn',
+				'command':	[['/usr/bin/python3', f"{self.WORKING_DIR}/lib_vpn.py", 'stop']],
+				'confirm':	self.t('box_menu_confirm_vpn'),
+				'visible':	self.vpn_active,
 			},
 		]
 
-		self.MENU_POWER	= [
+		MENU_POWER	= [
 			{
-				'type':		'item',
-				'title':	self.__lan.l('box_menu_power_reboot'),
-				'action':	self.create_confirmed_shell_action(
-								title	= self.__lan.l('box_menu_power_reboot'),
-								command	= [['/usr/bin/python3',f'{self.WORKING_DIR}/lib_poweroff.py','reboot' ]]
-							),
+				'label':	self.t('box_menu_display_off'),
+				'icon':		'display',
+				'run':		self.display_off,
 			},
-
 			{
-				'type':		'item',
-				'title':	self.__lan.l('box_menu_power_shutdown'),
-				'action':	self.create_confirmed_shell_action(
-								title	= self.__lan.l('box_menu_power_shutdown'),
-								command	= [['/usr/bin/python3',f'{self.WORKING_DIR}/lib_poweroff.py','poweroff' ]]
-							),
+				'label':	self.t('box_menu_power_reboot'),
+				'icon':		'reboot',
+				'command':	[['/usr/bin/python3', f'{self.WORKING_DIR}/lib_poweroff.py', 'reboot']],
+				'confirm':	self.t('box_menu_confirm_reboot'),
+				'danger':	True,
+			},
+			{
+				'label':	self.t('box_menu_power_shutdown'),
+				'icon':		'power',
+				'command':	[['/usr/bin/python3', f'{self.WORKING_DIR}/lib_poweroff.py', 'poweroff']],
+				'confirm':	self.t('box_menu_confirm_power_off'),
+				'ok':		self.t('box_menu_off'),
+				'danger':	True,
 			},
 		]
 
-		self.MENU_MAIN	= [
-			{
-				'type':		'menu',
-				'title':	self.__lan.l('box_menu_backup_backup'),
-				'action':	MENU_BACKUP,
-			},
+		MENU_MAIN	= []
 
-			{
-				'type':		'menu',
-				'title':	self.__lan.l('box_menu_network'),
-				'action':	self.MENU_NETWORK,
-			},
+		default	= self.default_backup()
+		if default:
+			MENU_MAIN.append(default)
 
+		MENU_MAIN	+= [
+			STOP_BACKUP,
 			{
-				'type':		'menu',
-				'title':	self.__lan.l('box_menu_system'),
-				'action':	self.MENU_POWER,
+				'label':	self.t('box_menu_backup_backup'),
+				'icon':		'backup',
+				'submenu':	BACKUP_SOURCES_MENU,
 			},
-
+			{
+				'label':	self.t('box_menu_status'),
+				'icon':		'status',
+				'page':		self.status_rows,
+			},
+			{
+				'label':	self.t('box_menu_network'),
+				'icon':		'wifi',
+				'submenu':	MENU_NETWORK,
+			},
+			{
+				'label':	self.t('box_menu_power'),
+				'icon':		'power',
+				'submenu':	MENU_POWER,
+			},
 		]
 
-		# define menu variables an (re-)set them
-		self.reset(ShowMenu=False)
+		return(MENU_MAIN)
 
-		self.GPIO_init()
+	def label(self, item, key='label'):
+		value	= item.get(key, '')
+		return(value() if callable(value) else value)
 
-		# debug commands
-		self.debug()
+	def is_risky(self, item):
+		return(item.get('danger', False))
 
-		# iternal loop
-		while menu_controller.proceed:
-			time.sleep(1)
+	def confirm_text(self, item):
+		# backups from the box's buttons always copy, never delete from the source: the screen says so
+		if 'backup' in item:
+			return(f"{item['confirm']}\n{self.t('box_menu_mode_copy')}")
+		return(item['confirm'])
+
+	def default_backup(self):
+		# the backup set as default (Settings): one item, as when the box starts
+		Source	= self.__setup.get_val('conf_BACKUP_DEFAULT_SOURCE')
+		Target	= self.__setup.get_val('conf_BACKUP_DEFAULT_TARGET')
+		if Source in ['none', ''] or Target in ['none', '']:
+			return(None)
+
+		Arguments	= [
+			'--SourceName', Source,
+			'--TargetName', Target,
+			'--rename-files', str(self.__setup.get_val('conf_BACKUP_RENAME_FILES')),
+			'--force-sync-database', 'False',
+			'--generate-thumbnails', str(self.__setup.get_val('conf_BACKUP_GENERATE_THUMBNAILS')),
+			'--update-exif', str(self.__setup.get_val('conf_BACKUP_UPDATE_EXIF')),
+			'--power-off', 'False',
+		]
+
+		return({
+			'label':	self.t('box_menu_start_default'),
+			'icon':		'play',
+			'backup':	Arguments,
+			'confirm':	f'{self.service_name(Source)} → {self.service_name(Target)}',
+			'ok':		self.t('box_menu_start'),
+			'done':		self.t('box_menu_backup_started'),
+			'visible':	lambda: not self.backup_running(),
+		})
+
+	# ---------- state ----------
+
+	def backup_running(self):
+		return(subprocess.run(['pgrep', '-f', f'{self.WORKING_DIR}/backup.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
+
+	def vpn_active(self):
+		try:
+			return(any(Interface.startswith(('tun', 'wg')) for Interface in os.listdir('/sys/class/net')))
+		except:
+			return(False)
+
+	def status_rows(self):
+		rows	= []
+
+		running	= self.backup_running()
+		rows.append({'icon': 'backup' if running else 'check', 'label': self.t('box_menu_running') if running else self.t('box_menu_ready'), 'value': ''})
+
+		# drives in use under /media (backup targets and sources, browse mounts)
+		drives	= {}
+		try:
+			Blockdevices	= json.loads(subprocess.check_output(['lsblk', '-J', '-o', 'PATH,LABEL,MODEL,MOUNTPOINT,PKNAME'], stderr=subprocess.DEVNULL).decode()).get('blockdevices', [])
+		except:
+			Blockdevices	= []
+
+		def walk(devices, model=''):
+			for device in devices:
+				Model	= device.get('model') or model
+				Mount	= device.get('mountpoint') or ''
+				if Mount.startswith(self.const_MEDIA_DIR + '/') and Mount not in drives:
+					drives[Mount]	= (device.get('label') or (Model or '').strip() or os.path.basename(Mount))
+				walk(device.get('children', []), Model)
+		walk(Blockdevices)
+
+		for Mount, Name in drives.items():
+			try:
+				st		= os.statvfs(Mount)
+				total	= st.f_blocks * st.f_frsize
+				free	= st.f_bavail * st.f_frsize
+			except:
+				continue
+			if total <= 0:
+				continue
+			rows.append({'icon': 'drive', 'label': Name, 'value': f"{100 * (1 - free / total):.0f}% · {self.human(total)}", 'bar': 1 - free / total})
+
+		if not drives:
+			# not mounted: the drive the display found (fill read without mounting or remembered)
+			Drive	= getattr(self.screen, 'drive_info', None) if self.screen is not None else None
+			if Drive and getattr(self.screen, 'drive_cache', None):
+				rows.append({'icon': 'drive', 'label': Drive['name'], 'value': f"{100 * Drive['used']:.0f}% · {Drive['size']}" if Drive.get('used') is not None else Drive['size'], 'bar': Drive.get('used')})
+			else:
+				rows.append({'icon': 'drive', 'label': self.t('box_menu_no_drive'), 'value': ''})
+
+		IPs	= [IP for IP in lib_network.get_IPs().split('\n') if IP and ':' not in IP]
+		rows.append({'icon': 'ip', 'label': 'IP', 'value': IPs[0] if IPs else '–'})
+
+		try:
+			with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+				Temp	= float(f.read()) / 1000
+			rows.append({'icon': 'temp', 'label': self.t('box_menu_temperature'), 'value': f'{Temp:.0f}°C', 'alert': Temp >= 75})
+		except:
+			pass
+
+		# power supply: vcgencmd get_throttled, bit 0 = under-voltage now, bit 16 = since boot
+		try:
+			Throttled	= int(subprocess.check_output(['vcgencmd', 'get_throttled'], stderr=subprocess.DEVNULL).decode().strip().split('=')[-1], 16)
+			if Throttled & 0x1:
+				rows.append({'icon': 'bolt', 'label': self.t('box_menu_power'), 'value': self.t('box_menu_power_low'), 'alert': True})
+			elif Throttled & 0x10000:
+				rows.append({'icon': 'bolt', 'label': self.t('box_menu_power'), 'value': self.t('box_menu_power_was_low'), 'alert': True})
+			else:
+				rows.append({'icon': 'bolt', 'label': self.t('box_menu_power'), 'value': self.t('box_menu_power_ok')})
+		except:
+			pass
+
+		return(rows)
+
+	def human(self, Bytes):
+		for Unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+			if Bytes < 1000 or Unit == 'TB':
+				return(f'{Bytes:.0f} {Unit}' if Bytes >= 10 or Unit == 'B' else f'{Bytes:.1f} {Unit}')
+			Bytes	/= 1000
+
+	# ---------- buttons ----------
 
 	def GPIO_init(self):
 		if self.conf_MENU_BUTTON_COMBINATION:
@@ -305,6 +460,8 @@ class menu(object):
 			elif self.conf_MENU_BUTTON_COMBINATION[0:1] == 'c':
 				ButtonsConfigFile		= f"{self.const_MEDIA_DIR}/{self.const_BUTTONS_PRIVATE_CONFIG_FILE}"
 				ButtonCombinationNumber	=  int(self.conf_MENU_BUTTON_COMBINATION[1:])
+			else:
+				return
 
 			if os.path.isfile(ButtonsConfigFile):
 				ConfigLines	= []
@@ -324,266 +481,234 @@ class menu(object):
 									GPIO_PIN, ButtonFunction	= ButtonDef.split('=')
 									GPIO_PIN	= int(GPIO_PIN)
 
-									self.GPIO_config_button(GPIO_PIN,ButtonFunction)
-
+									self.GPIO_config_button(GPIO_PIN,ButtonFunction.strip())
 
 	def GPIO_config_button(self,GPIO_PIN,ButtonFunction):
 		# rotate buttons
 		if self.conf_MENU_BUTTON_ROTATE == 2:
-			if ButtonFunction == 'up':
-				ButtonFunction	= 'down'
-			elif ButtonFunction == 'down':
-				ButtonFunction	= 'up'
-			elif ButtonFunction == 'left':
-				ButtonFunction	= 'right'
-			elif ButtonFunction == 'right':
-				ButtonFunction	= 'left'
+			ButtonFunction	= {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}.get(ButtonFunction, ButtonFunction)
 
-		# define button
+		if ButtonFunction not in ['up', 'down', 'left', 'right', 'ok', 'back', 'home']:
+			return()
+
+		# define button (up and down repeat while held)
 		try:
-			self.buttons[GPIO_PIN]				= Button(pin=GPIO_PIN, pull_up=self.GPIO_MENU_BUTTON_RESISTOR_PULL_UP, bounce_time=self.conf_MENU_BUTTON_BOUNCETIME / 1000)
+			self.buttons[GPIO_PIN]	= Button(pin=GPIO_PIN, pull_up=self.GPIO_MENU_BUTTON_RESISTOR_PULL_UP, bounce_time=self.conf_MENU_BUTTON_BOUNCETIME / 1000, hold_time=0.6, hold_repeat=True)
 		except:
 			return()
 
+		press	= lambda: self.press(ButtonFunction)
+
 		# add events to buttons
-		if ButtonFunction == 'up':
-			if self.GPIO_MENU_BUTTON_EDGE_DETECTION_RISING:
-				self.buttons[GPIO_PIN].when_pressed	= self.move_up
-			else:
-				self.buttons[GPIO_PIN].when_released	= self.move_up
-
-		if ButtonFunction == 'down':
-			if self.GPIO_MENU_BUTTON_EDGE_DETECTION_RISING:
-				self.buttons[GPIO_PIN].when_pressed		= self.move_down
-			else:
-				self.buttons[GPIO_PIN].when_released	= self.move_down
-
-		if ButtonFunction == 'left':
-			if self.GPIO_MENU_BUTTON_EDGE_DETECTION_RISING:
-				self.buttons[GPIO_PIN].when_pressed	= self.move_left
-			else:
-				self.buttons[GPIO_PIN].when_released	= self.move_left
-
-		if ButtonFunction == 'right':
-			if self.GPIO_MENU_BUTTON_EDGE_DETECTION_RISING:
-				self.buttons[GPIO_PIN].when_pressed	= self.move_right
-			else:
-				self.buttons[GPIO_PIN].when_released	= self.move_right
-
-	def reset(self, ShowMenu=False):
-		self.MENU_LEVEL		= 0 # integer
-		self.MENU			= []
-		self.MENU_POS		= []
-		self.MENU_SHIFT		= []
-		self.HEAD_LINES	= 0
-
-		self.LAST_INPUT_TIME	= time.time()
-
-		# init basic menu
-		self.MENU.append(self.MENU_MAIN) # points to the actually active menu level
-		self.MENU_POS.append(0)
-		self.MENU_SHIFT.append(0)
-
-		if ShowMenu:
-			self.display()
-
-	def check_timeout(self):
-		if abs(time.time() - self.LAST_INPUT_TIME) >= self.const_MENU_TIMEOUT_SEC:
-			self.reset()
+		if self.GPIO_MENU_BUTTON_EDGE_DETECTION_RISING:
+			self.buttons[GPIO_PIN].when_pressed		= press
+			if ButtonFunction in ['up', 'down']:
+				self.buttons[GPIO_PIN].when_held	= press
+			elif ButtonFunction in ['left', 'back']:
+				# hold left: close the menu from any level (joystick only boxes)
+				self.buttons[GPIO_PIN].when_held	= lambda: self.press('home')
 		else:
-			self.LAST_INPUT_TIME	= time.time()
+			self.buttons[GPIO_PIN].when_released	= press
 
-	def create_confirmed_shell_action(self, title, command):
-		return([
-			{
-				'type':		'confirmitem',
-				'title':	title,
-				'action':	self.create_shell_action(title, command),
-			},
-		])
+	def press(self, key):
+		with self.lock:
+			self.last_input	= time.time()
 
-	def create_shell_action(self, title, command):
-		return([
-			{
-				'type':		'shell',
-				'title':	title,
-				'action':	command,
-			},
-		]
-		)
+			# a display that is off is only woken up
+			if self.screen is not None and self.screen.wake():
+				return
 
-	def set_shift(self):
-		display_active_line	= self.MENU_POS[self.MENU_LEVEL] + 1 + self.HEAD_LINES - self.MENU_SHIFT[self.MENU_LEVEL]
-		if display_active_line <= self.HEAD_LINES:
-			# shift up
-			self.MENU_SHIFT[self.MENU_LEVEL] = self.MENU_POS[self.MENU_LEVEL]
-		elif display_active_line > self.DISPLAY_LINES - self.HEAD_LINES:
-			# shift down
-			self.MENU_SHIFT[self.MENU_LEVEL] = self.HEAD_LINES + self.MENU_POS[self.MENU_LEVEL] + 1 - self.DISPLAY_LINES
+			if self.message_until:
+				self.close()
+				return
 
-	def get_INFO(self, action):
-		if action == 'ip':
-			FrameTime	= self.conf_DISP_FRAME_TIME_IP
-			lib_cron_ip.ip_info().display_ip(FrameTime=FrameTime, force=True)
-			return([], FrameTime)
-		elif action == 'wifi_qr':
-			FrameTime	= self.conf_DISP_FRAME_TIME_IP * 2
-			lib_cron_ip.ip_info().display_wifi_qr(FrameTime=FrameTime, force=True)
-			return([], FrameTime)
+			if not self.active:
+				if key in ['back', 'home']:
+					return
+				self.open()
+				return
 
-		return([], self.conf_DISP_FRAME_TIME)
+			if key == 'home':
+				self.close()
+			elif self.dialog:
+				self.press_dialog(key)
+			elif self.page:
+				self.press_page(key)
+			else:
+				self.press_list(key)
 
-	def display(self):
-		self.check_timeout()
+	def press_list(self, key):
+		level	= self.stack[-1]
+		items	= self.visible(level['items'])
+		if not items:
+			self.back()
+			return
+		level['pos']	= min(level['pos'], len(items) - 1)
 
-		self.set_shift()
+		if key == 'down':
+			level['pos']	= (level['pos'] + 1) % len(items)
+		elif key == 'up':
+			level['pos']	= (level['pos'] - 1) % len(items)
+		elif key in ['left', 'back']:
+			self.back()
+			return
+		elif key in ['right', 'ok']:
+			self.select(items[level['pos']])
+			return
+		self.draw()
 
-		FrameTime			= self.const_MENU_FRAME_TIME
-		LINES 				= []
-		n					= 0
+	def press_dialog(self, key):
+		if key in ['up', 'down', 'left', 'right'] and not (key == 'right' and self.dialog['choice'] == 1):
+			if key == 'left' and self.dialog['choice'] == 0:
+				self.dialog	= None
+			else:
+				self.dialog['choice']	= 1 - self.dialog['choice']
+			self.draw()
+		elif key == 'back':
+			self.dialog	= None
+			self.draw()
+		elif key in ['ok', 'right']:
+			item		= self.dialog['item']
+			confirmed	= self.dialog['choice'] == 1
+			self.dialog	= None
+			if confirmed:
+				self.execute(item)
+			else:
+				self.draw()
 
-		# define title
-		self.HEAD_LINES = 0
-		if self.MENU_LEVEL > 0:
-			if self.MENU[self.MENU_LEVEL - 1][self.MENU_POS[self.MENU_LEVEL - 1]]['type'] == 'menu':
-				HEAD_LINE = self.MENU[self.MENU_LEVEL - 1][self.MENU_POS[self.MENU_LEVEL - 1]]['title'].strip()
-				if HEAD_LINE != '':
-					self.HEAD_LINES = 1
-					LINES	+= [f"s=h,u:{HEAD_LINE}"]
+	def press_page(self, key):
+		rows	= self.page['cache']
+		visible	= self.render.page_rows()
+		if key == 'down' and self.page['first'] + visible < len(rows):
+			self.page['first']	+= 1
+		elif key == 'up' and self.page['first'] > 0:
+			self.page['first']	-= 1
+		elif key in ['left', 'back', 'ok', 'right']:
+			self.page	= None
+		self.draw(refresh=False)
 
-		# generate content
-		for item in self.MENU[self.MENU_LEVEL]:
+	# ---------- actions ----------
 
-			if (n >= self.MENU_SHIFT[self.MENU_LEVEL]) and (n < self.DISPLAY_LINES + self.MENU_SHIFT[self.MENU_LEVEL] - self.HEAD_LINES):
+	def visible(self, items):
+		if callable(items):
+			items	= items()
+		return([item for item in items if not item.get('visible') or item['visible']()])
 
-				# Title can be combined by more than one parts translatet separately.
-				# Parts are separated by "|"
-				TITLE = ''
-				titleparts = self.MENU[self.MENU_LEVEL][n]['title'].split('|')
-				for titlepart in titleparts:
-					TITLE = "{}{} ".format(TITLE,titlepart)
+	def open(self):
+		self.active	= True
+		self.stack	= [{'title': 'Backup Box', 'items': self.MENU_MAIN, 'pos': 0, 'first': 0}]
+		self.dialog	= None
+		self.page	= None
+		self.draw()
 
-				# confirm item
-				if self.MENU[self.MENU_LEVEL][n]['type'] == 'confirmitem':
-					LINES	+= [f"s=b:{self.__lan.l('box_menu_confirm')}", f"s=b:{TITLE}", "s=h:{}".format(self.__lan.l('box_menu_yes'))]
-					break
+	def close(self):
+		self.active			= False
+		self.stack			= []
+		self.dialog			= None
+		self.page			= None
+		self.message_until	= 0
+		if self.screen is not None:
+			self.screen.menu_close()
 
-				elif self.MENU[self.MENU_LEVEL][n]['type'] == 'shell':
-					i	= 0
-					for command in self.MENU[self.MENU_LEVEL][n]['action']:
-						i	+= 1
+	def back(self):
+		if len(self.stack) > 1:
+			self.stack.pop()
+			self.draw()
+		else:
+			self.close()
 
-						# wait for all commands to finish except for the last
-						if i < len(self.MENU[self.MENU_LEVEL][n]['action']):
-							subprocess.run(command, shell=False)
-						else:
-							subprocess.Popen(command, shell=False)
+	def select(self, item):
+		if 'submenu' in item:
+			self.stack.append({'title': item.get('title', self.label(item)), 'items': item['submenu'], 'pos': 0, 'first': 0})
+			self.draw()
+		elif 'page' in item:
+			self.page	= {'title': item['label'], 'rows': item['page'], 'first': 0, 'cache': []}
+			self.draw()
+		elif 'run' in item:
+			# screens of their own (IP, Wi-Fi QR): the menu closes first
+			self.close()
+			threading.Thread(target=item['run'], daemon=True).start()
+		elif 'command' in item or 'backup' in item:
+			if item.get('confirm'):
+				# risky actions start on "cancel"
+				self.dialog	= {'item': item, 'choice': 0 if self.is_risky(item) else 1}
+				self.draw()
+			else:
+				self.execute(item)
 
-					self.reset(ShowMenu=False)
-					LINES	= []
-					break
+	def execute(self, item):
+		if 'backup' in item:
+			# copy only: a backup device on the go never deletes from the source by a button press
+			Commands	= [self.kill_backup_process, self.start_backup_trunk + item['backup'] + ['--move-files', 'False']]
+		else:
+			Commands	= item['command']
 
-				elif self.MENU[self.MENU_LEVEL][n]['type'] == 'info':
-					INFO, FrameTime	= self.get_INFO(self.MENU[self.MENU_LEVEL][n]['action'])
-					if INFO:
-						LINES	+= [f"s=h:{TITLE}"] + INFO
-
-					self.reset(ShowMenu=True)
-					LINES	= []
-					break
-
-				# menu or item
-				elif self.MENU[self.MENU_LEVEL][n]['type'] in ['menu','item']:
-					line	= TITLE
-
-					if self.MENU[self.MENU_LEVEL][n]['type'] == 'menu':
-						line = f"+ {line}"
-
-					if n == self.MENU_POS[self.MENU_LEVEL]:
-						style	= 's=h'
-					else:
-						style	= 's=b'
-
-					LINES+= [f"{style}:{line}"]
+		def run(commands):
+			# all commands but the last are waited for
+			for n, command in enumerate(commands):
+				if n < len(commands) - 1:
+					subprocess.run(command, shell=False)
 				else:
-					print('No known menu type: {}'.format(self.MENU[self.MENU_LEVEL][n]['type']),file=sys.stderr)
+					subprocess.Popen(command, shell=False)
 
-			n += 1
+		threading.Thread(target=run, args=(Commands,), daemon=True).start()
 
-		if LINES:
-			self.__display.message([f'set:clear,time={FrameTime}'] + LINES)
-
-	def move_down(self):
-		if len(self.MENU[self.MENU_LEVEL]) > (self.MENU_POS[self.MENU_LEVEL] + 1):
-			self.MENU_POS[self.MENU_LEVEL] += 1
+		if item.get('done'):
+			self.show(self.render.message('check', item['done']))
+			self.message_until	= time.time() + 1.5
 		else:
-			self.MENU_POS[self.MENU_LEVEL] = 0
+			self.close()
 
-		self.display()
+	def display_off(self):
+		if self.screen is not None:
+			self.screen.sleep()
 
-	def move_up(self):
-		if self.MENU_POS[self.MENU_LEVEL] > 0:
-			self.MENU_POS[self.MENU_LEVEL] += -1
-		elif (len(self.MENU[self.MENU_LEVEL]) > 0):
-			self.MENU_POS[self.MENU_LEVEL] = len(self.MENU[self.MENU_LEVEL]) - 1
-		self.display()
+	# ---------- drawing ----------
 
-	def move_right(self):
-		menu_new	= self.MENU[self.MENU_LEVEL][self.MENU_POS[self.MENU_LEVEL]]['action']
-		self.MENU_LEVEL += 1
+	def draw(self, refresh=True):
+		if self.screen is None or not self.active:
+			return
 
-		# replace or append next menu level
-		if len(self.MENU) >= self.MENU_LEVEL + 1:
-			self.MENU[self.MENU_LEVEL] = menu_new
-			self.MENU_POS[self.MENU_LEVEL] = 0
-			self.MENU_SHIFT[self.MENU_LEVEL] = 0
+		if self.dialog:
+			item	= self.dialog['item']
+			image	= self.render.confirm(
+				title			= item.get('title', self.label(item)),
+				text			= self.confirm_text(item),
+				ok_label		= item.get('ok', self.t('box_menu_ok')),
+				cancel_label	= self.t('box_menu_cancel'),
+				choice			= self.dialog['choice'],
+				danger			= self.is_risky(item),
+			)
+		elif self.page:
+			if refresh or not self.page['cache']:
+				self.page['cache']	= self.page['rows']()
+			self.page['first']	= min(self.page['first'], max(0, len(self.page['cache']) - self.render.page_rows()))
+			image	= self.render.page(self.page['title'], self.page['cache'], self.page['first'])
+			self.page_drawn	= time.time()
 		else:
-			self.MENU.append(menu_new)
-			self.MENU_POS.append(0)
-			self.MENU_SHIFT.append(0)
+			level	= self.stack[-1]
+			items	= self.visible(level['items'])
+			level['pos']	= min(level['pos'], max(0, len(items) - 1))
 
-		self.display()
+			# keep the selection in view
+			rows	= self.render.rows
+			if level['pos'] < level['first']:
+				level['first']	= level['pos']
+			elif level['pos'] >= level['first'] + rows:
+				level['first']	= level['pos'] - rows + 1
 
-	def move_left(self):
-		if self.MENU_LEVEL > 0:
-			self.MENU_LEVEL += -1
-		self.display()
+			image	= self.render.list(
+				level['title'],
+				[{'label': self.label(item), 'icon': self.label(item, 'icon'), 'submenu': 'submenu' in item or 'page' in item} for item in items],
+				level['pos'],
+				level['first'],
+			)
 
-##debug
-	def debug(self):
-		return()
+		self.show(image)
 
-		self.move_right()#debug
-		self.move_right()#debug
-		self.move_up()#debug
+	def show(self, image):
+		if self.screen is not None:
+			self.screen.menu_show(image)
 
 if __name__ == "__main__":
-	# setup=lib_setup.setup()
- #
-	# menu_controller	= MENU_CONTROLLER()
- #
-	# menuobj	= menu(DISPLAY_LINES=10, setup=setup, menu_controller=menu_controller)
- #
-	# menuobj.move_right()#debug
-	# menuobj.move_right()#debug
-	# menuobj.move_right()#debug
-	# menuobj.move_up()#debug
-	# menuobj.move_right()#debug
-	# menuobj.move_right()#debug
- #
-	# time.sleep (0.5)
-	# menuobj.move_right()#debug
-	# time.sleep (0.5)
-	# menuobj.move_right()#debug
-	# time.sleep (0.5)
-	# menuobj.move_right()#debug
- #
-	# menuobj.move_down()#debug
-	# menuobj.move_down()#debug
-	# menuobj.move_right()#debug
-	# menuobj.move_down()#debug
-	#menuobj.move_right()#debug
-	#menuobj.move_right()#debug
-	# time.sleep(20)
-
 	pass

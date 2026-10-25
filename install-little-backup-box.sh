@@ -33,6 +33,9 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
+# GitHub repository to install from (this fork of Little Backup Box with the touchscreen UI)
+LBB_REPO="keeratsawhney/backupbox"
+
 # get OS release version
 OS_RELEASE=$(lsb_release -a | grep 'Release:' | cut -d':' -f 2 | xargs)
 
@@ -41,8 +44,8 @@ if  [ "${OS_RELEASE}" == "13" ]; then
 
 elif  [ "${OS_RELEASE}" == "12" ]; then
 	# bookworm
-	echo -e "Note: It looks like you are running an outdated Raspberry Pi OS Bookworm system.\nThe current development version of Little Backup Box is no longer compatible with this release.\nThe last version supporting Bookworm will be installed instead.\nUpgrading to Trixie is strongly recommended."
-	branch='bookworm'; curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/${branch}/install-little-backup-box.sh | bash -s -- ${branch} 2> install-error.log
+	# the touchscreen UI of this fork is built on the Trixie version only
+	echo -e "Note: It looks like you are running an outdated Raspberry Pi OS Bookworm system.\nThis version of Little Backup Box needs Raspberry Pi OS Trixie.\nPlease install Raspberry Pi OS Trixie (Raspberry Pi Imager) and run the installer again."
 	exit
 else
 	echo -e "Sorry: Installation and updates are only supported on Raspberry Pi OS Trixie (main branch) and Bookworm (non-asterisk branch).\nThe Bookworm branch is no longer maintained — development has moved to Trixie."
@@ -95,8 +98,19 @@ echo "Cloning Little Backup Box"
 cd
 
 sudo rm -R ${INSTALLER_DIR} 2>/dev/null
-git clone --branch "${branch}" https://github.com/outdoorbits/little-backup-box.git
-GIT_CLONE=$?
+# clone into "little-backup-box" whatever the repository is called: INSTALLER_DIR and updates expect this directory name
+# only the newest version (no history): small and quick, survives weak connections; retried, the later tries over HTTP/1.1
+GIT_CLONE=1
+for try in 1 2 3; do
+	if [ "${try}" -gt 1 ]; then
+		echo "Cloning failed, retrying (${try}/3) ..."
+		rm -rf little-backup-box
+		sleep 5
+		git config --global http.version HTTP/1.1
+	fi
+	git clone --depth 1 --branch "${branch}" "https://github.com/${LBB_REPO}.git" little-backup-box && GIT_CLONE=0 && break
+done
+git config --global --unset http.version 2>/dev/null
 if [ "${GIT_CLONE}" -gt 0 ]; then
 	echo "Cloning little-backup-box from github.com failed. Please try again later."
 	exit 1
@@ -334,15 +348,20 @@ sudo setfacl -R \
 	"${const_MEDIA_DIR}"
 
 # move background images in place
-mv "${INSTALLER_DIR}/scripts/img/backgrounds/"* "${const_MEDIA_DIR}/${const_BACKGROUND_IMAGES_DIR}/lbb/"
+sudo mv "${INSTALLER_DIR}/scripts/img/backgrounds/"* "${const_MEDIA_DIR}/${const_BACKGROUND_IMAGES_DIR}/lbb/"
 
 # add user www-data to sudoers
 sudo usermod -aG sudo ${USER_WWW_DATA}
 yes | sudo cp -f "${INSTALLER_DIR}/etc/sudoers_d_www-data" "/etc/sudoers.d/www-data"
 sudo chmod 0440 "/etc/sudoers.d/www-data"
 
-# allow sudo for pi and www-data without password
-echo 'pi ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/010_pi-nopasswd
+# allow sudo without password for the user installing (Raspberry Pi OS keeps the first user in this file,
+# overwriting it with "pi" only took it away from users with another name) and for www-data
+INSTALL_USER="$(whoami)"
+{
+	echo "${INSTALL_USER} ALL=(ALL) NOPASSWD: ALL"
+	if [ "${INSTALL_USER}" != "pi" ] && id pi >/dev/null 2>&1; then echo 'pi ALL=(ALL) NOPASSWD: ALL'; fi
+} | sudo tee /etc/sudoers.d/010_pi-nopasswd
 sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 
 echo 'www-data ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/010_www-data-nopasswd
@@ -482,38 +501,25 @@ sudo a2enmod proxy
 sudo a2enmod proxy_http
 sudo a2enmod proxy_html
 sudo a2enmod headers
+sudo a2enmod xml2enc
 
 #enable conf php<VERSION>-fpm
 sudo a2enconf php${PHP_VERSION}-fpm
 
-#configure php-fpm to disable private mount namespace
-echo "[Unit]
-Description=The PHP ${PHP_VERSION} FastCGI Process Manager
-Documentation=man:php-fpm${PHP_VERSION}(8)
-After=network.target
-
-[Service]
-Type=notify
-ExecStart=/usr/sbin/php-fpm${PHP_VERSION} --nodaemonize --fpm-config /etc/php/${PHP_VERSION}/fpm/php-fpm.conf
-ExecStartPost=-/usr/lib/php/php-fpm-socket-helper install /run/php/php-fpm.sock /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf 82
-ExecStopPost=-/usr/lib/php/php-fpm-socket-helper remove /run/php/php-fpm.sock /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf 82
-ExecReload=/bin/kill -USR2 $MAINPID
-
-# Disable private mount namespace
-PrivateTmp=false
-RuntimeDirectory=php-fpm
-RuntimeDirectoryMode=0755
-
-[Install]
-WantedBy=multi-user.target" | tee /etc/systemd/system/multi-user.target.wants/php${PHP_VERSION}-fpm.service
+#configure php-fpm to disable private mount namespace (drives mounted later must be visible to the web UI)
+# as a drop-in: the unit file of the php package stays untouched
+sudo mkdir -p "/etc/systemd/system/php${PHP_VERSION}-fpm.service.d"
+echo "[Service]
+PrivateTmp=false" | sudo tee "/etc/systemd/system/php${PHP_VERSION}-fpm.service.d/little-backup-box.conf" > /dev/null
 
 #start php-fpm service
 sudo systemctl daemon-reload
 
 #openssl
 sudo openssl req -x509 -nodes -days 3650 -subj '/C=OW/ST=MilkyWay/L=Earth/O=little-backup-box/CN=10.42.0.1' -newkey rsa:2048 -keyout /etc/ssl/private/little-backup-box.key -out /etc/ssl/certs/little-backup-box.crt
-sudo cat /etc/ssl/private/little-backup-box.key | sudo tee /etc/ssl/private/little-backup-box.pem
-sudo cat /etc/ssl/certs/little-backup-box.crt | sudo tee -a /etc/ssl/private/little-backup-box.pem
+# (not printed: the key must not end up in install logs)
+sudo cat /etc/ssl/private/little-backup-box.key | sudo tee /etc/ssl/private/little-backup-box.pem > /dev/null
+sudo cat /etc/ssl/certs/little-backup-box.crt | sudo tee -a /etc/ssl/private/little-backup-box.pem > /dev/null
 
 sudo chown root:ssl-cert /etc/ssl/private/little-backup-box.key
 sudo chmod 640 /etc/ssl/private/little-backup-box.key
@@ -533,12 +539,16 @@ if [ "${SCRIPT_MODE}" = "install" ]; then
 	echo "ServerName little-backup-box" | sudo tee -a "/etc/apache2/apache2.conf"
 fi
 
-yes | sudo cp -f "${INSTALLER_DIR}/etc/apache2_ports.conf" "/etc/apache2/ports.conf"
-yes | sudo cp -f "${INSTALLER_DIR}/etc/apache2_conf-available_ssl-params.conf" "/etc/apache2/conf-available/ssl-params.conf"
-yes | sudo cp -f "${INSTALLER_DIR}/etc/apache2_sites-available_little-backup-box.conf" "/etc/apache2/sites-available/little-backup-box.conf"
+sudo cp -f "${INSTALLER_DIR}/etc/apache2_ports.conf" "/etc/apache2/ports.conf"
+sudo cp -f "${INSTALLER_DIR}/etc/apache2_conf-available_ssl-params.conf" "/etc/apache2/conf-available/ssl-params.conf"
+sudo cp -f "${INSTALLER_DIR}/etc/apache2_sites-available_little-backup-box.conf" "/etc/apache2/sites-available/little-backup-box.conf"
 
 sudo mkdir -p /etc/apache2/includes
 sudo touch /etc/apache2/includes/password.conf
+for src in "${INSTALLER_DIR}"/etc/apache2_includes_*.conf; do
+    name="${src##*/etc/apache2_includes_}"
+    sudo cp -f "$src" "/etc/apache2/includes/$name"
+done
 
 sudo a2enmod ssl
 sudo a2enmod headers
@@ -589,7 +599,7 @@ Please connect your mobile or notebook to this wifi.
 
 \ZuThere are two options now:\Zn
 
-1. If you want to configure comitup now, navigate to \Zb\Z1http\Zn://10.41.0.1 (http, not https!)
+1. If you want to configure comitup now, navigate to \Zb\Z1http\Zn://10.41.0.1/comitup/ (http, not https!)
 and connect your lbb to your wifi.
 Connect your mobile or notbook to the same wifi. If you use a display on your lbb, it will
 tell you its new IP. Connect to lbb:

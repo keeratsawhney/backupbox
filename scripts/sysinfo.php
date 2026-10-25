@@ -65,7 +65,7 @@
 
 			$mem_swap_frac			= shell_exec("free | grep Swap | awk '{print $3/$2 * 100.0}'");
 			$mem_swap_all			= shell_exec("free | grep Swap | awk '{print $2 / 1024}'");
-			$mem_swap				= round($mem_swap_frac, 1) . " % * " . round($mem_swap_all) . " MB";
+			$mem_swap				= round((float) $mem_swap_frac, 1) . " % * " . round((float) $mem_swap_all) . " MB";
 
 			$abnormal_conditions	= shell_exec("sudo python3 ${WORKING_DIR}/lib_system.py --get_abnormal_system_conditions");
 

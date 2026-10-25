@@ -23,6 +23,7 @@ import os
 import subprocess
 import shutil
 import threading
+import time
 
 import backup
 import lib_clean
@@ -31,6 +32,7 @@ import lib_cron_ip
 import lib_display
 import lib_git
 import lib_language
+import lib_network
 import lib_proftpd
 import lib_setup
 import lib_storage
@@ -114,17 +116,28 @@ class backup_autorun(object):
 
 	def __display_hello(self):
 		if self.__setup.get_val('conf_DISP_COLOR_MODEL') == '1':
-			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/little-backup-box-mono.png'])
+			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/boot-mono.png'])
 		else:
-			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/little-backup-box-color.png'])
+			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/boot-color.png'])
 
-		lib_cron_ip.ip_info().display_ip()
+	def __display_ready_later(self):
+		# the network often comes a little later: the address is added then, without delaying a default backup
+		for _ in range(30):
+			time.sleep(3)
+			if lib_network.get_IPs():
+				# fills in the address on the home screen (or shows it as QR while a backup has the display)
+				lib_cron_ip.ip_info().display_ip()
+				return
 
 	def __ip_info(self):
 		# ip info
 		ip_info	= lib_cron_ip.ip_info()
 
-		ip_info.display_ip()
+		# the box's home screen instead of the logo: temporary screens (the IP QR) return to it
+		if ip_info.ready_screen():
+			ip_info.display_ip(force=True)
+		else:
+			threading.Thread(target=self.__display_ready_later, args=(), daemon=False).start()
 
 		# ip_info.mail_ip() starts as thread
 		mail_thread	= ip_info.mail_ip()

@@ -18,6 +18,7 @@
 #######################################################################
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime, timedelta
 import os
 import pathlib
@@ -174,6 +175,7 @@ class backup(object):
 		self.SourceDevice				= None
 		self.TargetDevice				= None
 		self.__TIMSCopied				= False
+		self.__CopiedFiles				= [] # files copied by this run, relative to the target's mount point
 		self.__mail_threads_started		= []
 		self.__break_generateThumbnails	= False
 
@@ -257,9 +259,13 @@ class backup(object):
 			if self.DoRenameFiles:
 				self.RenameFiles()
 
+			# after a backup only the files it copied are processed (fast on the go);
+			# the functions thumbnails/database (web UI) process the whole drive
+			OnlyFiles	= None if self.SourceStorageType in ['thumbnails', 'database', 'exif', 'rename'] else self.__CopiedFiles
+
 			# sync database
 			if self.ForceSyncDatabase or self.__TIMSCopied:
-				self.syncDatabase()
+				self.syncDatabase(OnlyFiles=OnlyFiles)
 
 			# update exif
 			if self.TargetDevice and self.DoUpdateEXIF:
@@ -267,7 +273,7 @@ class backup(object):
 
 			# generate thumbnails
 			if self.TargetDevice and self.DoGenerateThumbnails_primary:
-					self.generateThumbnails(Device=self.TargetDevice)
+					self.generateThumbnails(Device=self.TargetDevice, OnlyFiles=OnlyFiles)
 
 		self.finish()
 
@@ -968,6 +974,10 @@ class backup(object):
 
 					del progress
 
+					# thumbnails and database are made for these files only, not for the whole target
+					# (files that do not arrive on the target are skipped there)
+					self.__CopiedFiles	+= [os.path.join(self.TargetDevice.CloudBaseDir, self.SourceDevice.SubPathAtTarget, File).strip('/') for File in FilesList if File]
+
 					# validate files after backup
 					if SourceStorageType == 'camera':
 						DisplayLine1	= self.__lan.l('box_backup_validate_files_from')		# header1
@@ -1221,7 +1231,8 @@ class backup(object):
 		# Set the PWR LED ON to indicate that RenameFiles has finished
 		lib_system.rpi_leds(led='PWR', trigger='none', brightness='1')
 
-	def syncDatabase(self):
+	def syncDatabase(self, OnlyFiles=None):
+		# OnlyFiles: list of files below the target's mount point (just copied); None: whole drive
 		if not self.TargetDevice:
 			return()
 
@@ -1233,6 +1244,11 @@ class backup(object):
 
 		# prepare database
 		db	= lib_view.viewdb(self.__setup, self.__log, self.TargetDevice.MountPoint)
+
+		if OnlyFiles is not None:
+			# just copied files: no cleaning of the whole database
+			self.__syncDatabaseImport(db, [os.path.join(self.TargetDevice.MountPoint, File.strip('/')) for File in self.get_OnlyFilesMedia(self.TargetDevice, OnlyFiles)])
+			return()
 
 ## clean database
 		# remove duplicates
@@ -1298,6 +1314,11 @@ class backup(object):
 		Images	= subprocess.check_output(Command, shell=True).decode().strip().split('\n')
 		Images[:]	= [element for element in Images if element]
 
+		self.__syncDatabaseImport(db, Images)
+
+	def __syncDatabaseImport(self, db, Images):
+		# insert images (full paths) missing in the database
+
 		# prepare loop to insert images into the database
 		FilesToProcess	= len(Images)
 
@@ -1331,6 +1352,29 @@ class backup(object):
 		# Set the PWR LED ON to indicate that syncDatabase has finished
 		lib_system.rpi_leds(led='PWR', trigger='none', brightness=1)
 
+	def get_AllowedExtensions(self, textfiles=False):
+		Extensions	= ';'.join([
+			self.const_FILE_EXTENSIONS_LIST_WEB_IMAGES,
+			self.const_FILE_EXTENSIONS_LIST_HEIC,
+			self.const_FILE_EXTENSIONS_LIST_RAW,
+			self.const_FILE_EXTENSIONS_LIST_TIF,
+			self.const_FILE_EXTENSIONS_LIST_VIDEO,
+			self.const_FILE_EXTENSIONS_LIST_AUDIO
+		] + ([self.const_FILE_EXTENSIONS_LIST_TEXT] if textfiles else []))
+		return([Extension.lower() for Extension in Extensions.split(';') if Extension])
+
+	def get_OnlyFilesMedia(self, Device, OnlyFiles):
+		# media files out of a list of copied files, as '/subpath/file' below the mount point
+		Extensions	= self.get_AllowedExtensions(textfiles=True)
+		Files	= []
+		for File in OnlyFiles:
+			File	= File.strip('/')
+			if '/tims/' in f'/{File}' or '/.' in f'/{File}' or not '.' in File or File.rsplit('.', 1)[1].lower() not in Extensions:
+				continue
+			if os.path.isfile(os.path.join(Device.MountPoint, File)):
+				Files.append(f'/{File}')
+		return(Files)
+
 	def get_AllowedExtensionsFindOptions(self, textfiles=False):
 
 		AllowedExtensionsList	= (
@@ -1357,7 +1401,8 @@ class backup(object):
 
 		return(AllowedExtensionsFindOptions)
 
-	def generateThumbnails(self, Device=None):
+	def generateThumbnails(self, Device=None, OnlyFiles=None):
+		# OnlyFiles: list of files below the device's mount point (just copied); None: whole drive
 
 		if Device is None:
 			return()
@@ -1367,20 +1412,13 @@ class backup(object):
 
 		lib_system.rpi_leds(trigger='timer', delay_on=900, delay_off=100, brightness=1)
 
-		if os.path.isfile('/usr/lib/libraw/dcraw_emu'):
-			DCRAW_EMU	= '/usr/lib/libraw/dcraw_emu'
-		else:
-			try:
-				DCRAW_EMU	= subprocess.check_output(['/usr/bin/whereis', 'dcraw_emu']).decode().strip().split('\n')[0].split(' ')[1]
-			except:
-				DCRAW_EMU	= 'dcraw_emu'
-
 		# remove all empty tims files
-		Command	= ['/usr/bin/find',  Device.MountPoint, '-type', 'f','-size', '0', '-path', '*/tims/*', '-delete']
-		try:
-			subprocess.run(Command)
-		except:
-			pass
+		if OnlyFiles is None:
+			Command	= ['/usr/bin/find',  Device.MountPoint, '-type', 'f','-size', '0', '-path', '*/tims/*', '-delete']
+			try:
+				subprocess.run(Command)
+			except:
+				pass
 
 		# prepare database
 		db	= lib_view.viewdb(self.__setup,self.__log, Device.MountPoint)
@@ -1394,6 +1432,20 @@ class backup(object):
 			])
 
 		BannedPathsViewCaseInsensitive	= self.get_BannedPathsViewCaseInsensitive()
+
+		if OnlyFiles is not None:
+			# just copied files without (non empty) thumbnail
+			MissingTIMSList	= []
+			for File in self.get_OnlyFilesMedia(Device, OnlyFiles):
+				TIMS	= os.path.join(Device.MountPoint, os.path.dirname(File).strip('/'), 'tims', f'{os.path.basename(File)}.JPG')
+				if not os.path.isfile(TIMS) or os.path.getsize(TIMS) == 0:
+					MissingTIMSList.append(File)
+		else:
+			MissingTIMSList	= self.__findMissingTIMS(Device, BannedPathsViewCaseInsensitive)
+
+		self.__generateThumbnailsFor(Device, MissingTIMSList)
+
+	def __findMissingTIMS(self, Device, BannedPathsViewCaseInsensitive):
 		Command	= rf"/usr/bin/find '{Device.MountPoint}' -type f \( {' '.join(self.get_AllowedExtensionsFindOptions(textfiles=True))} \) -not -path '*/tims/*' {' '.join(BannedPathsViewCaseInsensitive)}"
 
 		ImagesList	= subprocess.check_output(Command, shell=True).decode().strip().split('\n')
@@ -1413,7 +1465,192 @@ class backup(object):
 			TIMSList[i]	= '/'.join(TIMSList[i].rsplit('/tims/', 1))									# remove /tims from folder
 
 		#remove from ImagesList all items known in TIMSList
-		MissingTIMSList	= list(set(ImagesList) - set(TIMSList))
+		return(list(set(ImagesList) - set(TIMSList)))
+
+	def __thumbnail_workers(self):
+		try:
+			MemTotal	= int(open('/proc/meminfo').readline().split()[1]) * 1024
+		except:
+			MemTotal	= 0
+		if MemTotal and MemTotal < 1024 ** 3:
+			return(1)
+		try:
+			Throttled	= int(subprocess.check_output(['/usr/bin/vcgencmd', 'get_throttled'], stderr=subprocess.DEVNULL).decode().split('=')[1], 16)
+		except:
+			Throttled	= 0
+		# under-voltage now or since boot
+		return(2 if Throttled & 0x10001 else min(3, os.cpu_count() or 1))
+
+	def __rawPreview(self, RawFile):
+		# the full size JPEG every camera embeds in its raw files: far faster than developing the raw data
+		for Tag in ('PreviewImage', 'JpgFromRaw'):
+			try:
+				Data	= subprocess.run(['/usr/bin/exiftool', '-b', f'-{Tag}', RawFile], capture_output=True, timeout=60).stdout
+			except:
+				Data	= b''
+			if len(Data) > 20000 and Data[:2] == b'\xff\xd8':
+				return(Data)
+		return(None)
+
+	def __rawOrientation(self, RawFile):
+		# the embedded preview is stored unrotated: the raw file says how to turn it
+		try:
+			Orientation	= subprocess.check_output(['/usr/bin/exiftool', '-n', '-s3', '-Orientation', RawFile], stderr=subprocess.DEVNULL, timeout=30).decode().strip()
+		except:
+			Orientation	= ''
+		return({'3': '180', '6': '90', '8': '270'}.get(Orientation, '0'))
+
+	def __generateThumbnail(self, Device, SourceFilePathName, DCRAW_EMU):
+		# thumbnail (tims) of one file; returns files to process as well (converted HEIC images)
+		Extra	= []
+
+		#extract Extension from filename
+		SourceFilePathName	= SourceFilePathName.strip('/')
+		try:
+			SourceFilePathNameExt	= SourceFilePathName.rsplit('.',1)[1].lower()
+		except:
+			SourceFilePathNameExt	= ''
+
+		# generate thumbnails
+		TIMS_Dir				= os.path.join(os.path.dirname(SourceFilePathName), 'tims')
+		pathlib.Path(Device.MountPoint, TIMS_Dir).mkdir(parents=True, exist_ok=True)
+
+		FileName				= os.path.basename(SourceFilePathName)
+		TIMS_SubpathFilename	= os.path.join(TIMS_Dir, f"{FileName}.JPG")
+
+		if SourceFilePathNameExt in f"{self.const_FILE_EXTENSIONS_LIST_WEB_IMAGES};{self.const_FILE_EXTENSIONS_LIST_TIF}".split(';'):
+			# file-types: jpeg, tif image
+			# jpeg:size: JPEGs are decoded at a reduced size (at least twice the thumbnail), not with all their megapixels
+			Command	= ["/usr/bin/convert", "-define", "jpeg:size=1600x1600", f"{os.path.join(Device.MountPoint, SourceFilePathName)}[0]", "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_HEIC.split(';'):
+
+			# file-type: heic/heif
+			# convert heif to jpg
+			Command	= ['/usr/bin/heif-convert', os.path.join(Device.MountPoint, SourceFilePathName), os.path.join(Device.MountPoint, f'{SourceFilePathName}.JPG')]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+			# transfer exif from heif to jpg
+			Command	= ['/usr/bin/exiftool', '-overwrite_original', '-ignoreMinorErrors', '-TagsFromFile', os.path.join(Device.MountPoint, SourceFilePathName), os.path.join(Device.MountPoint, f'{SourceFilePathName}.JPG')]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+			# create tims file
+			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, f"{SourceFilePathName}.JPG"), "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+			conf_VIEW_CONVERT_HEIC				= self.__setup.get_val('conf_VIEW_CONVERT_HEIC')
+
+			if conf_VIEW_CONVERT_HEIC:
+				MissingTIMSList.append(f"{SourceFilePathName}.JPG")
+			else:
+				Command	= ["/usr/bin/rm", os.path.join(Device.MountPoint, f"{SourceFilePathName}.JPG")]
+				try:
+					subprocess.run(Command)
+				except:
+					print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_RAW.split(';'):
+			# file-type: raw-image
+			RawFile	= os.path.join(Device.MountPoint, SourceFilePathName)
+			Preview	= self.__rawPreview(RawFile)
+			if Preview:
+				# the JPEG preview of the camera, turned like the photo
+				Command	= ["/usr/bin/convert", "-define", "jpeg:size=1600x1600", "jpg:-", "-rotate", self.__rawOrientation(RawFile), "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+				try:
+					subprocess.run(Command, input=Preview)
+				except:
+					print(f"Error: {' '.join(Command)}",file=sys.stderr)
+			else:
+				# no preview: develop the raw data (slow)
+				SourceCommand	= [DCRAW_EMU, "-w", "-Z", "-", RawFile]
+				FilterCommand	= ["/usr/bin/convert", "-", "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+				try:
+					lib_common.pipe(SourceCommand,FilterCommand)
+				except:
+					print(f"Error: {' '.join(SourceCommand) + ' | ' + ' '.join(FilterCommand)}",file=sys.stderr)
+
+		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_VIDEO.split(';'):
+			# file-type: video
+			# -ss before -i: jumps to the second instead of decoding up to it; scaled by ffmpeg, not saved full size first
+			for Second in ("00:00:01", "00:00:00"):
+				# second 0 for videos shorter than a second
+				Command	= ["/usr/bin/ffmpeg", "-loglevel", "error", "-y", "-skip_frame", "nokey", "-ss", Second, "-i", os.path.join(Device.MountPoint, SourceFilePathName), "-frames:v", "1", "-vf", "scale='min(800,iw)':-2", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+				try:
+					subprocess.run(Command, stdin=subprocess.DEVNULL)
+				except:
+					print(f"Error: {' '.join(Command)}",file=sys.stderr)
+				if os.path.isfile(os.path.join(Device.MountPoint, TIMS_SubpathFilename)) and os.path.getsize(os.path.join(Device.MountPoint, TIMS_SubpathFilename)) > 0:
+					break
+
+			Command	=["/usr/bin/composite", "-gravity", "center", f"{self.__WORKING_DIR}/img/play.png", os.path.join(Device.MountPoint, TIMS_SubpathFilename), os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_AUDIO.split(';'):
+			Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/audio.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+		elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_TEXT.split(';'):
+			Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/text.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+		if not os.path.isfile(os.path.join(Device.MountPoint, TIMS_SubpathFilename)):
+			self.__log.message(f"ERROR: TIMS of '{os.path.join(Device.MountPoint, SourceFilePathName)}' ('{os.path.join(Device.MountPoint, TIMS_SubpathFilename)}') not regular created.")
+
+			Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/unknown.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+			Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+			try:
+				subprocess.run(Command)
+			except:
+				print(f"Error: {' '.join(Command)}",file=sys.stderr)
+
+		return(Extra)
+
+	def __generateThumbnailsFor(self, Device, MissingTIMSList):
+		if os.path.isfile('/usr/lib/libraw/dcraw_emu'):
+			DCRAW_EMU	= '/usr/lib/libraw/dcraw_emu'
+		else:
+			try:
+				DCRAW_EMU	= subprocess.check_output(['/usr/bin/whereis', 'dcraw_emu']).decode().strip().split('\n')[0].split(' ')[1]
+			except:
+				DCRAW_EMU	= 'dcraw_emu'
 
 		#prepare loop to create thumbnails
 		FilesToProcess	= len(MissingTIMSList)
@@ -1432,144 +1669,28 @@ class backup(object):
 			TaskNote		= self.__lan.l('box_backup_mode_thumbnails')
 		)
 
-		for SourceFilePathName in MissingTIMSList:
-
-			# allow to stop process remote (when running as thread)
-			if self.__break_generateThumbnails:
-				return()
-
-			#extract Extension from filename
-			SourceFilePathName	= SourceFilePathName.strip('/')
-			try:
-				SourceFilePathNameExt	= SourceFilePathName.rsplit('.',1)[1].lower()
-			except:
-				SourceFilePathNameExt	= ''
-
-			# generate thumbnails
-			TIMS_Dir				= os.path.join(os.path.dirname(SourceFilePathName), 'tims')
-			pathlib.Path(Device.MountPoint, TIMS_Dir).mkdir(parents=True, exist_ok=True)
-
-			FileName				= os.path.basename(SourceFilePathName)
-			TIMS_SubpathFilename	= os.path.join(TIMS_Dir, f"{FileName}.JPG")
-
-			if SourceFilePathNameExt in f"{self.const_FILE_EXTENSIONS_LIST_WEB_IMAGES};{self.const_FILE_EXTENSIONS_LIST_TIF}".split(';'):
-				# file-types: jpeg, tif image
-				Command	= ["/usr/bin/convert", f"{os.path.join(Device.MountPoint, SourceFilePathName)}[0]", "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-			elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_HEIC.split(';'):
-
-				# file-type: heic/heif
-				# convert heif to jpg
-				Command	= ['/usr/bin/heif-convert', os.path.join(Device.MountPoint, SourceFilePathName), os.path.join(Device.MountPoint, f'{SourceFilePathName}.JPG')]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				# transfer exif from heif to jpg
-				Command	= ['/usr/bin/exiftool', '-overwrite_original', '-ignoreMinorErrors', '-TagsFromFile', os.path.join(Device.MountPoint, SourceFilePathName), os.path.join(Device.MountPoint, f'{SourceFilePathName}.JPG')]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				# create tims file
-				Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, f"{SourceFilePathName}.JPG"), "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				conf_VIEW_CONVERT_HEIC				= self.__setup.get_val('conf_VIEW_CONVERT_HEIC')
-
-				if conf_VIEW_CONVERT_HEIC:
-					MissingTIMSList.append(f"{SourceFilePathName}.JPG")
-				else:
-					Command	= ["/usr/bin/rm", os.path.join(Device.MountPoint, f"{SourceFilePathName}.JPG")]
+		# several files at once (the Pi has 4 cores); fewer with little memory or a weak power supply,
+		# full load draws more current and could make the drives disconnect
+		Workers	= self.__thumbnail_workers()
+		Pending	= list(MissingTIMSList)
+		with ThreadPoolExecutor(max_workers=Workers) as Pool:
+			Running	= set()
+			while Pending or Running:
+				# allow to stop process remote (when running as thread)
+				while Pending and len(Running) < Workers * 2 and not self.__break_generateThumbnails:
+					Running.add(Pool.submit(self.__generateThumbnail, Device, Pending.pop(0), DCRAW_EMU))
+				if not Running:
+					break
+				Done, Running	= wait(Running, return_when=FIRST_COMPLETED)
+				for Future in Done:
 					try:
-						subprocess.run(Command)
-					except:
-						print(f"Error: {' '.join(Command)}",file=sys.stderr)
+						Pending.extend(Future.result())
+					except Exception as e:
+						print(f"Error: thumbnail: {e}", file=sys.stderr)
+					progress.progress()
 
-			elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_RAW.split(';'):
-				# file-type: raw-image
-				SourceCommand	= [DCRAW_EMU, "-w", "-Z", "-", os.path.join(Device.MountPoint, SourceFilePathName)]
-				FilterCommand	= ["/usr/bin/convert", "-", "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					lib_common.pipe(SourceCommand,FilterCommand)
-				except:
-					print(f"Error: {' '.join(SourceCommand) + ' | ' + ' '.join(FilterCommand)}",file=sys.stderr)
-
-			elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_VIDEO.split(';'):
-				# file-type: video
-				Command	= ["/usr/bin/ffmpeg", "-i", os.path.join(Device.MountPoint, SourceFilePathName), "-ss", "00:00:01", "-vframes", "1", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				if not os.path.isfile(os.path.join(Device.MountPoint, TIMS_SubpathFilename)):
-					# tims file not generated. Video too short? Try at second 0
-					Command	= ["/usr/bin/ffmpeg", "-i", f"{Device.MountPoint}/{SourceFilePathName}", "-ss", "00:00:00", "-vframes", "1", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-					try:
-						subprocess.run(Command)
-					except:
-						print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				Command	= ["/usr/bin/mogrify", "-resize", "800>", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				subprocess.run(Command)
-
-				Command	=["/usr/bin/composite", "-gravity", "center", f"{self.__WORKING_DIR}/img/play.png", os.path.join(Device.MountPoint, TIMS_SubpathFilename), os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_AUDIO.split(';'):
-				Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/audio.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			elif SourceFilePathNameExt in self.const_FILE_EXTENSIONS_LIST_TEXT.split(';'):
-				Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/text.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			if not os.path.isfile(os.path.join(Device.MountPoint, TIMS_SubpathFilename)):
-				self.__log.message(f"ERROR: TIMS of '{os.path.join(Device.MountPoint, SourceFilePathName)}' ('{os.path.join(Device.MountPoint, TIMS_SubpathFilename)}') not regular created.")
-
-				Command	= ["/usr/bin/cp", f"{self.__WORKING_DIR}/img/unknown.JPG", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-				Command	= ["/usr/bin/convert", os.path.join(Device.MountPoint, TIMS_SubpathFilename), "-gravity", "center", "-pointsize", "50", "-annotate", "0", FileName, os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
-				try:
-					subprocess.run(Command)
-				except:
-					print(f"Error: {' '.join(Command)}",file=sys.stderr)
-
-			progress.progress()
+		if self.__break_generateThumbnails:
+			return()
 
 		del progress
 		self.__display.message([f":{self.__lan.l('box_finished')}"])
@@ -1631,6 +1752,10 @@ class backup(object):
 
 		for BannedPath in self.__const_VIEW_BANNED_PATHS:
 			BannedPathsList += ['-not', '-ipath', BannedPath]
+
+		# hidden files and folders: macOS writes a "._name" metadata file next to every file it copies
+		# to FAT/exFAT drives, plus .Spotlight-V100, .Trashes, ... (used in shell commands, hence quoted)
+		BannedPathsList += ['-not', '-path', "'*/.*'"]
 
 		return(BannedPathsList)
 

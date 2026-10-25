@@ -30,7 +30,6 @@
 	$background = $config["conf_BACKGROUND_IMAGE"] == ""?"":"background='" . $constants["const_MEDIA_DIR"] .'/' . $constants["const_BACKGROUND_IMAGES_DIR"] . "/" . $config["conf_BACKGROUND_IMAGE"] . "'";
 
 	include("sub-popup.php");
-	include("sub-virtual-keyboard.php");
 
 	include("sub-common.php");
 	$NVMe_available	= get_nvme_available($WORKING_DIR, $constants, false);
@@ -87,6 +86,15 @@
 		if ($_POST['conf_DISP'] != $_POST['conf_DISP_OLD']) {
 			exec("nohup sudo python3 $WORKING_DIR/create_screen_config.py --activate ${_POST['conf_DISP']} 2>&1 &");
 			$SetupMessages .= '<div class="card" style="margin-top: 2em;">' . L::config_screen_usage_updated . '</div>';
+		}
+
+		// keyboard
+		if (
+			(isset($_POST['conf_VIRTUAL_KEYBOARD_ENABLED']) != isset($_POST['conf_VIRTUAL_KEYBOARD_ENABLED_OLD'])) or
+			($_POST['conf_LANGUAGE'] != $_POST['conf_LANGUAGE_OLD'])
+		) {
+			exec("sudo python3 " . $constants["const_WEB_ROOT_LBB"] . "/firefox-keyboard.py " . (isset($_POST['conf_VIRTUAL_KEYBOARD_ENABLED']) ? "enable --layout " . $config['conf_LANGUAGE'] : "disable"));
+			$SetupMessages	.= popup(L::config_alert_keyboard_effect_after_reboot, POPUP_ALLOWED: true, ECHO_OUTPUT: false);
 		}
 
 		// rclone_gui
@@ -372,6 +380,7 @@ conf_DISP_FRAME_TIME=$conf_DISP_FRAME_TIME
 conf_DISP_FRAME_TIME_IP=$conf_DISP_FRAME_TIME_IP
 conf_DISP_IP_REPEAT=$conf_DISP_IP_REPEAT
 conf_DISP_SHOW_STATUSBAR=$conf_DISP_SHOW_STATUSBAR
+conf_DISP_SLEEP_MIN=$conf_DISP_SLEEP_MIN
 conf_MENU_ENABLED=$conf_MENU_ENABLED
 conf_MENU_BUTTON_COMBINATION='$conf_MENU_BUTTON_COMBINATION'
 conf_MENU_BUTTON_ROTATE='$conf_MENU_BUTTON_ROTATE'
@@ -621,7 +630,6 @@ CONFIGDATA;
 <head>
 	<?php
 		include "${WORKING_DIR}/sub-standards-header-loader.php";
-		echo virtual_keyboard_css($config["conf_VIRTUAL_KEYBOARD_ENABLED"]);
 	?>
 	<script type="text/javascript" src="js/display.js"></script>
 </head>
@@ -631,15 +639,15 @@ CONFIGDATA;
 	<?php include "${WORKING_DIR}/sub-menu.php"; ?>
 	<?php
 		include "${WORKING_DIR}/sub-display.php";
-		display();
+		display(true, L::mainmenue_config);
 	?>
 
 	<?php echo($SetupMessages); ?>
 
 	<form action="<?php echo $_SERVER['PHP_SELF'] ?>" method="POST" enctype="multipart/form-data">
 
-		<div class="card" style="margin-top: 2em;">
-			<?php echo '<button style="margin-top: 2em;" type="submit" name="save">' . L::config_save_button . '</button>'; ?>
+		<div class="card lbb-savebar">
+			<?php echo '<button type="submit" name="save">' . L::config_save_button . '</button>'; ?>
 		</div>
 
 		<div class="card" style="margin-top: 2em;">
@@ -648,6 +656,7 @@ CONFIGDATA;
 
 				<div>
 					<h3><?php echo L::config_lang_header; ?></h3>
+						<typut type="hidden" name="conf_LANGUAGE_OLD" value="<?php echo $config["conf_LANGUAGE"]; ?>">
 						<label for="conf_LANGUAGE"><?php echo L::config_lang_label; ?></label><br />
 							<select name="conf_LANGUAGE" id="conf_LANGUAGE">
 							<?php
@@ -738,7 +747,7 @@ CONFIGDATA;
 				<details>
 					<summary style="letter-spacing: 1px; text-transform: uppercase;"><?php echo L::config_backup_camera_folder_mask_header; ?></summary>
 						<label for="conf_BACKUP_CAMERA_FOLDER_MASK"><?php echo L::config_backup_camera_folder_mask_label; ?></label><br />
-						<textarea <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_BACKUP_CAMERA_FOLDER_MASK" name="conf_BACKUP_CAMERA_FOLDER_MASK" rows="8" style="width: 100%;"><?php echo str_replace(';', "\n", $config['conf_BACKUP_CAMERA_FOLDER_MASK']); ?></textarea>
+						<textarea id="conf_BACKUP_CAMERA_FOLDER_MASK" name="conf_BACKUP_CAMERA_FOLDER_MASK" rows="8" style="width: 100%;"><?php echo str_replace(';', "\n", $config['conf_BACKUP_CAMERA_FOLDER_MASK']); ?></textarea>
 				</details>
 
 				<details>
@@ -889,6 +898,7 @@ CONFIGDATA;
 						<option value="light" <?php echo $config["conf_THEME"] == "light"?" selected":""; ?>><?php echo L::config_view_theme_light; ?></option>
 						<option value="dark" <?php echo $config["conf_THEME"] == "dark"?" selected":""; ?>><?php echo L::config_view_theme_dark; ?></option>
 						<option value="sepia" <?php echo $config["conf_THEME"] == "sepia"?" selected":""; ?>><?php echo L::config_view_theme_sepia; ?></option>
+						<option value="sage" <?php echo $config["conf_THEME"] == "sage"?" selected":""; ?>><?php echo L::config_view_theme_sage; ?></option>
 					</select>
 
 				<h3><?php echo L::config_view_bg_image_header; ?></h3>
@@ -967,6 +977,15 @@ CONFIGDATA;
 									$display_frame_times_ip_array=array('1', '1.5', '2', '2.5', '3', '4', '5', '7', '10');
 									foreach($display_frame_times_ip_array as $display_frame_time_ip) {
 										echo "<option value='" . $display_frame_time_ip . "' " . ($config["conf_DISP_FRAME_TIME_IP"] == $display_frame_time_ip?" selected":"") . ">" . $display_frame_time_ip . "</option>";
+									}
+								?>
+							</select>
+						<br />
+						<label for="conf_DISP_SLEEP_MIN"><?php echo L::config_display_sleep_label; ?></label><br />
+							<select name="conf_DISP_SLEEP_MIN" id="conf_DISP_SLEEP_MIN">
+								<?php
+									foreach(array(0, 1, 2, 5, 10, 15, 30, 60) as $display_sleep_min) {
+										echo "<option value='" . $display_sleep_min . "' " . (($config["conf_DISP_SLEEP_MIN"] ?? 10) == $display_sleep_min?" selected":"") . ">" . ($display_sleep_min == 0 ? L::config_display_sleep_never : $display_sleep_min) . "</option>";
 									}
 								?>
 							</select>
@@ -1452,6 +1471,11 @@ CONFIGDATA;
 
 					<h3><?php echo L::config_screen_virtual_keyboard_enable_header; ?></h3>
 						<div>
+							<?php
+								if ($config['conf_VIRTUAL_KEYBOARD_ENABLED']=="1") {
+									print '<input type="hidden" name="conf_VIRTUAL_KEYBOARD_ENABLED_OLD" value="1">';
+								}
+							?>
 							<input type="checkbox" id="conf_VIRTUAL_KEYBOARD_ENABLED" name="conf_VIRTUAL_KEYBOARD_ENABLED"<?php echo $config['conf_VIRTUAL_KEYBOARD_ENABLED']=="1"?" checked":""; ?>>
 							<label for="conf_VIRTUAL_KEYBOARD_ENABLED"><?php echo L::config_screen_virtual_keyboard_enable_label; ?></label><br />
 						</div>
@@ -1502,11 +1526,11 @@ CONFIGDATA;
 
 				<h3><?php echo L::config_mail_smtp_header; ?></h3>
 					<label for="conf_SMTP_SERVER"><?php echo L::config_mail_smtp_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SMTP_SERVER" name="conf_SMTP_SERVER" size="6" value="<?php echo $config['conf_SMTP_SERVER']; ?>">
+					<input type="text" id="conf_SMTP_SERVER" name="conf_SMTP_SERVER" size="6" value="<?php echo $config['conf_SMTP_SERVER']; ?>">
 
 				<h3><?php echo L::config_mail_port_header; ?></h3>
 					<label for="conf_SMTP_PORT"><?php echo L::config_mail_port_label . " " . $config_standard["conf_SMTP_PORT"]; ?>)</label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','numpad','bottom'); ?> id="conf_SMTP_PORT" name="conf_SMTP_PORT" size="20" value="<?php echo $config['conf_SMTP_PORT']; ?>">
+					<input type="text" id="conf_SMTP_PORT" name="conf_SMTP_PORT" size="20" value="<?php echo $config['conf_SMTP_PORT']; ?>">
 
 				<h3><?php echo L::config_mail_security_header; ?></h3>
 					<input type="radio" id="conf_MAIL_SECURITY_STARTTLS" name="conf_MAIL_SECURITY" value="STARTTLS"<?php echo $config['conf_MAIL_SECURITY']!=="SSL"?" checked":""; ?>>
@@ -1517,19 +1541,19 @@ CONFIGDATA;
 
 				<h3><?php echo L::config_mail_user_header; ?></h3>
 					<label for="conf_MAIL_USER"><?php echo L::config_mail_user_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_MAIL_USER" name="conf_MAIL_USER" size="20" value="<?php echo $config['conf_MAIL_USER']; ?>">
+					<input type="text" id="conf_MAIL_USER" name="conf_MAIL_USER" size="20" value="<?php echo $config['conf_MAIL_USER']; ?>">
 
 				<h3><?php echo L::config_mail_password_header; ?></h3>
 					<label for="conf_MAIL_PASSWORD"><?php echo L::config_mail_password_label; ?></label><br />
-					<input type="password" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_MAIL_PASSWORD" name="conf_MAIL_PASSWORD" size="20" value="<?php echo htmlspecialchars(base64_decode($config['conf_MAIL_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>">
+					<input type="password" id="conf_MAIL_PASSWORD" name="conf_MAIL_PASSWORD" size="20" value="<?php echo htmlspecialchars(base64_decode($config['conf_MAIL_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>">
 
 				<h3><?php echo L::config_mail_sender_header; ?></h3>
 					<label for="conf_MAIL_FROM"><?php echo L::config_mail_sender_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_MAIL_FROM" name="conf_MAIL_FROM" size="20" value="<?php echo $config['conf_MAIL_FROM']; ?>">
+					<input type="text" id="conf_MAIL_FROM" name="conf_MAIL_FROM" size="20" value="<?php echo $config['conf_MAIL_FROM']; ?>">
 
 				<h3><?php echo L::config_mail_recipient_header; ?></h3>
 					<label for="conf_MAIL_TO"><?php echo L::config_mail_recipient_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_MAIL_TO" name="conf_MAIL_TO" size="20" value="<?php echo $config['conf_MAIL_TO']; ?>">
+					<input type="text" id="conf_MAIL_TO" name="conf_MAIL_TO" size="20" value="<?php echo $config['conf_MAIL_TO']; ?>">
 
 				<h3><?php echo L::config_mail_timeout_header; ?></h3>
 					<label for="conf_MAIL_TIMEOUT_SEC"><?php echo L::config_mail_timeout_label; ?></label><br />
@@ -1554,23 +1578,23 @@ CONFIGDATA;
 
 				<h3><?php echo L::config_rsync_server_header; ?></h3>
 					<label for="conf_RSYNC_SERVER"><?php echo L::config_rsync_server_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_RSYNC_SERVER" name="conf_RSYNC_SERVER" size="6" value="<?php echo $config['conf_RSYNC_SERVER']; ?>">
+					<input type="text" id="conf_RSYNC_SERVER" name="conf_RSYNC_SERVER" size="6" value="<?php echo $config['conf_RSYNC_SERVER']; ?>">
 
 				<h3><?php echo L::config_rsync_port_header; ?></h3>
 					<label for="conf_RSYNC_PORT"><?php echo L::config_rsync_port_label . " " . $config_standard['conf_RSYNC_PORT']; ?>)</label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','numpad','bottom'); ?> id="conf_RSYNC_PORT" name="conf_RSYNC_PORT" size="20" value="<?php echo $config['conf_RSYNC_PORT']; ?>">
+					<input type="text" id="conf_RSYNC_PORT" name="conf_RSYNC_PORT" size="20" value="<?php echo $config['conf_RSYNC_PORT']; ?>">
 
 				<h3><?php echo L::config_rsync_user_header; ?></h3>
 					<label for="conf_RSYNC_USER"><?php echo L::config_rsync_user_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_RSYNC_USER" name="conf_RSYNC_USER" size="20" value="<?php echo $config['conf_RSYNC_USER']; ?>">
+					<input type="text" id="conf_RSYNC_USER" name="conf_RSYNC_USER" size="20" value="<?php echo $config['conf_RSYNC_USER']; ?>">
 
 				<h3><?php echo L::config_rsync_password_header; ?></h3>
 					<label for="conf_RSYNC_PASSWORD"><?php echo L::config_rsync_password_label; ?></label><br />
-					<input type="password" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_RSYNC_PASSWORD" name="conf_RSYNC_PASSWORD" size="20" value="<?php echo htmlspecialchars(base64_decode($config['conf_RSYNC_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>">
+					<input type="password" id="conf_RSYNC_PASSWORD" name="conf_RSYNC_PASSWORD" size="20" value="<?php echo htmlspecialchars(base64_decode($config['conf_RSYNC_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>">
 
 				<h3><?php echo L::config_rsync_module_header; ?></h3>
 					<label for="conf_RSYNC_SERVER_MODULE"><?php echo L::config_rsync_module_label1 .  $config_standard['conf_RSYNC_SERVER_MODULE'] . L::config_rsync_module_label2; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_RSYNC_SERVER_MODULE" name="conf_RSYNC_SERVER_MODULE" size="20" value="<?php echo $config['conf_RSYNC_SERVER_MODULE']; ?>">
+					<input type="text" id="conf_RSYNC_SERVER_MODULE" name="conf_RSYNC_SERVER_MODULE" size="20" value="<?php echo $config['conf_RSYNC_SERVER_MODULE']; ?>">
 			</details>
 		</div>
 
@@ -1595,7 +1619,7 @@ CONFIGDATA;
 
 					foreach($CloudServices as $CloudService) { ?>
 							<label for="conf_BACKUP_CLOUDS_TARGET_BASEDIR_"><?php echo $CloudService; ?>:</label><br />
-							<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_BACKUP_CLOUDS_TARGET_BASEDIR_<?php echo ($CloudService);?>" name="conf_BACKUP_CLOUDS_TARGET_BASEDIR_<?php echo ($CloudService);?>" size="6" value="<?php echo $CloudBaseDirs[$CloudService]; ?>">
+							<input type="text" id="conf_BACKUP_CLOUDS_TARGET_BASEDIR_<?php echo ($CloudService);?>" name="conf_BACKUP_CLOUDS_TARGET_BASEDIR_<?php echo ($CloudService);?>" size="6" value="<?php echo $CloudBaseDirs[$CloudService]; ?>">
 					<?php } ?>
 
 					<h3><?php echo L::config_backup_cloud_sync_parameter_header; ?></h3>
@@ -1701,7 +1725,7 @@ CONFIGDATA;
 						<?php echo L::config_social_telegram_install_desc; ?><br />
 						<br />
 						<label for="conf_SOCIAL_TELEGRAM_TOKEN"><?php echo L::config_social_telegram_token_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_TELEGRAM_TOKEN" name="conf_SOCIAL_TELEGRAM_TOKEN" size="50" value="<?php echo $config['conf_SOCIAL_TELEGRAM_TOKEN']; ?>"><br />
+						<input type="text" id="conf_SOCIAL_TELEGRAM_TOKEN" name="conf_SOCIAL_TELEGRAM_TOKEN" size="50" value="<?php echo $config['conf_SOCIAL_TELEGRAM_TOKEN']; ?>"><br />
 
 						<?php include("${WORKING_DIR}/sub-telegram-chat-id.php"); ?>
 				</details>
@@ -1711,10 +1735,10 @@ CONFIGDATA;
 						<?php echo L::config_social_mastodon_install_desc; ?><br />
 						<br />
 						<label for="conf_SOCIAL_MASTODON_BASE_URL"><?php echo L::config_social_mastodon_base_url_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_MASTODON_BASE_URL" name="conf_SOCIAL_MASTODON_BASE_URL" size="50" value="<?php echo $config['conf_SOCIAL_MASTODON_BASE_URL']; ?>"><br />
+						<input type="text" id="conf_SOCIAL_MASTODON_BASE_URL" name="conf_SOCIAL_MASTODON_BASE_URL" size="50" value="<?php echo $config['conf_SOCIAL_MASTODON_BASE_URL']; ?>"><br />
 
 						<label for="conf_SOCIAL_MASTODON_TOKEN"><?php echo L::config_social_mastodon_token_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_MASTODON_TOKEN" name="conf_SOCIAL_MASTODON_TOKEN" size="50" value="<?php echo $config['conf_SOCIAL_MASTODON_TOKEN']; ?>"><br />
+						<input type="text" id="conf_SOCIAL_MASTODON_TOKEN" name="conf_SOCIAL_MASTODON_TOKEN" size="50" value="<?php echo $config['conf_SOCIAL_MASTODON_TOKEN']; ?>"><br />
 				</details>
 
 				<details>
@@ -1722,13 +1746,13 @@ CONFIGDATA;
 						<?php echo L::config_social_bluesky_install_desc; ?><br />
 						<br />
 						<label for="conf_SOCIAL_BLUESKY_API_BASE_URL"><?php echo L::config_social_bluesky_base_url_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_BLUESKY_API_BASE_URL" name="conf_SOCIAL_BLUESKY_API_BASE_URL" size="50" value="<?php echo $config['conf_SOCIAL_BLUESKY_API_BASE_URL']; ?>"><br />
+						<input type="text" id="conf_SOCIAL_BLUESKY_API_BASE_URL" name="conf_SOCIAL_BLUESKY_API_BASE_URL" size="50" value="<?php echo $config['conf_SOCIAL_BLUESKY_API_BASE_URL']; ?>"><br />
 
 						<label for="conf_SOCIAL_BLUESKY_IDENTIFIER"><?php echo L::config_social_bluesky_identifier_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_BLUESKY_IDENTIFIER" name="conf_SOCIAL_BLUESKY_IDENTIFIER" size="50" value="<?php echo $config['conf_SOCIAL_BLUESKY_IDENTIFIER']; ?>"><br />
+						<input type="text" id="conf_SOCIAL_BLUESKY_IDENTIFIER" name="conf_SOCIAL_BLUESKY_IDENTIFIER" size="50" value="<?php echo $config['conf_SOCIAL_BLUESKY_IDENTIFIER']; ?>"><br />
 
 						<label for="conf_SOCIAL_BLUESKY_APP_PASSWORD"><?php echo L::config_social_bluesky_app_password_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_BLUESKY_APP_PASSWORD" name="conf_SOCIAL_BLUESKY_APP_PASSWORD" size="50" value="<?php echo htmlspecialchars(base64_decode($config['conf_SOCIAL_BLUESKY_APP_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>"><br />
+						<input type="text" id="conf_SOCIAL_BLUESKY_APP_PASSWORD" name="conf_SOCIAL_BLUESKY_APP_PASSWORD" size="50" value="<?php echo htmlspecialchars(base64_decode($config['conf_SOCIAL_BLUESKY_APP_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>"><br />
 				</details>
 
 				<details>
@@ -1737,7 +1761,7 @@ CONFIGDATA;
 						<br />
 
 						<label for="conf_SOCIAL_MATRIX_HOMESERVER"><?php echo L::config_social_matrix_homeserver_label; ?></label><br />
-						<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_SOCIAL_MATRIX_HOMESERVER" name="conf_SOCIAL_MATRIX_HOMESERVER" size="50" value="<?php echo htmlspecialchars($config['conf_SOCIAL_MATRIX_HOMESERVER'] ?? '', ENT_QUOTES); ?>"><br />
+						<input type="text" id="conf_SOCIAL_MATRIX_HOMESERVER" name="conf_SOCIAL_MATRIX_HOMESERVER" size="50" value="<?php echo htmlspecialchars($config['conf_SOCIAL_MATRIX_HOMESERVER'] ?? '', ENT_QUOTES); ?>"><br />
 
 						<?php include("${WORKING_DIR}/sub-matrix-token.php"); ?>
 						<br />
@@ -1842,7 +1866,7 @@ CONFIGDATA;
 					* <?php echo L::config_wifi_password_dynamic_desc; ?><br />
 					<br />
 					<label for="conf_WIFI_PASSWORD"><?php echo L::config_wifi_password_label; ?></label><br />
-					<input type="text" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_WIFI_PASSWORD" name="conf_WIFI_PASSWORD" size="20" value="<?php echo htmlspecialchars(base64_decode($config['conf_WIFI_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>"><br />
+					<input type="text" id="conf_WIFI_PASSWORD" name="conf_WIFI_PASSWORD" size="20" value="<?php echo htmlspecialchars(base64_decode($config['conf_WIFI_PASSWORD']), ENT_QUOTES, 'UTF-8'); ?>"><br />
 					<div id="count_conf_WIFI_PASSWORD"></div>
 					<script>
 						const conf_WIFI_PASSWORD = document.getElementById("conf_WIFI_PASSWORD");
@@ -1933,9 +1957,9 @@ CONFIGDATA;
 
 				<h3><?php echo L::config_password_header; ?></h3>
 					<label for="conf_PASSWORD_1"><?php echo L::config_password_global_lbb_label; ?></label>
-					<input type="password" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_PASSWORD_1" name="conf_PASSWORD_1" size="20" value="">
+					<input type="password" id="conf_PASSWORD_1" name="conf_PASSWORD_1" size="20" value="">
 					<label for="conf_PASSWORD_2"><?php echo L::config_password_repeat_label; ?></label><br />
-					<input type="password" <?php echo virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true'); ?> id="conf_PASSWORD_2" name="conf_PASSWORD_2" size="20" value="">
+					<input type="password" id="conf_PASSWORD_2" name="conf_PASSWORD_2" size="20" value="">
 
 					<?php
 						if ($config['conf_PASSWORD'] != "") {
@@ -1976,8 +2000,8 @@ CONFIGDATA;
 		</div>
 
 <!-- 		save -->
-		<div class="card" style="margin-top: 2em; position: sticky; bottom: 0; z-index: 10; background-color: var(--cbg)">
-            <?php echo '<button style="margin-top: 2em" type="submit" name="save">' . L::config_save_button . '</button>'; ?>
+		<div class="card lbb-savebar lbb-savebar-sticky">
+			<?php echo '<button type="submit" name="save">' . L::config_save_button . '</button>'; ?>
 		</div>
 
 	</form>
@@ -2063,7 +2087,6 @@ CONFIGDATA;
 		?>
 
 		<?php include "sub-footer.php"; ?>
-		<?php echo virtual_keyboard_js($config["conf_VIRTUAL_KEYBOARD_ENABLED"],$config["conf_LANGUAGE"],$config["conf_THEME"]); ?>
 </body>
 
 </html>

@@ -28,7 +28,6 @@ $background = $config["conf_BACKGROUND_IMAGE"] == ""?"":"background='" . $consta
 
 include("sub-i18n-loader.php");
 
-include("sub-virtual-keyboard.php");
 include("sub-logmonitor.php");
 
 $run_command	= false;
@@ -70,7 +69,6 @@ doFlush();
 <head>
 	<?php
 		include "${WORKING_DIR}/sub-standards-header-loader.php";
-		echo virtual_keyboard_css($config["conf_VIRTUAL_KEYBOARD_ENABLED"]);
 	?>
 	<script src="js/logmonitor.js"></script>
 </head>
@@ -236,7 +234,7 @@ if (isset($CMD_HEADER)) {
 					<?php
 						if ($PASSWORD_ASK) {
 							echo '<label for="PWD">' . L::cmd_input_password . ':</label>';
-							echo '<input type="password" ' . virtual_keyboard_options($config["conf_VIRTUAL_KEYBOARD_ENABLED"],'','all','bottom','true') . ' size="20" name="PWD" id="PWD"><br>';
+							echo '<input type="password" size="20" name="PWD" id="PWD"><br>';
 						}
 					?>
 
@@ -267,7 +265,6 @@ if (isset($CMD_HEADER)) {
 	<?php
 		}
 }
-		echo virtual_keyboard_js($config["conf_VIRTUAL_KEYBOARD_ENABLED"],$config["conf_LANGUAGE"],$config["conf_THEME"]);
 	?>
 </body>
 </html>
@@ -275,6 +272,26 @@ if (isset($CMD_HEADER)) {
 <?php
 doFlush();
 if ($run_command) {exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT);}
+
+function update_command_line($branch, $repo, $user, $logfile) {
+	# The installer runs as its own systemd unit: it upgrades and restarts php-fpm and the web server,
+	# which would stop everything started from this web request. Its output goes to the log shown here.
+	# It needs sudo without password for the user (as on a fresh Raspberry Pi OS); without, say so instead of hanging.
+	$home		= function_exists('posix_getpwnam') ? (posix_getpwnam($user)['dir'] ?? "/home/$user") : "/home/$user";
+	$installer	= "$home/install-little-backup-box.sh";
+	$run		= "curl -sSL https://raw.githubusercontent.com/$repo/$branch/install-little-backup-box.sh -o $installer && bash $installer $branch";
+
+	return(
+		"if sudo -u $user sudo -n true 2>/dev/null; then " .
+			"echo 'Update runs in the background, the box reboots when it is finished.'; " .
+			"sudo systemd-run --unit=lbb-update --collect --uid=$user --setenv=HOME=$home --working-directory=$home " .
+				"-p StandardOutput=append:$logfile -p StandardError=append:$logfile /bin/bash -c " . escapeshellarg($run) . "; " .
+		"else " .
+			"echo 'Update not possible: user $user needs sudo without password.'; " .
+			"echo 'Run once over SSH: echo $user ALL=NOPASSWD: ALL | sudo tee /etc/sudoers.d/010_pi-nopasswd'; " .
+		"fi"
+	);
+}
 
 function exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT) {
 	# call this function at the end of the code: if $MAIL_RESULT==true the script will wait until the process is finished
@@ -295,17 +312,20 @@ function exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT) {
 
 	if ($CMD !== '') {
 
+		// updates install from this repository as the box's regular user (the first user account, not necessarily "pi")
+		$UPDATE_REPO	= 'keeratsawhney/backupbox';
+		$UPDATE_USER	= function_exists('posix_getpwuid') ? (posix_getpwuid(1000)['name'] ?? 'pi') : trim(shell_exec("getent passwd 1000 | cut -d: -f1") ?? '');
+		$UPDATE_USER	= $UPDATE_USER === '' ? 'pi' : $UPDATE_USER;
+
 		switch($CMD) {
 			case 'update':
 				$COMMAND_LINE	= "sudo python3 $WORKING_DIR/lib_display.py ':" . L::box_cmd_update_start1 . "' ':" . L::box_cmd_update_start2 . "'";
-				$COMMAND_LINE	.= ";sudo -u pi curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/main/install-little-backup-box.sh -o ~pi/install-little-backup-box.sh";
-				$COMMAND_LINE	.= ";sudo -u pi bash ~pi/install-little-backup-box.sh main";
+				$COMMAND_LINE	.= ";" . update_command_line('main', $UPDATE_REPO, $UPDATE_USER, $constants['const_CMD_LOGFILE']);
 				break;
 
 			case 'update_development':
 				$COMMAND_LINE	= "sudo python3 $WORKING_DIR/lib_display.py ':" . L::box_cmd_update_start1 . "' ':" . L::box_cmd_update_start2 . "'";
-				$COMMAND_LINE	.= ";sudo -u pi curl -sSL https://raw.githubusercontent.com/outdoorbits/little-backup-box/development/install-little-backup-box.sh -o ~pi/install-little-backup-box.sh";
-				$COMMAND_LINE	.= ";sudo -u pi bash ~pi/install-little-backup-box.sh development";
+				$COMMAND_LINE	.= ";" . update_command_line('development', $UPDATE_REPO, $UPDATE_USER, $constants['const_CMD_LOGFILE']);
 				break;
 
 			case 'update_libraw':
@@ -535,7 +555,6 @@ function exec_command($CMD, $PARAM1, $PARAM2, $MAIL_RESULT) {
 				$COMMAND_LINE	.= ";sudo $MAIN_COMMAND";
 				$COMMAND_LINE	.= ";echo ''";
 				$COMMAND_LINE	.= ";echo 'FINISHED.'";
-				$COMMAND_LINE	.= ";sudo python3 $WORKING_DIR/lib_display.py ':" . L::config_comitup_section . "' ':" . L::cmd_reset . "'";
 				break;
 
 			default:

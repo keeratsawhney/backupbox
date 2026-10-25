@@ -18,8 +18,10 @@
 #######################################################################
 
 from datetime import datetime, timedelta
+import json
 import os
 import pathlib
+import time
 
 import lib_mail
 import lib_system
@@ -76,6 +78,16 @@ class progressmonitor(object):
 
 		self.__TaskFilePath	= os.path.join(self.__const_TASKS_PATH, f'task_{id(self)}.txt')
 
+		# names of the files being copied, for the web UI (tmp/backup-files.json)
+		self.__FilesStatusPath	= os.path.join(os.path.dirname(self.__const_TASKS_PATH.rstrip('/')), 'backup-files.json')
+		self.__RecentFiles		= []
+		self.__FilesStatusTime	= 0
+		try:
+			# left over from a stopped backup
+			os.remove(self.__FilesStatusPath)
+		except:
+			pass
+
 		# create task file
 		self.create_task_file()
 
@@ -84,6 +96,23 @@ class progressmonitor(object):
 
 	def __del__(self):
 		self.remove_task_file()
+		try:
+			if self.__RecentFiles:
+				os.remove(self.__FilesStatusPath)
+		except:
+			pass
+
+	def __note_file(self, FileName):
+		# remember the last copied files; written at most five times a second (the web UI shows them live)
+		self.__RecentFiles	= (self.__RecentFiles + [FileName])[-6:]
+		if time.time() - self.__FilesStatusTime < 0.2:
+			return
+		self.__FilesStatusTime	= time.time()
+		try:
+			with open(self.__FilesStatusPath, 'w') as FilesStatusFile:
+				json.dump({'current': FileName, 'recent': self.__RecentFiles, 'copied': self.CountJustCopied, 'total': self.FilesToProcess}, FilesStatusFile)
+		except:
+			pass
 
 	def create_task_file(self):
 		try:
@@ -141,6 +170,7 @@ class progressmonitor(object):
 					self.CountJustCopied	+= 1
 
 					self.FilesList	+= [SyncOutputLine]
+					self.__note_file(SyncOutputLine)
 
 					if not self.TIMSCopied:
 						self.TIMSCopied	= 'tims/' in SyncOutputLine
@@ -165,6 +195,7 @@ class progressmonitor(object):
 						self.CountJustCopied	+= 1
 
 						self.FilesList	+= [FileName]
+						self.__note_file(FileName)
 
 						if not self.TIMSCopied:
 							self.TIMSCopied	= 'tims/' in SyncOutputLine
@@ -176,6 +207,7 @@ class progressmonitor(object):
 				if SyncOutputLine[0:6] == 'Saving':
 					self.CountJustCopied	+= 1
 					self.FilesList	+= [SyncOutputLine.replace('Saving file as ', '')]
+					self.__note_file(SyncOutputLine.replace('Saving file as ', ''))
 				elif SyncOutputLine[0:4] == 'Skip':
 					self.CountSkip		+= 1
 
@@ -219,9 +251,16 @@ class progressmonitor(object):
 
 		# print changed progress
 		if len(self.TransferRate) > 0 and self.TransferRate[0] != ',':
-			self.TransferRate	= f", {self.TransferRate}"
+			TransferRateParts	= self.TransferRate.strip().split()
+			if len(TransferRateParts) < 2:
+				TransferRate			= f", {self.TransferRate}"
+			else:
+				TransferRateParts[0]	= f", {int(float(TransferRateParts[0]) + 0.5)}"
+				TransferRate			= " ".join(TransferRateParts)
+		else:
+			TransferRate	= ""
 
-		DisplayLine3	= f"{self.CountProgress} " + self.__lan.l('box_backup_of') + f" {self.FilesToProcess}{'+' if self.FilesToProcess_possible_more else ''}{self.TransferRate}"
+		DisplayLine3	= f"{self.CountProgress} " + self.__lan.l('box_backup_of') + f" {self.FilesToProcess}{'+' if self.FilesToProcess_possible_more else ''}{TransferRate}"
 
 		# calculate progress
 		PercentFinished	= None

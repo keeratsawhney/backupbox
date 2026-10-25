@@ -1,0 +1,10 @@
+# signing keys never go into the (public) repository: GitHub secrets / a local keystore folder
+keystore/
+*.keystore
+*.jks
+local.properties
+.gradle/
+build/
+app/build/
+.idea/
+*.iml
