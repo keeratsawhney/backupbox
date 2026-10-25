@@ -778,10 +778,12 @@
 			}
 		}
 
+		# the embedded preview is stored unrotated: the raw file says how to turn it
+		$rotate	= array('3' => 180, '6' => 90, '8' => 270)[trim((string)shell_exec("timeout 20 exiftool -n -s3 -Orientation $s 2>/dev/null"))] ?? 0;
 		foreach (array('PreviewImage', 'JpgFromRaw', 'ThumbnailImage') as $tag) {
 			exec("timeout 20 exiftool -b -$tag $s > " . escapeshellarg($tmp) . " 2>/dev/null");
 			if (@filesize($tmp) > 0) {
-				exec("timeout 30 $magick " . escapeshellarg($tmp) . " -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
+				exec("timeout 30 $magick " . escapeshellarg($tmp) . " -rotate $rotate -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
 				break;
 			}
 		}
@@ -1120,7 +1122,7 @@
 			$stat	= stat($file);
 			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
 			@mkdir($dir, 0755, true);
-			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime']) . '.jpg';
+			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime'] . '|2') . '.jpg';
 			# a preview that could not be made is not tried again for 10 minutes (the photo lists refresh often)
 			$failed	= $thumb . '.failed';
 			if (!is_file($thumb) and is_file($failed) and time() - filemtime($failed) < 600) {
