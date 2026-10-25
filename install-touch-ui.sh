@@ -62,6 +62,22 @@ if command -v comitup-cli >/dev/null 2>&1; then
 	sudo systemctl reload apache2 || true
 fi
 
+# Bluetooth for the Android app: find the box nearby, status, start/stop backup (files stay on Wi-Fi)
+echo "Setting up Bluetooth for the app ..."
+if ! python3 -c "import dbus, gi" >/dev/null 2>&1; then
+	sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-dbus python3-gi >/dev/null 2>&1 || echo "python3-dbus / python3-gi could not be installed (no internet?): Bluetooth for the app stays off"
+fi
+if command -v bluetoothctl >/dev/null 2>&1 && python3 -c "import dbus, gi" >/dev/null 2>&1; then
+	sudo rfkill unblock bluetooth 2>/dev/null || true
+	sudo cp -f "${INSTALLER_DIR}/etc/lbb-ble.service" /etc/systemd/system/lbb-ble.service
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now bluetooth.service >/dev/null 2>&1 || true
+	sudo systemctl enable lbb-ble.service >/dev/null 2>&1
+	sudo systemctl restart lbb-ble.service
+else
+	echo "Bluetooth (bluez) not found: Bluetooth for the app stays off"
+fi
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."

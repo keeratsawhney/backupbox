@@ -8,6 +8,10 @@
     "delete_button": "Delete log"
   },
   "box": {
+    "ble": {
+      "pairing": "Bluetooth pairing",
+      "code": "Code for the phone:"
+    },
     "backup": {
       "primary": "Primary backup",
       "secondary": "Secondary backup",

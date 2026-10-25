@@ -50,6 +50,8 @@ class MainActivity : Activity() {
 	private lateinit var connectivity: ConnectivityManager
 	private lateinit var finder: BoxFinder
 	private var wifi: Network? = null
+	private var pinned: Network? = null	// the box's own Wi-Fi joined by the app (Nearby)
+	private lateinit var nearby: Nearby
 	private var currentBox: Box? = null
 	private var autoOpen = true
 	private val found = mutableListOf<Box>()
@@ -73,6 +75,7 @@ class MainActivity : Activity() {
 
 		setupWeb()
 		keepToWifi()
+		nearby	= Nearby(this, connectivity, ::openBox, ::pin)
 
 		findViewById<Button>(R.id.search).setOnClickListener { search() }
 		findViewById<Button>(R.id.go).setOnClickListener { connectTyped() }
@@ -81,7 +84,44 @@ class MainActivity : Activity() {
 		}
 		addressField.setText(prefs.getString("last", ""))
 
-		search()
+		if (!openLink(intent)) {
+			nearby.resume()
+			search()
+		}
+	}
+
+	@Deprecated("Deprecated in Java")
+	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+		if (!nearby.onActivityResult(requestCode, resultCode, data)) {
+			@Suppress("DEPRECATION")
+			super.onActivityResult(requestCode, resultCode, data)
+		}
+	}
+
+	override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+		if (!nearby.onRequestPermissionsResult(requestCode, grantResults)) {
+			super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+		}
+	}
+
+	/** the app's requests go to the box's own Wi-Fi (joined by Nearby), else to the Wi-Fi the phone is on */
+	private fun pin(network: Network?) {
+		pinned	= network
+		connectivity.bindProcessToNetwork(network ?: wifi)
+	}
+
+	override fun onNewIntent(intent: Intent) {
+		super.onNewIntent(intent)
+		openLink(intent)
+	}
+
+	/** backupbox://<address>: opened from the box's page in a browser (its QR code, a link) */
+	private fun openLink(intent: Intent?): Boolean {
+		val data	= intent?.data ?: return false
+		if (data.scheme != "backupbox") return false
+		val address	= data.host?.takeIf { it.matches(Regex("^[\\w.-]+$")) } ?: return false
+		openBox(Box(address, false))
+		return true
 	}
 
 	// ---------- network ----------
@@ -96,7 +136,7 @@ class MainActivity : Activity() {
 		connectivity.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
 			override fun onAvailable(network: Network) {
 				wifi	= network
-				connectivity.bindProcessToNetwork(network)
+				if (pinned == null) connectivity.bindProcessToNetwork(network)
 				// search again, now with the Wi-Fi's own network
 				runOnUiThread { if (connectView.visibility == View.VISIBLE && currentBox == null) search() }
 			}
@@ -104,7 +144,7 @@ class MainActivity : Activity() {
 			override fun onLost(network: Network) {
 				if (wifi == network) {
 					wifi	= null
-					connectivity.bindProcessToNetwork(null)
+					if (pinned == null) connectivity.bindProcessToNetwork(null)
 				}
 			}
 		})
@@ -194,6 +234,7 @@ class MainActivity : Activity() {
 
 	private fun openBox(box: Box) {
 		finder.stop()
+		nearby.pause()
 		currentBox	= box
 		autoOpen	= false
 		authTried.clear()
@@ -210,6 +251,8 @@ class MainActivity : Activity() {
 	private var clearHistoryWhenLoaded = false
 
 	private fun showConnect(message: String? = null) {
+		nearby.leaveBox()
+		nearby.resume()
 		web.stopLoading()
 		web.loadUrl("about:blank")
 		web.visibility	= View.GONE
@@ -362,6 +405,8 @@ class MainActivity : Activity() {
 
 	override fun onDestroy() {
 		finder.stop()
+		nearby.pause()
+		nearby.leaveBox()
 		connectivity.bindProcessToNetwork(null)
 		web.destroy()
 		super.onDestroy()

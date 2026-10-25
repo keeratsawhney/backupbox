@@ -250,7 +250,15 @@ class DISPLAY(object):
 		# home screen (content marked hidden=READY): drawn as a picture with the backup drive
 		self.home_mode		= False
 		self.home_lines		= None		# its lines, to come back to after short messages
-		self.home_overlay	= False		# a message over the home screen: the home screen returns after a while
+		# kept in a file: the display is restarted (settings saved) and must still know its home screen
+		self.home_file		= os.path.join(os.path.dirname(self.__const_DISPLAY_CONTENT_OLD_FILE), 'display-home.txt')
+		try:
+			with open(self.home_file, 'r') as f:
+				self.home_lines	= [Line for Line in f.read().splitlines() if Line] or None
+		except:
+			pass
+		self.home_overlay	= False		# another screen than the home screen: the home screen returns after a while
+		self.overlay_task	= False		# ... and a backup (or other task) ran meanwhile: its screens stay while it runs
 		try:
 			self.home_no_drive	= lib_language.language().l('box_menu_no_drive')
 		except:
@@ -458,6 +466,17 @@ class DISPLAY(object):
 
 		self.drive_cache	= [f'{Kind} {100 * Used:.0f}%' if Used is not None else Kind, SizeText]
 		self.drive_info		= {'name': Label or Kind, 'used': Used, 'size': SizeText}
+
+		# for the Bluetooth service (lib_ble.py) and others: the drive as the display shows it
+		try:
+			Path	= os.path.join(os.path.dirname(self.__const_DISPLAY_CONTENT_OLD_FILE), 'drive-status.json')
+			Data	= json.dumps(self.drive_info)
+			if Data != getattr(self, 'drive_status_written', ''):
+				with open(Path, 'w') as f:
+					f.write(Data)
+				self.drive_status_written	= Data
+		except:
+			pass
 
 	def __lsblk(self):
 		try:
@@ -1029,14 +1048,17 @@ class DISPLAY(object):
 
 				CF.close()
 
-				# a message over the home screen is shown on its own (the home screen's lines are not merged into it,
-				# further messages replace it); the home screen comes back after a while unless a task takes over
-				if (self.home_mode or self.home_overlay) and import_old_file:
+				# every screen but the home screen is temporary: the home screen comes back 8 s after the last message
+				# (60 s after a backup: its result stays readable), never while a backup or other task runs
+				if not temp_screen and 'READY' not in hidden_info and self.home_lines:
+					if not self.overlay_task and self.__busy():
+						self.overlay_task	= True
+					self.home_overlay	= True
+
+				# a message over the home screen (or a short message after it) is shown on its own: the home screen's
+				# lines are not merged into it; while a task runs, its messages stack as before
+				if (self.home_mode or (self.home_overlay and not self.overlay_task)) and import_old_file:
 					import_old_file	= False
-					if not temp_screen:
-						self.home_overlay	= not self.__busy()
-				elif not temp_screen and 'READY' not in hidden_info:
-					self.home_overlay	= False
 
 				# read old lines
 				if import_old_file:
@@ -1108,6 +1130,12 @@ class DISPLAY(object):
 					if self.home_mode:
 						self.home_lines		= list(Lines)
 						self.home_overlay	= False
+						self.overlay_task	= False
+						try:
+							with open(self.home_file, 'w') as f:
+								f.write('\n'.join(Lines))
+						except:
+							pass
 				else:
 					self.home_mode	= False
 
@@ -1119,18 +1147,25 @@ class DISPLAY(object):
 				self.content_time	= time.time()
 			elif self.menu_closed:
 				self.menu_closed	= False
-				if not self.menu_active and not self.sleeping:
+				if self.home_overlay and self.home_lines and not self.overlay_task:
+					# a short message was on screen: straight back to the home screen
+					self.content_time	= 0
+				elif not self.menu_active and not self.sleeping:
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
 					display_time	= time.time()
 			elif (
 				self.home_overlay and
 				self.home_lines and
 				not self.menu_active and
-				time.time() - self.content_time >= 8
+				time.time() - self.content_time >= (60 if self.overlay_task else 8)
 				):
-				# back to the home screen after a short message (comitup, VPN, IP ...), not over a task's screens
-				self.home_overlay	= False
-				if not self.__busy():
+				# back to the home screen; not while a task runs (asked only now: pgrep at most every 8 s)
+				if self.__busy():
+					self.overlay_task	= True
+					self.content_time	= time.time()
+				else:
+					self.home_overlay	= False
+					self.overlay_task	= False
 					Lines	= list(self.home_lines)
 					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'w') as oCF:
 						oCF.write("\n".join(Lines))

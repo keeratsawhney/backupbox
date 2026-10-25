@@ -584,6 +584,10 @@
     }
   },
   "box": {
+    "ble": {
+      "pairing": "Emparejamiento Bluetooth",
+      "code": "Código para el teléfono:"
+    },
     "backup": {
       "invalid_mode_combination_1": "Modo",
       "invalid_mode_combination_2": "de combinacion",

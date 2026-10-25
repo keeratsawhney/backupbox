@@ -1476,6 +1476,20 @@ svg {
 	right: calc(6px + env(safe-area-inset-right));
 }
 
+/* next to the close button: the same distance from the status bar (the app shows the UI edge to edge) */
+.viewer-download {
+	top: calc(6px + env(safe-area-inset-top));
+	right: calc(60px + env(safe-area-inset-right));
+}
+
+.viewer-prev {
+	left: calc(6px + env(safe-area-inset-left));
+}
+
+.viewer-next {
+	right: calc(6px + env(safe-area-inset-right));
+}
+
 .viewer-caption {
 	padding-bottom: calc(6px + env(safe-area-inset-bottom));
 }

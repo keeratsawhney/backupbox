@@ -584,6 +584,10 @@
     }
   },
   "box": {
+    "ble": {
+      "pairing": "Bluetooth-Kopplung",
+      "code": "Code für das Telefon:"
+    },
     "backup": {
       "invalid_mode_combination_1": "Ungültige",
       "invalid_mode_combination_2": "Modus-",

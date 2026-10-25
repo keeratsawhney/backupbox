@@ -584,6 +584,10 @@
     }
   },
   "box": {
+    "ble": {
+      "pairing": "Appairage Bluetooth",
+      "code": "Code pour le téléphone :"
+    },
     "backup": {
       "invalid_mode_combination_1": "Invalide",
       "invalid_mode_combination_2": "mode",

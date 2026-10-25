@@ -1,0 +1,13 @@
+# Backup Box: Bluetooth Low Energy service for the Android app (scripts/lib_ble.py)
+[Unit]
+Description=Backup Box Bluetooth (app: find the box, status, start/stop backup)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+ExecStart=/usr/bin/python3 /var/www/little-backup-box/lib_ble.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

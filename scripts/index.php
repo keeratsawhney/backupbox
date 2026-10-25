@@ -2,6 +2,25 @@
 	// the box's address (http://IP/, the box's own touchscreen) opens the app view (touch UI);
 	// this page stays at /index.php ("Full web interface" in the app, the menu of all classic pages)
 	if (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) === '/') {
+		$Scheme		= (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+		$Host		= $_SERVER['HTTP_HOST'] ?? '';
+		$Agent		= $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+		// Android phones (QR code on the box's display, a link, the typed address): the Backup Box app if it is
+		// installed, else this browser goes on to the touch UI (Chrome and Samsung Internet know intent: links)
+		if (
+			preg_match('/^[\w.:\[\]-]+$/', $Host) and
+			str_contains($Agent, 'Android') and
+			(str_contains($Agent, 'Chrome/') or str_contains($Agent, 'SamsungBrowser/')) and
+			!str_contains($Agent, 'BackupBoxApp') and
+			!str_contains($Agent, '; wv)')
+		) {
+			$Box		= preg_replace('/:\d+$/', '', $Host);
+			$Fallback	= "$Scheme://$Host/touch.php";
+			header('Location: intent://' . $Box . '#Intent;scheme=backupbox;package=com.yws.backupbox;S.browser_fallback_url=' . rawurlencode($Fallback) . ';end');
+			exit();
+		}
+
 		header('Location: /touch.php');
 		exit();
 	}
