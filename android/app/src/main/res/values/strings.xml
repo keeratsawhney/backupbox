@@ -34,6 +34,7 @@
 	<string name="ble_connecting">Connecting over Bluetooth …</string>
 	<string name="ble_pairing">Type the code shown on the box\'s display</string>
 	<string name="ble_off">Bluetooth is off</string>
+	<string name="ble_unreachable">The box does not answer over Bluetooth. Is it switched on and nearby? Still trying …</string>
 	<string name="ble_ready">Ready</string>
 	<string name="ble_running">Backup running</string>
 	<string name="ble_open">Open box</string>
