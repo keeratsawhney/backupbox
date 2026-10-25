@@ -231,10 +231,18 @@ class DISPLAY(object):
 			self.comitup_state			= False
 			self.comitup_time			= 0
 			self.cpu_times				= None
+			self.drive_cache			= None
+			self.drive_time				= 0
 
 		# power saving: unchanged frames are not sent again, the panel sleeps when idle
 		self.last_frame		= None
 		self.sleeping		= False
+		self.content_time	= time.time()
+
+		# display menu: draws its own screens while open (menu_show, menu_close)
+		self.menu_active	= False
+		self.menu_closed	= False
+		self.__lock			= threading.RLock()
 
 		# create folders
 		## ensure const_DISPLAY_CONTENT_PATH exists
@@ -264,7 +272,7 @@ class DISPLAY(object):
 		if self.__conf_MENU_ENABLED:
 			# start displaymenu as iternal background process
 			try:
-				thread	= threading.Thread(target=displaymenu.menu, args=(self.maxLines -1 if self.__conf_DISP_SHOW_STATUSBAR else self.maxLines, self.__setup, self.menu_controller))
+				thread	= threading.Thread(target=displaymenu.menu, args=(self.maxLines -1 if self.__conf_DISP_SHOW_STATUSBAR else self.maxLines, self.__setup, self.menu_controller, self))
 				thread.start()
 			except:
 				pass
@@ -338,7 +346,10 @@ class DISPLAY(object):
 				statusbar.append('WiFi')
 
 		if self.statusbar_toggle == 1:
-			#network traffic
+			# backup drive at a glance (how full, how big), else network traffic
+			drive	= self.__drive_status()
+			if drive:
+				return(drive)
 			statusbar	+=[self.traffic_monitor.get_traffic()]
 			return(statusbar)
 
@@ -364,6 +375,48 @@ class DISPLAY(object):
 
 		return(statusbar)
 
+	def __drive_status(self):
+		# the backup drive: NVMe first, then a backup target, then any drive mounted under /media
+		# ['NVMe 67%', '1.0T'] or None; looked up every 10 s
+		if time.time() - self.drive_time < 10:
+			return(self.drive_cache)
+		self.drive_time		= time.time()
+		self.drive_cache	= None
+
+		try:
+			Mounts	= []
+			with open('/proc/mounts', 'r') as f:
+				for Line in f:
+					Device, MountPoint	= Line.split()[:2]
+					MountPoint	= MountPoint.replace('\\040', ' ')
+					if Device.startswith('/dev/') and MountPoint.startswith('/media/'):
+						Mounts.append((Device, MountPoint))
+		except:
+			return(None)
+
+		for Device, MountPoint in sorted(Mounts, key=lambda Mount: (0 if Mount[0].startswith('/dev/nvme') else 1 if 'target' in Mount[1] else 2)):
+			try:
+				st		= os.statvfs(MountPoint)
+				Total	= st.f_blocks * st.f_frsize
+				Free	= st.f_bavail * st.f_frsize
+			except:
+				continue
+			if Total <= 0:
+				continue
+
+			Name	= 'NVMe' if Device.startswith('/dev/nvme') else 'USB' if Device.startswith('/dev/sd') else 'SD' if Device.startswith('/dev/mmcblk') else 'Disk'
+
+			Size	= Total
+			for Unit in ['B', 'K', 'M', 'G', 'T']:
+				if Size < 1000 or Unit == 'T':
+					break
+				Size	/= 1000
+
+			self.drive_cache	= [f'{Name} {100 * (1 - Free / Total):.0f}%', f'{Size:.1f}{Unit}' if Size < 10 else f'{Size:.0f}{Unit}']
+			break
+
+		return(self.drive_cache)
+
 	def show(self, Lines, statusbar=None, new_content=True):
 		# fill line count to const_DISPLAY_LINES_LIMIT
 		while len(Lines) < self.__const_DISPLAY_LINES_LIMIT:
@@ -387,8 +440,12 @@ class DISPLAY(object):
 			if self.__unchanged(image, new_content):
 				return()
 
-			# display image
-			self.__display_image(image)
+			# display image (not over the menu, it may have opened meanwhile)
+			with self.__lock:
+				if self.menu_active:
+					self.last_frame	= None
+					return()
+				self.__display_image(image)
 
 			# save image to file
 			self.__save_image(image=image, new_content=new_content)
@@ -541,15 +598,52 @@ class DISPLAY(object):
 			if self.__unchanged(image, new_content):
 				return()
 
-			# display image
-			self.__display_image(image)
+			# display image (not over the menu, it may have opened meanwhile)
+			with self.__lock:
+				if self.menu_active:
+					self.last_frame	= None
+					return()
+				self.__display_image(image)
 
 			# save image to file
 			self.__save_image(image=image, new_content=new_content)
 
 	def __display_image(self, image):
 		if self.hardware_ready:
-			self.device.display(image)
+			# the menu draws from its own thread
+			with self.__lock:
+				self.device.display(image)
+
+	def menu_show(self, image):
+		# a menu screen, shown at once (no message queue)
+		with self.__lock:
+			self.menu_active	= True
+			self.content_time	= time.time()
+			self.__panel(on=True)
+			self.__display_image(image)
+			self.last_frame	= None
+			self.__save_image(image=image, new_content=False)
+
+	def menu_close(self):
+		# the main loop shows the current screen again
+		with self.__lock:
+			self.menu_active	= False
+			self.menu_closed	= True
+			self.content_time	= time.time()
+
+	def wake(self):
+		# True if the display was off (the button press only wakes it)
+		with self.__lock:
+			self.content_time	= time.time()
+			if not self.sleeping:
+				return(False)
+			self.__panel(on=True)
+			return(True)
+
+	def sleep(self):
+		with self.__lock:
+			self.menu_active	= False
+			self.__panel(on=False)
 
 	def __unchanged(self, image, new_content):
 		# a statusbar refresh that draws the same picture again: skip sending and saving it
@@ -609,7 +703,6 @@ class DISPLAY(object):
 
 	def main(self):
 		display_time	= time.time()
-		content_time	= time.time()
 		Lines 			= []
 
 		# start endless loop to display content
@@ -750,25 +843,35 @@ class DISPLAY(object):
 						if hidden_info:
 							oCF.write(f"\nset:hidden={hidden_info}")
 
-				self.__panel(on=True)
-				self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
-				display_time	= time.time()
-				content_time	= time.time()
+				# while the menu is open, news are kept and shown when it closes
+				if not self.menu_active:
+					self.__panel(on=True)
+					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
+				display_time		= time.time()
+				self.content_time	= time.time()
+			elif self.menu_closed:
+				self.menu_closed	= False
+				if not self.menu_active and not self.sleeping:
+					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
+					display_time	= time.time()
 			else:
 				# sleep after conf_DISP_SLEEP_MIN minutes without news, never while a task runs
 				if (
 					not self.sleeping and
+					not self.menu_active and
 					self.__conf_DISP_SLEEP_MIN > 0 and
-					time.time() - content_time >= self.__conf_DISP_SLEEP_MIN * 60
+					time.time() - self.content_time >= self.__conf_DISP_SLEEP_MIN * 60
 					):
 					if self.__busy():
-						content_time	= time.time()
+						self.content_time	= time.time()
 					else:
-						self.__panel(on=False)
+						with self.__lock:
+							self.__panel(on=False)
 
 				# statusbar
 				if (
 					not self.sleeping and
+					not self.menu_active and
 					self.__conf_DISP_SHOW_STATUSBAR and
 					time.time() - display_time >= self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC
 					):
