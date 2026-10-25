@@ -283,6 +283,11 @@
 		$('power-pill').classList.toggle('now', !!power.undervoltage);
 		if ($('power-pill').hidden) showPowerNote(false);
 
+		// thumbnails and database after a backup (background.py): the card can already be removed
+		const background = data.background;
+		$('bg-pill').hidden = !background;
+		if (background) $('bg-pill-text').textContent = `${T.background_short} ${background.done}/${background.total}`;
+
 		// names of the files being copied, live while a backup runs
 		renderCopying(data.running ? data.copying : null);
 		if (data.running && !state.copyingTimer) {
@@ -1380,6 +1385,7 @@
 		$('power-note-text').textContent = T.power_warning;
 		$('power-note-close').setAttribute('aria-label', T.cancel);
 		$('power-pill').title = T.power_warning;
+		$('bg-pill').title = T.background_note;
 		$('classic-label').textContent = T.classic_ui;
 		$('wifi-label').textContent = T.wifi;
 		$('wifi-title').textContent = T.wifi;

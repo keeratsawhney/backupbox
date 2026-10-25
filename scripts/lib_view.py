@@ -103,10 +103,11 @@ class viewdb(object):
 
 			self.dbExecute(f"update CONFIG set VERSION = {i};")
 
-	def dbExecute(self, Command):
+	def dbExecute(self, Command, commit=True):
 		try:
 			self.__cur.execute(Command)
-			self.__con.commit()
+			if commit:
+				self.__con.commit()
 			return(True)
 		except:
 			return(False)
@@ -117,8 +118,36 @@ class viewdb(object):
 		except:
 			return(False)
 
-	def dbInsertImage(self, ImageFileSubpathFilename):
-		#read exif-data from file
+	def dbInsertImages(self, ImageFileSubpathFilenames):
+		# many files with one exiftool run: starting exiftool (perl) takes far longer than reading one file
+		Files	= [File.strip('/') for File in ImageFileSubpathFilenames]
+		if len(Files) < 2:
+			for File in Files:
+				self.dbInsertImage(File)
+			return()
+
+		Paths	= {os.path.join(self.MountPoint, File): File for File in Files}
+		try:
+			Output	= subprocess.run(['/usr/bin/exiftool', '-use', 'MWG', '-charset', 'filename=utf8', '-@', '-'], input='\n'.join(Paths.keys()).encode(), capture_output=True, timeout=600).stdout.decode(errors='replace')
+		except:
+			Output	= ''
+
+		# one block per file, starting with "======== <path>"
+		EXIF_Lists	= {}
+		Current	= None
+		for Line in Output.split('\n'):
+			if Line.startswith('======== '):
+				Current	= Line[9:]
+				EXIF_Lists[Current]	= []
+			elif Current is not None and ':' in Line:
+				EXIF_Lists[Current].append(Line)
+
+		for Path, File in Paths.items():
+			self.dbInsertImage(File, EXIF_List=EXIF_Lists.get(Path, []), commit=False)
+		self.__con.commit()
+
+	def dbInsertImage(self, ImageFileSubpathFilename, EXIF_List=None, commit=True):
+		#read exif-data from file (or use EXIF_List, the exiftool lines of the file)
 
 		ImageFileSubpathFilename	= ImageFileSubpathFilename.strip('/')
 
@@ -131,10 +160,11 @@ class viewdb(object):
 			ImageFileExtension	= ''
 
 		ImageFile	= os.path.join(self.MountPoint, ImageFileSubpathFilename)
-		try:
-			EXIF_List	= subprocess.check_output(f"/usr/bin/exiftool -use MWG '{ImageFile}' | /usr/bin/grep ':'", shell=True).decode().strip().split('\n')
-		except:
-			EXIF_List	= []
+		if EXIF_List is None:
+			try:
+				EXIF_List	= subprocess.check_output(f"/usr/bin/exiftool -use MWG '{ImageFile}' | /usr/bin/grep ':'", shell=True).decode().strip().split('\n')
+			except:
+				EXIF_List	= []
 
 		ImageRecord	= self._normalize_exif_array(EXIF_List)
 
@@ -202,11 +232,11 @@ class viewdb(object):
 		if dbFields:
 			# delete item if pre exists:
 			Command	= f"delete from EXIF_DATA where File_Name='{ImageRecord['File_Name']}' and Directory='{ImageRecord['Directory']}'"
-			self.dbExecute(Command)
+			self.dbExecute(Command, commit=commit)
 
 			# insert new image
 			Command	= f"insert into EXIF_DATA ({dbFields}) values ({dbValues});"
-			self.dbExecute(Command)
+			self.dbExecute(Command, commit=commit)
 
 	def _format_EXIF_Value(self, value):
 		value	= value.replace('\r', '')

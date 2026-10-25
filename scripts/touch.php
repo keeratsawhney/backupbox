@@ -127,6 +127,7 @@
 	<div class="app">
 		<header class="topbar">
 			<span class="brand"><img src="img/icons/favicon-180.png" alt="Your Wedding Saga"><span class="brand-name">Backup Box</span></span>
+			<span class="pill bg-pill" id="bg-pill" hidden><span class="dot"></span><span id="bg-pill-text"></span></span>
 			<button class="pill power-pill" id="power-pill" aria-expanded="false" aria-controls="power-note" hidden><svg><use href="#i-bolt"/></svg><span id="power-pill-text"></span></button>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>
 			<span class="temp" id="temp"></span>

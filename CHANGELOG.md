@@ -6,6 +6,22 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#31](https://github.com/keeratsawhney/backupbox/pull/31) Fix: background previews stopped at once**: the end of the backup unmounted every drive, including the one the background job works on. It now stays mounted until the job is done. The job's errors go to `tmp/background/errors.log`.
+- **[#30](https://github.com/keeratsawhney/backupbox/pull/30) Backups report done right after copying; thumbnails and database in the background**
+  - `background.py` makes the thumbnails and the database entries at low priority. The list of files to do is kept on the drive, so a power off only interrupts it.
+  - The app's top bar shows a *Previews 312/2418* pill while it works.
+  - Not used when the box powers off after the backup, a cloud backup follows, or EXIF updates are on: then everything runs before "done", as before.
+  - Thumbnails in their own module (`lib_thumbnails.py`): JPEGs decoded at about 1/4 size (about 2× faster), turned while scaling.
+  - Fix: converted HEIC images were not queued for thumbnails (wrong list name).
+- **[#29](https://github.com/keeratsawhney/backupbox/pull/29) Fan at full speed from 60 °C** (Raspberry Pi 5 Active Cooler; the default reaches full speed at 75 °C): `install-fan.sh`, run by the installer and the update.
+- **[#28](https://github.com/keeratsawhney/backupbox/pull/28) App finds the box on a home Wi-Fi during backups, faster thumbnails**
+  - The app's box search uses a quick check that the box answers at once, also while a backup keeps it busy (the full status took too long, so the box was not found).
+  - If https does not answer, the app opens the box over http on port 8080, like a browser (never after a refused certificate).
+  - **Open box** over Bluetooth opens the box's address in the Wi-Fi network when it has no hotspot.
+  - Thumbnails: one exiftool kept running per worker instead of two exiftool starts per RAW file; one ImageMagick thread per worker.
+- **[#27](https://github.com/keeratsawhney/backupbox/pull/27) Faster "Sync database", RAW previews the right way up**
+  - The database step after a backup reads photos in groups of 50 with one exiftool run, about 15× faster than one run per photo.
+  - Quick previews of RAW files (shown while a backup still runs) are turned like the photo.
 - **[#23](https://github.com/keeratsawhney/backupbox/pull/23) App over Bluetooth + Wi-Fi, box links open the app, OLED home screen fixes**
   - **Bluetooth service on the box** (`lib_ble.py`): status, start (copy only) and stop, power off, and the Wi-Fi details. It pairs with a code shown on the OLED.
   - **App:**

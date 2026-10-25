@@ -275,6 +275,9 @@ else
 	sudo sed -i "/^${VAR}/s/\(.[^=]*\)\([ \t]*=[ \t]*\)\(.[^=]*\)/\1\2${VALUE}/" "${CONFIG_TXT}"
 fi
 
+# raspberry pi 5: fan at full speed from 60 °C
+bash "${INSTALLER_DIR}/install-fan.sh" || true
+
 # configure Little Backup Box
 ## write branch into constants
 echo "const_SOFTWARE_BRANCH='${branch}'" | sudo tee -a "${INSTALLER_DIR}/scripts/constants.sh"

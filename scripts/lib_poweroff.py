@@ -37,12 +37,14 @@ import lib_system
 
 class poweroff(object):
 
-	def __init__(self, Action='poweroff', DisplayMessage=[]):
-		# Action:	['poweroff','reboot'] or anything else for no action
+	def __init__(self, Action='poweroff', DisplayMessage=[], KeepMountPoint=None):
+		# Action:			['poweroff','reboot'] or anything else for no action
+		# KeepMountPoint:	stays mounted without power off: background.py makes the thumbnails there and unmounts it
 
 		# Arguments
 		self.Action					= Action
 		self.DisplayMessage		= DisplayMessage
+		self.KeepMountPoint		= KeepMountPoint if Action not in ['poweroff','reboot'] else None
 
 		# objects
 		self.__setup		= lib_setup.setup()
@@ -60,7 +62,12 @@ class poweroff(object):
 		lib_system.rpi_leds(trigger='none',brightness='1')
 
 		# umount
-		lib_storage.umount(self.__setup,'all')
+		if self.KeepMountPoint:
+			for MountPoint in lib_storage.get_mountPoints(self.__setup, ['all'], True):
+				if os.path.normpath(MountPoint) != os.path.normpath(self.KeepMountPoint):
+					lib_storage.umount(self.__setup, MountPoint)
+		else:
+			lib_storage.umount(self.__setup,'all')
 
 		if self.Action in ['poweroff','reboot']:
 			if self.Action == 'poweroff':
