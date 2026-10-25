@@ -146,6 +146,8 @@ Made for the **Waveshare 1.3" OLED HAT** (SH1106, 128×64), and it also works on
 **Download:** [BackupBox.apk](https://github.com/keeratsawhney/backupbox/releases/download/android/BackupBox.apk)
 (built by GitHub on every change, see [android/](android/)).
 
+<p align="center"><img src="docs/screenshots/app-connect.png" alt="Backup Box app: the paired box over Bluetooth, box search" width="300"></p>
+
 - **Pair a nearby box** through Android's own device popup, like earbuds. Type the 6-digit code shown on the OLED.
 - **Status card over Bluetooth**, with no Wi-Fi needed:
   - Ready or backup running, with what the OLED shows;

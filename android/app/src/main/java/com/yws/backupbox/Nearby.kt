@@ -60,6 +60,9 @@ class Nearby(
 	private var opening	= false
 	private var hotspotCallback: ConnectivityManager.NetworkCallback? = null
 	private var pending: (() -> Unit)? = null
+	private val handler	= android.os.Handler(android.os.Looper.getMainLooper())
+	// still no answer after a while: say so (Bluetooth keeps trying)
+	private val unreachable	= Runnable { setState(activity.getString(R.string.ble_unreachable), false) }
 
 	private val address: String? get() = prefs.getString("ble", null)
 
@@ -87,6 +90,7 @@ class Nearby(
 
 	/** the touch UI is shown (over Wi-Fi): Bluetooth rests */
 	fun pause() {
+		handler.removeCallbacks(unreachable)
 		ble.disconnect()
 	}
 
@@ -184,15 +188,23 @@ class Nearby(
 	// ---------- Bluetooth ----------
 
 	override fun onBleState(state: BleBox.State) {
+		handler.removeCallbacks(unreachable)
 		when (state) {
 			BleBox.State.OFF -> setState(activity.getString(R.string.ble_off), false)
-			BleBox.State.CONNECTING -> setState(activity.getString(R.string.ble_connecting), false)
+			BleBox.State.CONNECTING -> {
+				// the first attempt: "connecting"; later attempts keep the hint shown
+				if (stateView.text != activity.getString(R.string.ble_unreachable)) {
+					setState(activity.getString(R.string.ble_connecting), false)
+				}
+				handler.postDelayed(unreachable, 20000)
+			}
 			BleBox.State.PAIRING -> setState(activity.getString(R.string.ble_pairing), false)
 			BleBox.State.CONNECTED -> {}
 		}
 	}
 
 	override fun onBleStatus(status: JSONObject) {
+		handler.removeCallbacks(unreachable)
 		showCard(true)
 		running	= status.optString("s") == "running"
 		setState(activity.getString(if (running) R.string.ble_running else R.string.ble_ready), true)
@@ -303,7 +315,10 @@ class Nearby(
 		startButton.alpha	= if (connected) 1f else 0.5f
 		powerButton.alpha	= if (connected) 1f else 0.5f
 		if (!connected) {
+			// nothing known yet: no empty drive bar
 			linesView.visibility	= View.GONE
+			driveText.visibility	= View.GONE
+			driveBar.visibility	= View.GONE
 		}
 	}
 
