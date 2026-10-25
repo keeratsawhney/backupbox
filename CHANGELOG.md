@@ -6,6 +6,9 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#27](https://github.com/keeratsawhney/backupbox/pull/27) Faster "Sync database", RAW previews the right way up**
+  - The database step after a backup reads photos in groups of 50 with one exiftool run, about 15× faster than one run per photo.
+  - Quick previews of RAW files (shown while a backup still runs) are turned like the photo.
 - **[#23](https://github.com/keeratsawhney/backupbox/pull/23) App over Bluetooth + Wi-Fi, box links open the app, OLED home screen fixes**
   - **Bluetooth service on the box** (`lib_ble.py`): status, start (copy only) and stop, power off, and the Wi-Fi details. It pairs with a code shown on the OLED.
   - **App:**

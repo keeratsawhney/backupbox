@@ -1336,15 +1336,24 @@ class backup(object):
 			TaskNote		= self.__lan.l('box_backup_mode_database')
 		)
 
-		for Image in Images:
-			FileName		= Image.replace(self.TargetDevice.MountPoint,'',1)	# remove mountpoint
-			ImageFilePath	= os.path.dirname(FileName).strip('/')
-			ImageFileName	= os.path.basename(FileName)
+		# files known to the database: one query, not one per file
+		Known	= set(tuple(Row) for Row in (db.dbSelect("select Directory, File_Name from EXIF_DATA") or []))
 
-			if not db.dbSelect(f"select ID from EXIF_DATA where File_Name='{ImageFileName}' and Directory='{ImageFilePath}'"):
-				db.dbInsertImage(FileName)
+		# exiftool reads the missing files in groups: one start of exiftool per group, not per file
+		Group	= []
+		for Image in Images + [None]:
+			if Image is not None:
+				FileName	= Image.replace(self.TargetDevice.MountPoint,'',1)	# remove mountpoint
+				if (os.path.dirname(FileName).strip('/'), os.path.basename(FileName)) in Known:
+					progress.progress()
+					continue
+				Group.append(FileName)
 
-			progress.progress()
+			if Group and (Image is None or len(Group) >= 50):
+				db.dbInsertImages(Group)
+				for File in Group:
+					progress.progress()
+				Group	= []
 
 		del progress
 		self.__display.message([f":{self.__lan.l('box_finished')}"])
@@ -1567,7 +1576,7 @@ class backup(object):
 			Preview	= self.__rawPreview(RawFile)
 			if Preview:
 				# the JPEG preview of the camera, turned like the photo
-				Command	= ["/usr/bin/convert", "-define", "jpeg:size=1600x1600", "jpg:-", "-rotate", self.__rawOrientation(RawFile), "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
+				Command	= ["/usr/bin/convert", "-define", "jpeg:size=1600x1600", "jpg:-", "-rotate", self.__rawOrientation(RawFile), "-strip", "-resize", "800", os.path.join(Device.MountPoint, TIMS_SubpathFilename)]
 				try:
 					subprocess.run(Command, input=Preview)
 				except:
