@@ -6,6 +6,11 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#28](https://github.com/keeratsawhney/backupbox/pull/28) App finds the box on a home Wi-Fi during backups, faster thumbnails**
+  - The app's box search uses a quick check that the box answers at once, also while a backup keeps it busy (the full status took too long, so the box was not found).
+  - If https does not answer, the app opens the box over http on port 8080, like a browser (never after a refused certificate).
+  - **Open box** over Bluetooth opens the box's address in the Wi-Fi network when it has no hotspot.
+  - Thumbnails: one exiftool kept running per worker instead of two exiftool starts per RAW file; one ImageMagick thread per worker.
 - **[#27](https://github.com/keeratsawhney/backupbox/pull/27) Faster "Sync database", RAW previews the right way up**
   - The database step after a backup reads photos in groups of 50 with one exiftool run, about 15× faster than one run per photo.
   - Quick previews of RAW files (shown while a backup still runs) are turned like the photo.
