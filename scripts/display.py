@@ -247,6 +247,8 @@ class DISPLAY(object):
 
 		# home screen (content marked hidden=READY): drawn as a picture with the backup drive
 		self.home_mode		= False
+		self.home_lines		= None		# its lines, to come back to after short messages
+		self.home_overlay	= False		# a message over the home screen: the home screen returns after a while
 		try:
 			self.home_no_drive	= lib_language.language().l('box_menu_no_drive')
 		except:
@@ -741,9 +743,12 @@ class DISPLAY(object):
 	def __busy(self):
 		# a backup or another task is running
 		try:
-			return(any(TaskFile.endswith('.txt') for TaskFile in os.listdir(self.__const_TASKS_PATH)))
+			if any(TaskFile.endswith('.txt') for TaskFile in os.listdir(self.__const_TASKS_PATH)):
+				return(True)
 		except:
-			return(False)
+			pass
+		# a backup that is still mounting or preparing (no task file yet)
+		return(subprocess.run(['pgrep', '-f', 'little-backup-box/backup.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
 
 	def __save_image(self, image, new_content=True):
 
@@ -861,6 +866,15 @@ class DISPLAY(object):
 
 				CF.close()
 
+				# a message over the home screen is shown on its own (the home screen's lines are not merged into it,
+				# further messages replace it); the home screen comes back after a while unless a task takes over
+				if (self.home_mode or self.home_overlay) and import_old_file:
+					import_old_file	= False
+					if not temp_screen:
+						self.home_overlay	= not self.__busy()
+				elif not temp_screen and 'READY' not in hidden_info:
+					self.home_overlay	= False
+
 				# read old lines
 				if import_old_file:
 					if len(Lines) < self.__const_DISPLAY_LINES_LIMIT and os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
@@ -869,12 +883,15 @@ class DISPLAY(object):
 
 								Line = Line.strip()
 
+								# settings of the saved screen (set:hidden=...) are not text
+								if Line.startswith('set:'):
+									continue
+
 								if len(Lines) < self.__const_DISPLAY_LINES_LIMIT:
 									Line = Line.split(':',1)[-1]
 									if Line:
-										if not Line.startswith('set:'):
-											Line = "s=b:{}".format(Line)
-											Lines.append(Line)
+										Line = "s=b:{}".format(Line)
+										Lines.append(Line)
 
 			else:
 				# no new content file:
@@ -904,7 +921,12 @@ class DISPLAY(object):
 
 				# display temp only:
 				if temp_screen and os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
-					shutil.copyfile(self.__const_DISPLAY_CONTENT_OLD_FILE, f'{ContentFile}')
+					# the screen before comes back as it was ("clear": without merging the saved screen into itself,
+					# which doubled its lines after every QR code and stacked "offline" lines)
+					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'r') as oCF:
+						OldContent	= oCF.read()
+					with open(ContentFile, 'w') as newCF:
+						newCF.write('set:clear\n' + OldContent)
 
 					if hidden_info:
 						with open(ContentFile, 'a') as newCF:
@@ -920,6 +942,9 @@ class DISPLAY(object):
 							oCF.write(f"\nset:hidden={hidden}")
 
 					self.home_mode	= 'READY' in hidden_info
+					if self.home_mode:
+						self.home_lines		= list(Lines)
+						self.home_overlay	= False
 				else:
 					self.home_mode	= False
 
@@ -934,6 +959,23 @@ class DISPLAY(object):
 				if not self.menu_active and not self.sleeping:
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
 					display_time	= time.time()
+			elif (
+				self.home_overlay and
+				self.home_lines and
+				not self.menu_active and
+				time.time() - self.content_time >= 8
+				):
+				# back to the home screen after a short message (comitup, VPN, IP ...), not over a task's screens
+				self.home_overlay	= False
+				if not self.__busy():
+					Lines	= list(self.home_lines)
+					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'w') as oCF:
+						oCF.write("\n".join(Lines))
+						oCF.write("\nset:hidden=READY")
+					self.home_mode	= True
+					if not self.sleeping:
+						self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
+						display_time	= time.time()
 			else:
 				# sleep after conf_DISP_SLEEP_MIN minutes without news, never while a task runs
 				if (
