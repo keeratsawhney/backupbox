@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#29](https://github.com/keeratsawhney/backupbox/pull/29) Fan at full speed from 60 °C** (Raspberry Pi 5 Active Cooler; the default reaches full speed at 75 °C): `install-fan.sh`, run by the installer and the update.
 - **[#28](https://github.com/keeratsawhney/backupbox/pull/28) App finds the box on a home Wi-Fi during backups, faster thumbnails**
   - The app's box search uses a quick check that the box answers at once, also while a backup keeps it busy (the full status took too long, so the box was not found).
   - If https does not answer, the app opens the box over http on port 8080, like a browser (never after a refused certificate).

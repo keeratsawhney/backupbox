@@ -78,6 +78,9 @@ else
 	echo "Bluetooth (bluez) not found: Bluetooth for the app stays off"
 fi
 
+# fan: full speed from 60 °C (after the next reboot)
+bash "${INSTALLER_DIR}/install-fan.sh" || true
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."
