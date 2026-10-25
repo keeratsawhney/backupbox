@@ -480,10 +480,12 @@ class renderer(object):
 		# backup drive: name, fill and size, bar
 		if drive:
 			self.icon(draw, 'drive', 2, y + (small_h - icon_w) // 2, self.fg)
-			value	= f"{100 * drive['used']:.0f}% · {drive['size']}"
+			value	= f"{100 * drive['used']:.0f}% · {drive['size']}" if drive.get('used') is not None else drive['size']
 			value_w	= self.text_w(value, self.font_small)
 			self.text(draw, (2 + icon_w + 4, y), self.fit(drive['name'], self.font_small, self.width - icon_w - value_w - 12), self.font_small, self.fg)
 			self.text(draw, (self.width - value_w - 2, y), value, self.font_small, self.high)
+			if drive.get('used') is None:
+				return(image)
 			bar_y	= min(self.height - 2, y + small_h + 2)
 			x0, x1	= 2 + icon_w + 4, self.width - 3
 			fill_w	= int((x1 - x0) * min(1, max(0, drive['used'])))
@@ -494,4 +496,47 @@ class renderer(object):
 		else:
 			self.icon(draw, 'drive', 2, y + (small_h - icon_w) // 2, self.fg)
 			self.text(draw, (2 + icon_w + 4, y), no_drive, self.font_small, self.fg)
+		return(image)
+
+	def screen(self, title, lines, temp, task=''):
+		# any other message (comitup, backup progress, power off ...) under the same title bar as the home screen
+		# lines: dicts text, style ('h' message, 'b' earlier lines, 'a' alert, 'hc' highlighted), progress (0..100 or None)
+		image, draw	= self.new()
+		self.header(draw, title, f'{temp:.0f}°C' if temp is not None else '')
+
+		bottom	= self.height
+		if task:
+			# what a running task does, at the bottom
+			small_h	= self.text_h(self.font_small)
+			bottom	= self.height - small_h - 3
+			draw.line((0, bottom, self.width - 1, bottom), fill=self.fg)
+			self.text(draw, (2, bottom + 2), self.fit(task, self.font_small, self.width - 4), self.font_small, self.fg)
+
+		y	= self.head_h + 1
+		for line in lines:
+			style	= line.get('style', 'h')
+			font	= self.font_small if style == 'b' else self.font
+			row_h	= self.text_h(font) + 3
+			if y + row_h > bottom + 1:
+				break
+
+			if line.get('progress') is not None:
+				# progress bar with the percentage
+				percent	= line['progress']
+				label	= f'{percent:.0f}%' if percent >= 10 else f'{percent:.1f}%'
+				label_w	= self.text_w('100%', self.font)
+				self.text(draw, (2, y + 1), label, self.font, self.high)
+				x0, x1	= label_w + 6, self.width - 3
+				draw.rounded_rectangle((x0, y + 2, x1, y + row_h - 3), radius=2, outline=self.fg)
+				fill_w	= int((x1 - x0 - 2) * min(100, max(0, percent)) / 100)
+				if fill_w > 0:
+					draw.rectangle((x0 + 1, y + 3, x0 + 1 + fill_w, y + row_h - 4), fill=self.high)
+			elif style == 'a':
+				# alert: inverted row
+				draw.rounded_rectangle((0, y, self.width - 1, y + row_h - 1), radius=3, fill=self.alert)
+				self.text(draw, (3, y + 1), self.fit(line['text'], font, self.width - 6), font, self.bg)
+			else:
+				fill	= self.high if style in ['h', 'hc'] else self.fg
+				self.text(draw, (2, y + 1), self.fit(line['text'], self.font_bold if style == 'hc' else font, self.width - 4), self.font_bold if style == 'hc' else font, fill)
+			y	+= row_h
 		return(image)
