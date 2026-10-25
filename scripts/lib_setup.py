@@ -285,6 +285,7 @@ class setup(object):
 					'conf_DISP_FRAME_TIME_IP':							{'value': 3.0, 'type': 'float'},
 					'conf_DISP_IP_REPEAT':								{'value': True, 'type': 'bool'},
 					'conf_DISP_SHOW_STATUSBAR':							{'value': True, 'type': 'bool'},
+					'conf_DISP_SLEEP_MIN':								{'value': 10, 'type': 'int'},
 					'conf_DISP_BACKLIGHT_PIN':							{'value': 23, 'type': 'int'},
 					'conf_DISP_BACKLIGHT_ENABLED':						{'value': True, 'type': 'bool'},
 					'conf_MENU_ENABLED':								{'value': True, 'type': 'bool'},

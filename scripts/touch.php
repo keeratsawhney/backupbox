@@ -117,6 +117,7 @@
 		<symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
 		<symbol id="i-power" viewBox="0 0 24 24"><path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/></symbol>
 		<symbol id="i-reboot" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></symbol>
+		<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/></symbol>
 		<symbol id="i-web" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
 		<symbol id="i-theme" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
 		<symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.7-.7-2.5z"/></symbol>
@@ -235,6 +236,7 @@
 					<div class="btn-row">
 						<button class="btn" id="btn-theme"><svg><use href="#i-theme"/></svg><span id="theme-label"></span></button>
 						<a class="btn" href="index.php" id="btn-classic"><svg><use href="#i-web"/></svg><span id="classic-label"></span></a>
+						<button class="btn" id="btn-wifi" hidden><svg><use href="#i-wifi"/></svg><span id="wifi-label"></span></button>
 					</div>
 
 					<h3 id="h-power"></h3>
@@ -279,6 +281,18 @@
 				<button class="btn btn-icon" id="sheet-close"><svg><use href="#i-close"/></svg></button>
 			</div>
 			<div class="sheet-body" id="sheet-body"></div>
+		</div>
+	</div>
+
+	<!-- Wi-Fi settings: networks nearby, saved networks; in hotspot mode comitup's page -->
+	<div class="sheet" id="wifi-sheet" role="dialog" hidden>
+		<div class="sheet-box sheet-frame">
+			<div class="sheet-head">
+				<span class="row-label"><b id="wifi-title"></b><small id="wifi-sub"></small></span>
+				<button class="btn btn-icon" id="wifi-scan"><svg><use href="#i-reboot"/></svg></button>
+				<button class="btn btn-icon" id="wifi-close"><svg><use href="#i-close"/></svg></button>
+			</div>
+			<div class="sheet-body wifi-body" id="wifi-body"></div>
 		</div>
 	</div>
 

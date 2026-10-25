@@ -35,6 +35,11 @@ import lib_setup
 # import lib_debug
 # xx	= lib_debug.debug()
 
+# system files adapted by hotspot_setup()
+COMITUP_DNS_HOTSPOT_CONF	= '/usr/share/comitup/dns/dns-hotspot.conf'
+COMITUP_WEB_DROPIN_DIR		= '/etc/systemd/system/comitup-web.service.d'
+APACHE_PORTS_CONF			= '/etc/apache2/ports.conf'
+
 class comitup(object):
 	def __init__(self):
 
@@ -311,27 +316,79 @@ class comitup(object):
 		if status_translated is not None:
 			self.__display.message([f'set:temp,time={self.__conf_DISP_FRAME_TIME * 4}', ':Comitup:', f':{status_translated}'])
 
-		# setup apache ports
-		ApachePortsConf	= '/etc/apache2/ports.conf'
-
-		BasicPorts	= [
-			81,
-			443,
-			8080,
-			8443,
-			8843
-		]
-
-		with open(ApachePortsConf,'w') as f:
-			for Port in BasicPorts:
-				f.write(f'Listen {Port}\n')
-
-			if not (status in ['HOTSPOT', 'RESET']):
-				f.write(f'Listen 80\n')
+		# the box keeps port 80 in hotspot mode too (comitup-web runs on 127.0.0.1:8099)
+		self.hotspot_setup(restart_apache=False)
+		self.__apache_ports()
 
 		subprocess.run('/usr/sbin/service apache2 restart || /usr/sbin/service apache2 start', shell=True)
 
 		self.create_wifi_link_qr_image()
+
+	def __apache_ports(self):
+		# returns True if ports.conf was changed
+		ApachePortsConf	= APACHE_PORTS_CONF
+
+		Ports	= ''.join(f'Listen {Port}\n' for Port in [80, 81, 443, 8080, 8443, 8843])
+
+		try:
+			with open(ApachePortsConf,'r') as f:
+				if f.read() == Ports:
+					return(False)
+		except:
+			pass
+
+		with open(ApachePortsConf,'w') as f:
+			f.write(Ports)
+
+		return(True)
+
+	def hotspot_setup(self, restart_apache=True):
+		# Out in the field there is no network to connect to. Phones join the hotspot like a camera's Wi-Fi:
+		# no sign-in page that only offers to connect the box to a network, http://10.41.0.1 opens the Backup Box.
+		# The Wi-Fi setup page stays available at /comitup/ (menu, app view: System).
+		# Repeated at every comitup state change, as comitup updates restore their files.
+
+		# DNS in hotspot mode: no longer every name answered with the box (address=/#/) and no captive portal
+		# announcement (DHCP option 160): phones see "no internet" instead of a portal and stay connected.
+		# Takes effect when comitup starts the hotspot the next time (reboot).
+		DnsConf	= COMITUP_DNS_HOTSPOT_CONF
+		try:
+			with open(DnsConf, 'r') as f:
+				Lines	= f.read().splitlines()
+
+			New	= [Line for Line in Lines if not Line.startswith('address=/#/') and not Line.startswith('dhcp-option=160')]
+			if 'no-resolv' not in New:
+				New.append('no-resolv')
+
+			if New != Lines:
+				with open(DnsConf, 'w') as f:
+					f.write('\n'.join(New) + '\n')
+		except FileNotFoundError:
+			pass
+		except Exception as e:
+			print(f'comitup DNS config not adapted: {e}', file=sys.stderr)
+
+		# comitup-web on 127.0.0.1:8099
+		DropInDir	= COMITUP_WEB_DROPIN_DIR
+		DropIn		= f'{DropInDir}/lbb.conf'
+		Content		= f'[Service]\nExecStart=\nExecStart={self.python} {self.WORKING_DIR}/comitup-web-lbb.py\n'
+
+		try:
+			with open(DropIn, 'r') as f:
+				DropInChanged	= f.read() != Content
+		except:
+			DropInChanged	= True
+
+		if DropInChanged:
+			os.makedirs(DropInDir, exist_ok=True)
+			with open(DropIn, 'w') as f:
+				f.write(Content)
+			subprocess.run(['systemctl', 'daemon-reload'])
+			# free port 80 before Apache takes it
+			subprocess.run(['systemctl', 'try-restart', 'comitup-web.service'])
+
+		if self.__apache_ports() and restart_apache:
+			subprocess.run('/usr/sbin/service apache2 restart || /usr/sbin/service apache2 start', shell=True)
 
 	def hotspot_active(self):
 		status	= self.get_status()
@@ -383,6 +440,10 @@ if __name__ == "__main__":
 
 		if Status:
 			comitup().new_status(Status)
+
+	elif Mode == '--hotspot_setup':
+		if comitup().installed():
+			comitup().hotspot_setup()
 
 	elif Mode == '--hotspot_active':
 		print('active' if comitup().hotspot_active() else 'inactive')

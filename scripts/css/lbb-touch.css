@@ -1731,7 +1731,8 @@ svg {
 
 /* ---------- System: drives ---------- */
 
-.drive-row {
+.drive-row,
+.wifi-row {
 	width: 100%;
 	min-height: var(--tap);
 	padding: 6px 10px;
@@ -1741,7 +1742,8 @@ svg {
 	cursor: pointer;
 }
 
-.drive-row:active {
+.drive-row:active,
+button.wifi-row:active {
 	background: var(--surface-2);
 }
 
@@ -1830,6 +1832,44 @@ svg {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.sheet-frame {
+	height: 100%;
+}
+
+.sheet-frame .sheet-head small {
+	white-space: normal;
+}
+
+@media (min-height: 600px) {
+	.sheet-frame {
+		height: 88%;
+	}
+}
+
+.wifi-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+}
+
+.wifi-body > * {
+	flex: none;
+}
+
+.wifi-row .btn-icon {
+	flex: none;
+}
+
+.sheet-frame iframe {
+	flex: 1;
+	width: 100%;
+	min-height: 260px;
+	margin-top: 8px;
+	border: 0;
+	border-radius: 8px;
+	background: #fff;
 }
 
 .sheet-body {

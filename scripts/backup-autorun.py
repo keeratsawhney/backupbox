@@ -80,9 +80,6 @@ class backup_autorun(object):
 
 		self.__ip_info()
 
-		# the box's home screen instead of the logo: temporary screens (the IP shown every minute) return to it
-		self.__display_ready()
-
 		self.__default_backup()
 
 		# check for updates
@@ -123,43 +120,24 @@ class backup_autorun(object):
 		else:
 			self.__display.message(['set:time=2', f':IMAGE={self.WORKING_DIR}/img/boot-color.png'])
 
-		lib_cron_ip.ip_info().display_ip()
-
-	def __ready_ip(self):
-		# the first IPv4 address of the box ('' without network)
-		IPs	= [IP.split('/')[0] for IP in lib_network.get_IPs().split('\n') if IP and ':' not in IP]
-		return(IPs[0] if IPs else '')
-
-	def __display_ready(self):
-		IP	= self.__ready_ip()
-		Ready	= self.__lan.l('touch_idle')
-		self.__display.message(['set:clear', ':BACKUP BOX', f':{Ready}', f":{IP or self.__lan.l('box_cronip_offline')}"], logging=False)
-
-		if not IP:
-			# the network often comes a little later: the address is added then, without delaying a default backup
-			threading.Thread(target=self.__display_ready_later, args=(Ready,), daemon=False).start()
-
-	def __display_ready_later(self, Ready):
+	def __display_ready_later(self):
+		# the network often comes a little later: the address is added then, without delaying a default backup
 		for _ in range(30):
 			time.sleep(3)
-			IP	= self.__ready_ip()
-			if not IP:
-				continue
-			# only while the home screen is still shown (no backup took the display meanwhile)
-			try:
-				with open(self.__setup.get_val('const_DISPLAY_CONTENT_OLD_FILE'), 'r') as f:
-					Shown	= f.read()
-			except:
-				Shown	= ''
-			if 'BACKUP BOX' in Shown and Ready in Shown:
-				self.__display.message(['set:clear', ':BACKUP BOX', f':{Ready}', f':{IP}'], logging=False)
-			return
+			if lib_network.get_IPs():
+				# fills in the address on the home screen (or shows it as QR while a backup has the display)
+				lib_cron_ip.ip_info().display_ip()
+				return
 
 	def __ip_info(self):
 		# ip info
 		ip_info	= lib_cron_ip.ip_info()
 
-		ip_info.display_ip()
+		# the box's home screen instead of the logo: temporary screens (the IP QR) return to it
+		if ip_info.ready_screen():
+			ip_info.display_ip(force=True)
+		else:
+			threading.Thread(target=self.__display_ready_later, args=(), daemon=False).start()
 
 		# ip_info.mail_ip() starts as thread
 		mail_thread	= ip_info.mail_ip()

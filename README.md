@@ -164,7 +164,7 @@ In Raspberry Pi Imager you can define options for your image. Shift+Ctrl+x opens
 		***<br />
 		*** There are two options now:<br />
 		***<br />
-		*** 1. If you want to configure comitup now, navigate to <b>http</b>://10.41.0.1 (http, not https!)<br />
+		*** 1. If you want to configure comitup now, navigate to <b>http</b>://10.41.0.1/comitup/ (http, not https!)<br />
 		*** and connect your lbb to your wifi.<br />
 		*** Connect your mobile or notbook to the same wifi. If you use a display on your lbb, it will<br />
 		*** tell you its new IP. Connect to lbb:<br />

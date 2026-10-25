@@ -74,7 +74,10 @@ sudo systemctl mask wpa-supplicant.service
 # create config
 sudo python3 "${const_WEB_ROOT_LBB}/lib_comitup.py" --config
 
-echo "All done. Connect to the little-backup-box-<nn> network and open http://10.41.0.1/"
+# hotspot without a forced sign-in page, the Wi-Fi setup page at /comitup/
+sudo python3 "${const_WEB_ROOT_LBB}/lib_comitup.py" --hotspot_setup
+
+echo "All done. Connect to the little-backup-box-<nn> network and open http://10.41.0.1/ (Wi-Fi setup: http://10.41.0.1/comitup/)"
 echo "comitup will be available after reboot."
 
 
