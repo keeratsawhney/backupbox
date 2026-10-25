@@ -81,7 +81,21 @@ class MainActivity : Activity() {
 		}
 		addressField.setText(prefs.getString("last", ""))
 
-		search()
+		if (!openLink(intent)) search()
+	}
+
+	override fun onNewIntent(intent: Intent) {
+		super.onNewIntent(intent)
+		openLink(intent)
+	}
+
+	/** backupbox://<address>: opened from the box's page in a browser (its QR code, a link) */
+	private fun openLink(intent: Intent?): Boolean {
+		val data	= intent?.data ?: return false
+		if (data.scheme != "backupbox") return false
+		val address	= data.host?.takeIf { it.matches(Regex("^[\\w.-]+$")) } ?: return false
+		openBox(Box(address, false))
+		return true
 	}
 
 	// ---------- network ----------

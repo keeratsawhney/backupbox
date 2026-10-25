@@ -460,6 +460,17 @@ class DISPLAY(object):
 		self.drive_cache	= [f'{Kind} {100 * Used:.0f}%' if Used is not None else Kind, SizeText]
 		self.drive_info		= {'name': Label or Kind, 'used': Used, 'size': SizeText}
 
+		# for the Bluetooth service (lib_ble.py) and others: the drive as the display shows it
+		try:
+			Path	= os.path.join(os.path.dirname(self.__const_DISPLAY_CONTENT_OLD_FILE), 'drive-status.json')
+			Data	= json.dumps(self.drive_info)
+			if Data != getattr(self, 'drive_status_written', ''):
+				with open(Path, 'w') as f:
+					f.write(Data)
+				self.drive_status_written	= Data
+		except:
+			pass
+
 	def __lsblk(self):
 		try:
 			return(json.loads(subprocess.check_output(['lsblk', '-J', '-b', '-o', 'PATH,TYPE,TRAN,FSTYPE,LABEL,UUID,SIZE,MOUNTPOINT,MODEL'], stderr=subprocess.DEVNULL, timeout=5).decode()).get('blockdevices', []))
