@@ -257,6 +257,12 @@ class DISPLAY(object):
 				self.home_lines	= [Line for Line in f.read().splitlines() if Line] or None
 		except:
 			pass
+		# the screen saved before a restart is the home screen: drawn as such from the start
+		try:
+			with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'r') as f:
+				self.home_mode	= 'set:hidden=READY' in f.read()
+		except:
+			pass
 		self.home_overlay	= False		# another screen than the home screen: the home screen returns after a while
 		self.overlay_task	= False		# ... and a backup (or other task) ran meanwhile: its screens stay while it runs
 		try:
