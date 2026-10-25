@@ -224,7 +224,7 @@
     "display_message_settings_saved_2": "salvado.",
     "comitup": {
       "section": "comitup",
-      "text": "Los datos de acceso WiFi guardados se eliminarán. Se interrumpe una conexión Wi-Fi existente y comitup entra en modo punto de acceso.<br>\nLuego, conéctese al punto de acceso WiFi \"little-backup-box-nnnn\". Ahora puede acceder a la confirmación en <a href=\"http://10.41.0.1\">http://10.41.0.1</a>. Puede acceder a la WebUI de Little Backup Box aquí: <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
+      "text": "Los datos de acceso WiFi guardados se eliminarán. Se interrumpe una conexión Wi-Fi existente y comitup entra en modo punto de acceso.<br>\nLuego, conéctese al punto de acceso WiFi \"little-backup-box-nnnn\". Ahora puede acceder a comitup en <a href=\"http://10.41.0.1/comitup/\">http://10.41.0.1/comitup/</a>. Puede acceder a la WebUI de Little Backup Box aquí: <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
       "linktext": "Eliminar credenciales de WiFi"
     },
     "vpn": {
@@ -978,6 +978,9 @@
     "umount": "Desmontar",
     "maintenance": "Mantenimiento",
     "classic_ui": "Interfaz web completa",
+    "wifi": "Wi-Fi",
+    "wifi_setup": "Conectar la caja a una Wi-Fi",
+    "wifi_setup_hint": "Solo para acceso a Internet, las copias funcionan sin red",
     "settings": "Ajustes",
     "theme": "Tema",
     "ip": "Dirección IP",

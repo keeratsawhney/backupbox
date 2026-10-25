@@ -970,7 +970,30 @@
 		if (data.model) add(T.model, data.model);
 		if (data.branch && data.branch !== 'main') add('Branch', data.branch);
 
+		$('btn-wifi').hidden = !data.wifi_setup;
+
 		loadDrives();
+	}
+
+	// ---------- Wi-Fi (comitup) ----------
+
+	function openWifi() {
+		// a new frame each time: its first page adds no history step (back closes the pop-up)
+		const frame = el('iframe', { id: 'wifi-frame', title: T.wifi });
+		frame.src = '/comitup/';
+		$('wifi-sheet').querySelector('.sheet-box').append(frame);
+		$('wifi-sheet').hidden = false;
+		openOverlay(wifiBack);
+	}
+
+	function closeWifi(fromBack) {
+		$('wifi-sheet').hidden = true;
+		if ($('wifi-frame')) $('wifi-frame').remove();
+		if (!fromBack) closeOverlay(wifiBack);
+	}
+
+	function wifiBack() {
+		closeWifi(true);
 	}
 
 	// ---------- drives (system page) ----------
@@ -1229,6 +1252,10 @@
 		$('power-note-close').setAttribute('aria-label', T.cancel);
 		$('power-pill').title = T.power_warning;
 		$('classic-label').textContent = T.classic_ui;
+		$('wifi-label').textContent = T.wifi;
+		$('wifi-title').textContent = T.wifi_setup;
+		$('wifi-sub').textContent = T.wifi_setup_hint;
+		$('wifi-close').setAttribute('aria-label', T.close);
 		$('reboot-label').textContent = T.reboot;
 		$('shutdown-label').textContent = T.shutdown;
 	}
@@ -1259,6 +1286,8 @@
 		}));
 
 		$('sheet-close').addEventListener('click', () => closeDriveSheet());
+		$('btn-wifi').addEventListener('click', openWifi);
+		$('wifi-close').addEventListener('click', () => closeWifi());
 
 		$('power-pill').addEventListener('click', (event) => {
 			event.stopPropagation();

@@ -486,7 +486,7 @@
     "display_message_settings_saved_2": "saved.",
     "comitup": {
       "section": "comitup",
-      "text": "Saved WiFi access data will be deleted. An existing WiFi connection is interrupted and comitup goes into hotspot mode.<br>\nThen connect to the \"little-backup-box-nnnn\" WiFi hotspot. Now you can reach commitup at <a href=\"http://10.41.0.1\">http://10.41.0.1</a>. You can access the Little Backup Box WebUI here: <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
+      "text": "Saved WiFi access data will be deleted. An existing WiFi connection is interrupted and comitup goes into hotspot mode.<br>\nThen connect to the \"little-backup-box-nnnn\" WiFi hotspot. Now you can reach comitup at <a href=\"http://10.41.0.1/comitup/\">http://10.41.0.1/comitup/</a>. You can access the Little Backup Box WebUI here: <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
       "linktext": "Delete WiFi credentials"
     },
     "vpn": {
@@ -978,6 +978,9 @@
     "umount": "Unmount",
     "maintenance": "Maintenance",
     "classic_ui": "Full web interface",
+    "wifi": "Wi-Fi",
+    "wifi_setup": "Connect the box to a Wi-Fi",
+    "wifi_setup_hint": "Only for internet access, backups work without a network",
     "settings": "Settings",
     "theme": "Theme",
     "ip": "IP address",

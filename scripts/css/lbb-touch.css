@@ -1832,6 +1832,30 @@ svg {
 	white-space: nowrap;
 }
 
+.sheet-frame {
+	height: 100%;
+}
+
+.sheet-frame .sheet-head small {
+	white-space: normal;
+}
+
+@media (min-height: 600px) {
+	.sheet-frame {
+		height: 88%;
+	}
+}
+
+.sheet-frame iframe {
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin-top: 8px;
+	border: 0;
+	border-radius: 8px;
+	background: #fff;
+}
+
 .sheet-body {
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;

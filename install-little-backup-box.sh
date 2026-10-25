@@ -599,7 +599,7 @@ Please connect your mobile or notebook to this wifi.
 
 \ZuThere are two options now:\Zn
 
-1. If you want to configure comitup now, navigate to \Zb\Z1http\Zn://10.41.0.1 (http, not https!)
+1. If you want to configure comitup now, navigate to \Zb\Z1http\Zn://10.41.0.1/comitup/ (http, not https!)
 and connect your lbb to your wifi.
 Connect your mobile or notbook to the same wifi. If you use a display on your lbb, it will
 tell you its new IP. Connect to lbb:

@@ -1135,6 +1135,8 @@
 				'mem_avail'	=> isset($meminfo['MemAvailable']) ? $meminfo['MemAvailable'] : null,
 				'branch'	=> isset($constants['const_SOFTWARE_BRANCH']) ? $constants['const_SOFTWARE_BRANCH'] : '',
 				'storages'	=> touch_storages($constants),
+				# comitup's Wi-Fi setup page runs while the box's hotspot is on
+				'wifi_setup'	=> trim((string)shell_exec('systemctl is-active comitup-web 2>/dev/null')) === 'active',
 			));
 
 		case 'backup':

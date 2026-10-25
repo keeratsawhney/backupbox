@@ -224,7 +224,7 @@
     "display_message_settings_saved_2": "gespeichert.",
     "comitup": {
       "section": "comitup",
-      "text": "Gespeicherte WiFi-Zugangsdaten werden gelöscht. Eine bestehende WiFi-Verbindung wird unterbrochen und comitup geht in den Hotspot-Modus.<br>\nVerbinden Sie sich danach mit dem WiFi-Hotspot \"little-backup-box-nnnn\". Nun können Sie comitup unter <a href=\"http://10.41.0.1\">http://10.41.0.1</a> erreichen. Zur WebUI der Little Backup Box kommen Sie hier: <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
+      "text": "Gespeicherte WiFi-Zugangsdaten werden gelöscht. Eine bestehende WiFi-Verbindung wird unterbrochen und comitup geht in den Hotspot-Modus.<br>\nVerbinden Sie sich danach mit dem WiFi-Hotspot \"little-backup-box-nnnn\". Nun können Sie comitup unter <a href=\"http://10.41.0.1/comitup/\">http://10.41.0.1/comitup/</a> erreichen. Zur WebUI der Little Backup Box kommen Sie hier: <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
       "linktext": "WiFi-Zugangsdaten löschen"
     },
     "vpn": {
@@ -978,6 +978,9 @@
     "umount": "Aushängen",
     "maintenance": "Wartung",
     "classic_ui": "Vollständige Weboberfläche",
+    "wifi": "WLAN",
+    "wifi_setup": "Box mit einem WLAN verbinden",
+    "wifi_setup_hint": "Nur für Internetzugang, Backups funktionieren ohne Netzwerk",
     "settings": "Einstellungen",
     "theme": "Design",
     "ip": "IP-Adresse",

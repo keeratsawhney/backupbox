@@ -224,7 +224,7 @@
     "display_message_settings_saved_2": "enregistré.",
     "comitup": {
       "section": "comitup",
-      "text": "Les données d'accès WiFi enregistrées seront supprimées. Une connexion Wi-Fi existante est interrompue et comitup passe en mode point d'accès.<br>\nConnectez-vous ensuite au hotspot WiFi \"little-backup-box-nnnn\". Vous pouvez maintenant accéder à commitup sur <a href=\"http://10.41.0.1\">http://10.41.0.1</a>. Vous pouvez accéder à l'interface Web de Little Backup Box ici : <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
+      "text": "Les données d'accès WiFi enregistrées seront supprimées. Une connexion Wi-Fi existante est interrompue et comitup passe en mode point d'accès.<br>\nConnectez-vous ensuite au hotspot WiFi \"little-backup-box-nnnn\". Vous pouvez maintenant accéder à comitup sur <a href=\"http://10.41.0.1/comitup/\">http://10.41.0.1/comitup/</a>. Vous pouvez accéder à l'interface Web de Little Backup Box ici : <a href=\"https://10.41.0.1\">https://10.41.0.1</a>.",
       "linktext": "Supprimer les identifiants WiFi"
     },
     "vpn": {
@@ -978,6 +978,9 @@
     "umount": "Démonter",
     "maintenance": "Maintenance",
     "classic_ui": "Interface web complète",
+    "wifi": "Wi-Fi",
+    "wifi_setup": "Connecter la box à un Wi-Fi",
+    "wifi_setup_hint": "Uniquement pour l'accès à Internet, les sauvegardes fonctionnent sans réseau",
     "settings": "Paramètres",
     "theme": "Thème",
     "ip": "Adresse IP",

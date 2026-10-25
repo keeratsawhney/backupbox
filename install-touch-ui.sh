@@ -54,6 +54,14 @@ if [[ -f "${TFM_CONFIG}" ]]; then
 	sudo sed -i 's/"show_hidden":true/"show_hidden":false/' "${TFM_CONFIG}"
 fi
 
+# comitup hotspot: no forced sign-in page, port 80 stays with the Backup Box, Wi-Fi setup at /comitup/
+if command -v comitup-cli >/dev/null 2>&1; then
+	echo "Setting up the hotspot ..."
+	sudo cp -f "${INSTALLER_DIR}/etc/apache2_includes_comitup.conf" /etc/apache2/includes/comitup.conf
+	sudo python3 "${WEB_ROOT}/lib_comitup.py" --hotspot_setup
+	sudo systemctl reload apache2 || true
+fi
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."
