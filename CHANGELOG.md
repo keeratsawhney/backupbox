@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#31](https://github.com/keeratsawhney/backupbox/pull/31) Fix: background previews stopped at once**: the end of the backup unmounted every drive, including the one the background job works on. It now stays mounted until the job is done. The job's errors go to `tmp/background/errors.log`.
 - **[#30](https://github.com/keeratsawhney/backupbox/pull/30) Backups report done right after copying; thumbnails and database in the background**
   - `background.py` makes the thumbnails and the database entries at low priority. The list of files to do is kept on the drive, so a power off only interrupts it.
   - The app's top bar shows a *Previews 312/2418* pill while it works.

@@ -1645,7 +1645,7 @@ class backup(object):
 			else:
 				Action	= 'None'
 
-			lib_poweroff.poweroff(Action, display_summary).poweroff()
+			lib_poweroff.poweroff(Action, display_summary, KeepMountPoint=self.__BackgroundMountPoint).poweroff()
 
 	def __cleanup(self):
 		# Wait for running threads (mails to send)
