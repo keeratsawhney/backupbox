@@ -51,6 +51,113 @@
 				android:textColor="@color/muted"
 				android:textSize="14sp" />
 
+			<!-- the paired box over Bluetooth: state, drive, open (over Wi-Fi), start / stop -->
+			<LinearLayout
+				android:id="@+id/bleCard"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="24dp"
+				android:background="@drawable/card"
+				android:orientation="vertical"
+				android:padding="16dp"
+				android:visibility="gone">
+
+				<TextView
+					android:id="@+id/bleTitle"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:text="@string/ble_title"
+					android:textColor="@color/muted"
+					android:textSize="13sp" />
+
+				<TextView
+					android:id="@+id/bleState"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginTop="2dp"
+					android:textColor="@color/ink"
+					android:textSize="22sp"
+					android:textStyle="bold" />
+
+				<TextView
+					android:id="@+id/bleLines"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginTop="2dp"
+					android:textColor="@color/muted"
+					android:textSize="14sp" />
+
+				<TextView
+					android:id="@+id/bleDriveText"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginTop="10dp"
+					android:textColor="@color/ink"
+					android:textSize="14sp" />
+
+				<ProgressBar
+					android:id="@+id/bleDrive"
+					style="@android:style/Widget.Material.ProgressBar.Horizontal"
+					android:layout_width="match_parent"
+					android:layout_height="8dp"
+					android:layout_marginTop="4dp"
+					android:max="100"
+					android:progressTint="@color/sage_dark" />
+
+				<LinearLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginTop="14dp"
+					android:orientation="horizontal">
+
+					<Button
+						android:id="@+id/bleOpen"
+						android:layout_width="0dp"
+						android:layout_height="52dp"
+						android:layout_weight="1"
+						android:background="@drawable/button"
+						android:text="@string/ble_open"
+						android:textAllCaps="false"
+						android:textColor="@color/paper"
+						android:textSize="16sp" />
+
+					<Button
+						android:id="@+id/bleStart"
+						android:layout_width="0dp"
+						android:layout_height="52dp"
+						android:layout_marginStart="8dp"
+						android:layout_weight="1"
+						android:background="@drawable/field"
+						android:text="@string/ble_start"
+						android:textAllCaps="false"
+						android:textColor="@color/ink"
+						android:textSize="16sp" />
+				</LinearLayout>
+
+				<Button
+					android:id="@+id/blePower"
+					android:layout_width="wrap_content"
+					android:layout_height="44dp"
+					android:layout_gravity="end"
+					android:layout_marginTop="6dp"
+					android:background="@android:color/transparent"
+					android:text="@string/ble_power_off"
+					android:textAllCaps="false"
+					android:textColor="@color/danger"
+					android:textSize="14sp" />
+			</LinearLayout>
+
+			<Button
+				android:id="@+id/pair"
+				android:layout_width="match_parent"
+				android:layout_height="52dp"
+				android:layout_marginTop="16dp"
+				android:background="@drawable/field"
+				android:text="@string/ble_pair"
+				android:textAllCaps="false"
+				android:textColor="@color/ink"
+				android:textSize="16sp" />
+
 			<LinearLayout
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"

@@ -250,6 +250,13 @@ class DISPLAY(object):
 		# home screen (content marked hidden=READY): drawn as a picture with the backup drive
 		self.home_mode		= False
 		self.home_lines		= None		# its lines, to come back to after short messages
+		# kept in a file: the display is restarted (settings saved) and must still know its home screen
+		self.home_file		= os.path.join(os.path.dirname(self.__const_DISPLAY_CONTENT_OLD_FILE), 'display-home.txt')
+		try:
+			with open(self.home_file, 'r') as f:
+				self.home_lines	= [Line for Line in f.read().splitlines() if Line] or None
+		except:
+			pass
 		self.home_overlay	= False		# another screen than the home screen: the home screen returns after a while
 		self.overlay_task	= False		# ... and a backup (or other task) ran meanwhile: its screens stay while it runs
 		try:
@@ -1124,6 +1131,11 @@ class DISPLAY(object):
 						self.home_lines		= list(Lines)
 						self.home_overlay	= False
 						self.overlay_task	= False
+						try:
+							with open(self.home_file, 'w') as f:
+								f.write('\n'.join(Lines))
+						except:
+							pass
 				else:
 					self.home_mode	= False
 
@@ -1135,7 +1147,10 @@ class DISPLAY(object):
 				self.content_time	= time.time()
 			elif self.menu_closed:
 				self.menu_closed	= False
-				if not self.menu_active and not self.sleeping:
+				if self.home_overlay and self.home_lines and not self.overlay_task:
+					# a short message was on screen: straight back to the home screen
+					self.content_time	= 0
+				elif not self.menu_active and not self.sleeping:
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
 					display_time	= time.time()
 			elif (
