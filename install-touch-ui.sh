@@ -100,6 +100,14 @@ fi
 # fan: full speed from 60 °C (after the next reboot)
 bash "${INSTALLER_DIR}/install-fan.sh" || true
 
+# the display runs on until it is stopped: restart it with the new code (the home screen is drawn again at once)
+if pgrep -f "${WEB_ROOT}/displa[y].py" >/dev/null; then
+	echo "Restarting the display ..."
+	sudo pkill -f "${WEB_ROOT}/displa[y].py" || true
+	sleep 1
+	sudo python3 "${WEB_ROOT}/lib_cron_ip.py" --display >/dev/null 2>&1 || true
+fi
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."

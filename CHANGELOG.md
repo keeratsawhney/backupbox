@@ -6,6 +6,9 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#37](https://github.com/keeratsawhney/backupbox/pull/37) OLED home screen up to date right after network changes**
+  - Any network change (Wi-Fi or cable connected or lost, internet found) redraws the home screen with the new address and online state at once, not after up to a minute. It no longer says "offline" for the first minute after boot.
+  - An update restarts the display, so new display code runs without a reboot.
 - **[#35](https://github.com/keeratsawhney/backupbox/pull/35) Card folders named by date, folder dates kept, LAN address on the OLED**
   - New cards (or cards formatted in the camera) get a folder named by the date and time of their first backup and the card's name, e.g. `2026-11-14_15-29-07_NIKON_Z_6_2`. Cards backed up before keep their folder.
   - Thumbnails no longer change the photo folders' modified date.
