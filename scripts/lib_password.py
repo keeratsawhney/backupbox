@@ -20,6 +20,7 @@
 
 import datetime
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -38,12 +39,13 @@ def share_password():
 	try:
 		with open(SHARE_PASSWORD_FILE, 'r') as f:
 			Password	= f.read().strip()
-		if Password:
+		if re.fullmatch(r'backup\d{4}', Password):
 			return(Password)
 	except OSError:
 		pass
 
-	Password	= ''.join(secrets.choice('abcdefghjkmnpqrstuvwxyz23456789') for i in range(10))
+	# easy to read from the display and to type: backup and four digits, different on every box
+	Password	= f'backup{secrets.randbelow(10000):04d}'
 	os.makedirs(os.path.dirname(SHARE_PASSWORD_FILE), exist_ok=True)
 	with open(SHARE_PASSWORD_FILE, 'w') as f:
 		f.write(Password)
