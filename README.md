@@ -183,7 +183,8 @@ repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `AND
 
 ## Copy files to a computer (Ethernet)
 
-Plug the box into the studio network with a cable:
+Plug the box into the studio network with a cable, or straight into the computer (no router needed: after 30 s
+the box is `10.42.0.1` and the computer gets an address by itself):
 - **The Wi-Fi switches off** while the cable is in, so everything goes over the cable. Unplug it and the Wi-Fi comes back.
 - **The OLED shows *File transfer*** with the box's address, the link speed (`LAN 1G`) and the share login.
 - **Open the network share** on the computer:
@@ -192,6 +193,7 @@ Plug the box into the studio network with a cable:
 - **Log in as `lbb`** with the password shown on the OLED and in the app (*System › Share login*), or the box's own password if you set one. Recent Windows versions refuse guest access, so the login is needed.
 - **The backup drive is in the `nvme_target` folder** (`usb_target` for a USB drive). The box keeps it mounted while it is idle.
 - **Speed:** the Raspberry Pi 5's port is gigabit, so about 110 MB/s with a gigabit switch or PC. A Cat 6 or Cat 7 cable does not raise that.
+  The computer needs a cable too (a USB-C Ethernet adapter on a MacBook): over its Wi-Fi the copy is only as fast and as steady as that Wi-Fi.
 
 ## Safety
 
