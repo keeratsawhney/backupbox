@@ -84,7 +84,10 @@ echo "Setting up Ethernet and the network share ..."
 if [ -d /etc/NetworkManager/dispatcher.d ]; then
 	sudo install -m 0755 -o root -g root "${INSTALLER_DIR}/etc/NetworkManager_dispatcher_90-lbb-ethernet" /etc/NetworkManager/dispatcher.d/90-lbb-ethernet
 	# a cable already connected
-	nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^ethernet:connected' && sudo nmcli radio wifi off
+	if nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^ethernet:connected'; then
+		sudo systemctl stop comitup 2>/dev/null
+		sudo nmcli radio wifi off
+	fi
 fi
 if [ -d /etc/samba ]; then
 	sudo cp -f "${INSTALLER_DIR}/etc/samba_smb.conf" /etc/samba/smb.conf

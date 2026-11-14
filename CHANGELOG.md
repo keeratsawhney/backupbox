@@ -6,6 +6,10 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#35](https://github.com/keeratsawhney/backupbox/pull/35) Card folders named by date, folder dates kept, LAN address on the OLED**
+  - New cards (or cards formatted in the camera) get a folder named by the date and time of their first backup and the card's name, e.g. `2026-11-14_15-29-07_NIKON_Z_6_2`. Cards backed up before keep their folder.
+  - Thumbnails no longer change the photo folders' modified date.
+  - Ethernet: the OLED shows the cable's address. Comitup is paused while the cable is in, and every minute the box checks that the Wi-Fi is off with a cable and on without one.
 - **[#33](https://github.com/keeratsawhney/backupbox/pull/33) Ethernet file transfer mode**
   - **Wi-Fi:** off while an Ethernet cable is connected, back on when it is unplugged (NetworkManager dispatcher).
   - **OLED home screen:** *File transfer* with the address, the link speed and the share login (`lbb · password`).
