@@ -132,7 +132,19 @@ class thumbnails(object):
 
 		# generate thumbnails
 		TIMS_Dir	= os.path.join(os.path.dirname(SourceFilePathName), 'tims')
-		pathlib.Path(MountPoint, TIMS_Dir).mkdir(parents=True, exist_ok=True)
+		if not os.path.isdir(os.path.join(MountPoint, TIMS_Dir)):
+			# the photo folder keeps its date (a new tims folder would change it to now)
+			Parent	= os.path.join(MountPoint, os.path.dirname(SourceFilePathName))
+			try:
+				Times	= os.stat(Parent)
+			except OSError:
+				Times	= None
+			pathlib.Path(MountPoint, TIMS_Dir).mkdir(parents=True, exist_ok=True)
+			if Times:
+				try:
+					os.utime(Parent, ns=(Times.st_atime_ns, Times.st_mtime_ns))
+				except OSError:
+					pass
 
 		FileName	= os.path.basename(SourceFilePathName)
 		TIMS		= os.path.join(MountPoint, TIMS_Dir, f"{FileName}.JPG")

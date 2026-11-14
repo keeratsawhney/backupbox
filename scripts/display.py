@@ -50,6 +50,7 @@
 # hidden:	markertext to write into const_DISPLAY_CONTENT_OLD_FILE
 # kill:		terminate display daemon
 
+import fcntl
 import json
 import os
 import RPi.GPIO as GPIO
@@ -57,6 +58,8 @@ import pathlib
 import re
 import shutil
 import signal
+import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -595,9 +598,10 @@ class DISPLAY(object):
 			return(Fallback)
 
 	def __ethernet(self):
-		# link speed (Mb/s, 0 if unknown) of a connected Ethernet cable, None without one; read from /sys, no process
+		# (link speed in Mb/s or 0, IPv4 address or '') of a connected Ethernet cable, None without one;
+		# read from /sys and the kernel, no process
 		try:
-			for Device in os.listdir('/sys/class/net'):
+			for Device in sorted(os.listdir('/sys/class/net')):
 				if not re.match(r'^(eth|end|enx)', Device):
 					continue
 				with open(f'/sys/class/net/{Device}/operstate') as f:
@@ -605,12 +609,21 @@ class DISPLAY(object):
 						continue
 				try:
 					with open(f'/sys/class/net/{Device}/speed') as f:
-						return(max(0, int(f.read().strip())))
+						Speed	= max(0, int(f.read().strip()))
 				except (OSError, ValueError):
-					return(0)
+					Speed	= 0
+				return(Speed, self.__ipv4(Device))
 		except OSError:
 			pass
 		return(None)
+
+	def __ipv4(self, Device):
+		# IPv4 address of a network device (SIOCGIFADDR), '' without one
+		try:
+			with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as Socket:
+				return(socket.inet_ntoa(fcntl.ioctl(Socket.fileno(), 0x8915, struct.pack('256s', Device[:15].encode()))[20:24]))
+		except OSError:
+			return('')
 
 	def __share_login(self):
 		# the network share's login: user lbb and its share password (lib_password.py), else the box's password
@@ -634,9 +647,13 @@ class DISPLAY(object):
 		# Ethernet cable: file transfer mode (Wi-Fi off, network share at full speed)
 		Ethernet	= self.__ethernet()
 		if Ethernet is not None:
+			Speed, EthernetIP	= Ethernet
 			State	= self.home_ethernet
 			Login	= self.__share_login()
-			Network	= 'LAN' if not Ethernet else f'LAN {Ethernet // 1000}G' if Ethernet >= 1000 else f'LAN {Ethernet}M'
+			Network	= 'LAN' if not Speed else f'LAN {Speed // 1000}G' if Speed >= 1000 else f'LAN {Speed}M'
+			# the cable's address: the one to use for the network share (not the Wi-Fi's)
+			if EthernetIP:
+				IP	= EthernetIP
 
 		self.__drive_status()
 

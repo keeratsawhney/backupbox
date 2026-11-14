@@ -13,11 +13,16 @@ esac
 
 case "${ACTION}" in
 	up)
+		# comitup would switch the Wi-Fi on again for its hotspot: paused while the cable is in
+		systemctl stop --no-block comitup 2>/dev/null
 		nmcli radio wifi off
 		;;
 	down)
 		# only when no other cable is connected
-		nmcli -t -f TYPE,STATE device | grep -q '^ethernet:connected' || nmcli radio wifi on
+		if ! nmcli -t -f TYPE,STATE device | grep -q '^ethernet:connected'; then
+			nmcli radio wifi on
+			systemctl is-enabled --quiet comitup 2>/dev/null && systemctl start --no-block comitup
+		fi
 		;;
 esac
 
