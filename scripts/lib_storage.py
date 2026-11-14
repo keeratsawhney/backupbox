@@ -626,25 +626,20 @@ class storage(object):
 					'ColumnEnd'			: ColumnEnd
 				}
 
-			# build LbbDeviceID
-			Parts	= []
-			for Column in Columns:
-				if Column != 'PATH':
-					Part	= Result[1][ColumnPositions[Column]['ColumnPosition']:ColumnPositions[Column]['ColumnEnd']].strip()
-					if Part:
-						if Column == 'SERIAL':
-							Part	= Part[-5:].strip()
-						if Column == 'UUID':
-							continue
+			Values	= {Column: Result[1][ColumnPositions[Column]['ColumnPosition']:ColumnPositions[Column]['ColumnEnd']].strip() for Column in Columns}
 
-						Parts.append(Part)
+			# the card's name: its label (cameras name their cards, e.g. NIKON Z 6_2), else the reader's model, else the size
+			LbbDeviceID	= Values.get('LABEL') or Values.get('MODEL') or Values.get('VENDOR') or Values.get('FSSIZE') or ''
 
-			LbbDeviceID	= '_'.join(Parts).replace(' ','_')
+		# folder of this card on the backup drive: date and time of its first backup, then its name,
+		# e.g. "2026-11-14_15-29-07_NIKON_Z_6_2" (sorted by date; a card formatted in the camera gets a new folder)
+		try:
+			Date	= datetime.datetime.strptime(str(DatePart), '%Y%m%d%H%M%S').strftime('%Y-%m-%d_%H-%M-%S')
+		except ValueError:
+			Date	= f"{DatePart}-{RandomPart}"
+		LbbDeviceID	= re.sub(r'[^\w.-]+', '_', LbbDeviceID).strip('_.')
 
-		if not LbbDeviceID:
-			LbbDeviceID	= f"{DatePart}-{RandomPart}"
-
-		return(f'lbb_{LbbDeviceID}')
+		return(f'{Date}_{LbbDeviceID}' if LbbDeviceID else Date)
 
 	def __manage_lbb_device_ID(self):
 		if self.mounted():

@@ -22,6 +22,17 @@ WORKING_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # run directly
 python3 ${WORKING_DIR}/lib_cron_ip.py --display --mail
 
+# Ethernet cable: Wi-Fi off (also if something switched it on again); no cable: Wi-Fi on (also if the unplug was missed)
+if nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^ethernet:connected'; then
+	if [ "$(nmcli radio wifi 2>/dev/null)" = "enabled" ]; then
+		systemctl stop comitup 2>/dev/null
+		nmcli radio wifi off
+	fi
+elif [ "$(nmcli radio wifi 2>/dev/null)" = "disabled" ]; then
+	nmcli radio wifi on
+	systemctl is-enabled --quiet comitup 2>/dev/null && systemctl start comitup
+fi
+
 # the backup drive stays mounted while the box is idle: network share and app show it
 curl -s -m 30 -o /dev/null "http://127.0.0.1:8080/touch-api.php?action=automount"
 
