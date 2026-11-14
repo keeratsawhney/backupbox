@@ -6,6 +6,14 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#33](https://github.com/keeratsawhney/backupbox/pull/33) Ethernet file transfer mode**
+  - **Wi-Fi:** off while an Ethernet cable is connected, back on when it is unplugged (NetworkManager dispatcher).
+  - **OLED home screen:** *File transfer* with the address and the link speed.
+  - **Network share:**
+    - the backup drive stays mounted while the box is idle, so it shows in `\\box\media`;
+    - user `lbb` with a share password shown in the app when the box has no password (Windows 10/11 refuse guest access);
+    - Samba tuned for gigabit (sendfile, async I/O, SMB2+).
+  - **App, System page:** Ethernet link speed, the share's address and login.
 - **[#31](https://github.com/keeratsawhney/backupbox/pull/31) Fix: background previews stopped at once**: the end of the backup unmounted every drive, including the one the background job works on. It now stays mounted until the job is done. The job's errors go to `tmp/background/errors.log`.
 - **[#30](https://github.com/keeratsawhney/backupbox/pull/30) Backups report done right after copying; thumbnails and database in the background**
   - `background.py` makes the thumbnails and the database entries at low priority. The list of files to do is kept on the drive, so a power off only interrupts it.

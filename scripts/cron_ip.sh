@@ -22,6 +22,9 @@ WORKING_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # run directly
 python3 ${WORKING_DIR}/lib_cron_ip.py --display --mail
 
+# the backup drive stays mounted while the box is idle: network share and app show it
+curl -s -m 30 -o /dev/null "http://127.0.0.1:8080/touch-api.php?action=automount"
+
 # mail checks only when IP mails are configured (each check starts python)
 grep -qi "^conf_MAIL_IP=['\"]\?\(true\|1\)\b" "${WORKING_DIR}/config.cfg" 2>/dev/null || exit 0
 

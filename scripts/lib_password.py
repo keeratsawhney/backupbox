@@ -20,6 +20,8 @@
 
 import datetime
 import os
+import secrets
+import shutil
 import subprocess
 import sys
 
@@ -27,6 +29,30 @@ import lib_comitup
 import lib_language
 import lib_log
 import lib_setup
+
+SHARE_PASSWORD_FILE	= '/var/lib/little-backup-box/share-password'
+
+def share_password():
+	# password of the network share while the box has no password of its own: made once, kept over updates,
+	# readable by the web interface (shown on the System page)
+	try:
+		with open(SHARE_PASSWORD_FILE, 'r') as f:
+			Password	= f.read().strip()
+		if Password:
+			return(Password)
+	except OSError:
+		pass
+
+	Password	= ''.join(secrets.choice('abcdefghjkmnpqrstuvwxyz23456789') for i in range(10))
+	os.makedirs(os.path.dirname(SHARE_PASSWORD_FILE), exist_ok=True)
+	with open(SHARE_PASSWORD_FILE, 'w') as f:
+		f.write(Password)
+	try:
+		shutil.chown(SHARE_PASSWORD_FILE, 'root', 'www-data')
+	except (LookupError, OSError):
+		pass
+	os.chmod(SHARE_PASSWORD_FILE, 0o640)
+	return(Password)
 
 class password(object):
 
@@ -43,9 +69,11 @@ class password(object):
 			#Apache
 			open('/etc/apache2/includes/password.conf','w').close()
 
-			#Samba
+			#Samba: guests may connect, and the user lbb with the share password (Windows 10/11 refuse guest access)
 			with open('/etc/samba/login.conf','w') as f:
 				f.write('guest ok = yes')
+			SharePassword	= share_password()
+			subprocess.run(['/usr/bin/smbpasswd', '-a', '-s', self.user], input=f'{SharePassword}\n{SharePassword}\n'.encode(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 			#comitup
 			lib_comitup.comitup().config(Password='')
@@ -75,6 +103,12 @@ class password(object):
 			with open('/etc/samba/login.conf','w') as f:
 				f.write(f'valid users = {self.user}\n')
 				f.write('guest ok = no\n')
+
+			# the share's login is the box's password now
+			try:
+				os.remove(SHARE_PASSWORD_FILE)
+			except OSError:
+				pass
 
 			#comitup
 			lib_comitup.comitup().config(Password=Password)

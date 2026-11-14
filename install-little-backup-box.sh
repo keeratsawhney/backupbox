@@ -275,6 +275,11 @@ else
 	sudo sed -i "/^${VAR}/s/\(.[^=]*\)\([ \t]*=[ \t]*\)\(.[^=]*\)/\1\2${VALUE}/" "${CONFIG_TXT}"
 fi
 
+# Ethernet: Wi-Fi off while a cable is connected
+if [ -d /etc/NetworkManager/dispatcher.d ]; then
+	sudo install -m 0755 -o root -g root "${INSTALLER_DIR}/etc/NetworkManager_dispatcher_90-lbb-ethernet" /etc/NetworkManager/dispatcher.d/90-lbb-ethernet
+fi
+
 # raspberry pi 5: fan at full speed from 60 °C
 bash "${INSTALLER_DIR}/install-fan.sh" || true
 

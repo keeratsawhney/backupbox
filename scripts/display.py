@@ -269,6 +269,10 @@ class DISPLAY(object):
 			self.home_no_drive	= lib_language.language().l('box_menu_no_drive')
 		except:
 			self.home_no_drive	= 'No drive'
+		try:
+			self.home_ethernet	= lib_language.language().l('box_menu_file_transfer')
+		except:
+			self.home_ethernet	= 'File transfer'
 		self.home_render	= lib_menu_render.renderer(
 			width		= self.device.width,
 			height		= self.device.height,
@@ -588,6 +592,24 @@ class DISPLAY(object):
 		except:
 			return(Fallback)
 
+	def __ethernet(self):
+		# link speed (Mb/s, 0 if unknown) of a connected Ethernet cable, None without one; read from /sys, no process
+		try:
+			for Device in os.listdir('/sys/class/net'):
+				if not re.match(r'^(eth|end|enx)', Device):
+					continue
+				with open(f'/sys/class/net/{Device}/operstate') as f:
+					if f.read().strip() != 'up':
+						continue
+				try:
+					with open(f'/sys/class/net/{Device}/speed') as f:
+						return(max(0, int(f.read().strip())))
+				except (OSError, ValueError):
+					return(0)
+		except OSError:
+			pass
+		return(None)
+
 	def __home_image(self, Lines):
 		# Lines of the home screen: BACKUP BOX / state / IP / online state (lib_cron_ip.py)
 		Contents	= [Line.split(':', 1)[-1].strip() for Line in Lines if Line.split(':', 1)[-1].strip()]
@@ -596,6 +618,12 @@ class DISPLAY(object):
 		Rest		= Contents[2:]
 		IP			= next((Item for Item in Rest if re.match(r'^\d+\.\d+\.\d+\.\d+$', Item)), '')
 		Network		= next((Item for Item in Rest if Item != IP), '')
+
+		# Ethernet cable: file transfer mode (Wi-Fi off, network share at full speed)
+		Ethernet	= self.__ethernet()
+		if Ethernet is not None:
+			State	= self.home_ethernet
+			Network	= 'LAN' if not Ethernet else f'LAN {Ethernet // 1000}G' if Ethernet >= 1000 else f'LAN {Ethernet}M'
 
 		self.__drive_status()
 
