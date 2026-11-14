@@ -271,8 +271,10 @@ class DISPLAY(object):
 			self.home_no_drive	= 'No drive'
 		try:
 			self.home_ethernet	= lib_language.language().l('box_menu_file_transfer')
+			self.home_box_password	= lib_language.language().l('box_menu_box_password')
 		except:
 			self.home_ethernet	= 'File transfer'
+			self.home_box_password	= 'box password'
 		self.home_render	= lib_menu_render.renderer(
 			width		= self.device.width,
 			height		= self.device.height,
@@ -610,6 +612,15 @@ class DISPLAY(object):
 			pass
 		return(None)
 
+	def __share_login(self):
+		# the network share's login: user lbb and its share password (lib_password.py), else the box's password
+		try:
+			with open('/var/lib/little-backup-box/share-password') as f:
+				Password	= f.read().strip()
+		except OSError:
+			Password	= ''
+		return(f"lbb · {Password or self.home_box_password}")
+
 	def __home_image(self, Lines):
 		# Lines of the home screen: BACKUP BOX / state / IP / online state (lib_cron_ip.py)
 		Contents	= [Line.split(':', 1)[-1].strip() for Line in Lines if Line.split(':', 1)[-1].strip()]
@@ -618,11 +629,13 @@ class DISPLAY(object):
 		Rest		= Contents[2:]
 		IP			= next((Item for Item in Rest if re.match(r'^\d+\.\d+\.\d+\.\d+$', Item)), '')
 		Network		= next((Item for Item in Rest if Item != IP), '')
+		Login		= ''
 
 		# Ethernet cable: file transfer mode (Wi-Fi off, network share at full speed)
 		Ethernet	= self.__ethernet()
 		if Ethernet is not None:
 			State	= self.home_ethernet
+			Login	= self.__share_login()
 			Network	= 'LAN' if not Ethernet else f'LAN {Ethernet // 1000}G' if Ethernet >= 1000 else f'LAN {Ethernet}M'
 
 		self.__drive_status()
@@ -642,6 +655,7 @@ class DISPLAY(object):
 			drive	= self.drive_info if self.drive_cache else None,
 			temp	= Temp,
 			no_drive	= self.home_no_drive,
+			login		= Login,
 		))
 
 	def __screen_image(self, Lines):

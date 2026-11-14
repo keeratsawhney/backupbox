@@ -239,6 +239,7 @@
       "free": "free",
       "no_drive": "No drive",
       "file_transfer": "File transfer",
+      "box_password": "box password",
       "temperature": "Temperature",
       "power_low": "low voltage",
       "power_was_low": "was low",

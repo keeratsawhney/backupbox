@@ -185,11 +185,11 @@ repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `AND
 
 Plug the box into the studio network with a cable:
 - **The Wi-Fi switches off** while the cable is in, so everything goes over the cable. Unplug it and the Wi-Fi comes back.
-- **The OLED shows *File transfer*** with the box's address and the link speed (`LAN 1G`).
+- **The OLED shows *File transfer*** with the box's address, the link speed (`LAN 1G`) and the share login.
 - **Open the network share** on the computer:
   - Windows: `\\<box address>\media`
   - Mac: `smb://<box address>/media`
-- **Log in as `lbb`** with the password shown in the app (*System › Share login*), or the box's own password if you set one. Recent Windows versions refuse guest access, so the login is needed.
+- **Log in as `lbb`** with the password shown on the OLED and in the app (*System › Share login*), or the box's own password if you set one. Recent Windows versions refuse guest access, so the login is needed.
 - **The backup drive is in the `nvme_target` folder** (`usb_target` for a USB drive). The box keeps it mounted while it is idle.
 - **Speed:** the Raspberry Pi 5's port is gigabit, so about 110 MB/s with a gigabit switch or PC. A Cat 6 or Cat 7 cable does not raise that.
 

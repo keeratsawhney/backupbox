@@ -816,6 +816,7 @@
       "free": "libre",
       "no_drive": "Sin unidad",
       "file_transfer": "Transferencia",
+      "box_password": "contraseña de la caja",
       "temperature": "Temperatura",
       "power_low": "bajo voltaje",
       "power_was_low": "fue bajo",

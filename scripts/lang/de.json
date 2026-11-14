@@ -816,6 +816,7 @@
       "free": "frei",
       "no_drive": "Kein Laufwerk",
       "file_transfer": "Dateiübertragung",
+      "box_password": "Box-Passwort",
       "temperature": "Temperatur",
       "power_low": "Unterspannung",
       "power_was_low": "war zu niedrig",

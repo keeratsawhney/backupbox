@@ -8,7 +8,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ### Android app, Bluetooth, OLED
 - **[#33](https://github.com/keeratsawhney/backupbox/pull/33) Ethernet file transfer mode**
   - **Wi-Fi:** off while an Ethernet cable is connected, back on when it is unplugged (NetworkManager dispatcher).
-  - **OLED home screen:** *File transfer* with the address and the link speed.
+  - **OLED home screen:** *File transfer* with the address, the link speed and the share login (`lbb · password`).
   - **Network share:**
     - the backup drive stays mounted while the box is idle, so it shows in `\\box\media`;
     - user `lbb` with a share password shown in the app when the box has no password (Windows 10/11 refuse guest access);
