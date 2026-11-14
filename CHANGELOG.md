@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#38](https://github.com/keeratsawhney/backupbox/pull/38) Fix: Finder copies from the network share failed (error 100060)**: the share stored Mac metadata in extended attributes, which exFAT drives don't have. Plain files now; SMB multichannel off (unreliable with Macs that have Wi-Fi and Ethernet).
 - **[#37](https://github.com/keeratsawhney/backupbox/pull/37) OLED home screen up to date right after network changes**
   - Any network change (Wi-Fi or cable connected or lost, internet found) redraws the home screen with the new address and online state at once, not after up to a minute. It no longer says "offline" for the first minute after boot.
   - An update restarts the display, so new display code runs without a reboot.
