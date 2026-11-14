@@ -105,8 +105,10 @@ if pgrep -f "${WEB_ROOT}/displa[y].py" >/dev/null; then
 	echo "Restarting the display ..."
 	sudo pkill -f "${WEB_ROOT}/displa[y].py" || true
 	sleep 1
-	sudo python3 "${WEB_ROOT}/lib_cron_ip.py" --display >/dev/null 2>&1 || true
 fi
+# the home screen again: its message starts the display (lib_cron_ip --display sends nothing while the address is unchanged)
+sudo python3 -c "import sys; sys.path.insert(0, '${WEB_ROOT}'); import lib_cron_ip; lib_cron_ip.ip_info().ready_screen()" >/dev/null 2>&1 || true
+sleep 2
 
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
