@@ -969,6 +969,12 @@
 		const ipv4 = data.ips.filter((ip) => !ip.includes(':'));
 		const ips = ipv4.length ? ipv4 : data.ips;
 		add(T.ip, ips.length ? ips.join(', ') : T.no_network);
+		if (data.ethernet) add(T.ethernet, data.ethernet.speed ? data.ethernet.speed + ' Mb/s' : T.ethernet_connected);
+		// network share: copy files to a computer (Windows \\box\media, Mac smb://box/media)
+		if (data.share && ipv4.length) {
+			add(T.share, `\\\\${ipv4[0]}\\${data.share.name}  ·  smb://${ipv4[0]}/${data.share.name}`);
+			add(T.share_login, `${data.share.user}  ·  ${data.share.password || T.share_box_password}`);
+		}
 		add(T.temperature, data.temp !== null ? data.temp + ' °C' : '–');
 		add(T.uptime, formatUptime(data.uptime));
 		if (data.mem_total) add(T.memory, formatBytes(data.mem_total - data.mem_avail) + ' / ' + formatBytes(data.mem_total));

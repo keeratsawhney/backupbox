@@ -78,6 +78,22 @@ else
 	echo "Bluetooth (bluez) not found: Bluetooth for the app stays off"
 fi
 
+# Ethernet: Wi-Fi off while a cable is connected; network share tuned for gigabit and a login that works on
+# Windows 10/11 (user lbb, password on the System page or the box's password)
+echo "Setting up Ethernet and the network share ..."
+if [ -d /etc/NetworkManager/dispatcher.d ]; then
+	sudo install -m 0755 -o root -g root "${INSTALLER_DIR}/etc/NetworkManager_dispatcher_90-lbb-ethernet" /etc/NetworkManager/dispatcher.d/90-lbb-ethernet
+	# a cable already connected
+	nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^ethernet:connected' && sudo nmcli radio wifi off
+fi
+if [ -d /etc/samba ]; then
+	sudo cp -f "${INSTALLER_DIR}/etc/samba_smb.conf" /etc/samba/smb.conf
+	sudo chmod 0440 /etc/samba/smb.conf
+	CONF_PASSWORD=$(sed -n "s/^conf_PASSWORD=['\"]\?\([^'\"]*\)['\"]\?\$/\1/p" "${WEB_ROOT}/config.cfg" 2>/dev/null | base64 --decode 2>/dev/null)
+	sudo python3 "${WEB_ROOT}/lib_password.py" "${CONF_PASSWORD}" >/dev/null 2>&1 || true
+	sudo systemctl restart smbd 2>/dev/null || true
+fi
+
 # fan: full speed from 60 °C (after the next reboot)
 bash "${INSTALLER_DIR}/install-fan.sh" || true
 

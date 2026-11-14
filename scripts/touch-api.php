@@ -253,6 +253,27 @@
 		return($total > 0 ? array('done' => $done, 'total' => $total) : null);
 	}
 
+	function touch_share_info() {
+		# network share \\<box>\media: user lbb, its password (the box's password when one is set: null)
+		if (!is_file('/etc/samba/smb.conf')) {
+			return(null);
+		}
+		$password	= @file_get_contents('/var/lib/little-backup-box/share-password');
+		return(array('name' => 'media', 'user' => 'lbb', 'password' => $password === false ? null : trim($password)));
+	}
+
+	function touch_ethernet() {
+		# the cable's link speed in Mb/s, null without a cable
+		foreach (glob('/sys/class/net/*') ?: array() as $device) {
+			if (!preg_match('/^(eth|end|enx)/', basename($device)) or trim((string)@file_get_contents("$device/operstate")) !== 'up') {
+				continue;
+			}
+			$speed	= (int)@file_get_contents("$device/speed");
+			return(array('device' => basename($device), 'speed' => $speed > 0 ? $speed : null));
+		}
+		return(null);
+	}
+
 	function touch_copying($constants) {
 		# names of the files being copied (written by lib_backup.progressmonitor while copying)
 		$file	= $constants['const_WEB_ROOT_LBB'] . '/tmp/backup-files.json';
@@ -879,6 +900,41 @@
 
 	switch ($action) {
 
+		case 'automount':
+			# every minute (cron_ip.sh): the backup drive stays mounted while the box is idle, so the network share
+			# (\\<box>\media) and the app show it; never during a backup or a disk task (check, repair, format)
+			if (touch_backup_running() or touch_disk_task_running($constants) or is_file($constants['const_CMD_RUNNER_LOCKFILE'])) {
+				touch_respond(array('ok' => true, 'mounted' => false));
+			}
+			$drives	= touch_attached_drives();
+			$choice	= touch_target_choice($constants);
+			$drive	= null;
+			foreach ($drives as $candidate) {
+				if ($choice and $choice['id'] === ($candidate['uuid'] ?: $candidate['path'])) {
+					$drive	= $candidate;
+				}
+			}
+			# no drive chosen in the app: the largest NVMe drive
+			if (!$drive) {
+				foreach ($drives as $candidate) {
+					if ($candidate['kind'] == 'nvme' and (!$drive or $candidate['size'] > $drive['size'])) {
+						$drive	= $candidate;
+					}
+				}
+			}
+			if (!$drive or !empty($drive['mountpoint'])) {
+				touch_respond(array('ok' => true, 'mounted' => (bool)$drive));
+			}
+			# the box's mount point of this kind is in use by another drive: leave it
+			$mountpoint	= $constants['const_MEDIA_DIR'] . '/' . $constants[$drive['kind'] == 'nvme' ? 'const_MOUNTPOINT_NVME_TARGET' : 'const_MOUNTPOINT_USB_TARGET'];
+			foreach ($drives as $candidate) {
+				if ($candidate['mountpoint'] === $mountpoint) {
+					touch_respond(array('ok' => true, 'mounted' => false));
+				}
+			}
+			touch_mount_target($WORKING_DIR, $drive);
+			touch_respond(array('ok' => true, 'mounted' => true));
+
 		case 'ping':
 			# the app's box search: an answer at once, also while a backup keeps the box busy
 			touch_respond(array('ok' => true, 'box' => 'backupbox'));
@@ -1222,6 +1278,8 @@
 				'storages'	=> touch_storages($constants),
 				# Wi-Fi settings: the box's Wi-Fi interface and its connection
 				'wifi'		=> touch_wifi_device(),
+				'ethernet'	=> touch_ethernet(),
+				'share'		=> touch_share_info(),
 			));
 
 		case 'backup':

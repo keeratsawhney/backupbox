@@ -453,11 +453,15 @@ class renderer(object):
 			y	+= self.text_h(self.font_bold) + 2
 		return(image)
 
-	def home(self, title, state, ip, network, online, drive, temp, no_drive='No drive'):
+	def home(self, title, state, ip, network, online, drive, temp, no_drive='No drive', login=''):
 		# the box's home screen (instead of text lines and the status bar):
 		#   title bar with the temperature, the state, IP and network state, the backup drive with a fill bar
 		# drive: dict name, used (0..1), size (text) or None
+		# login: a last line (the network share's user and password in file transfer mode)
 		image, draw	= self.new()
+		if login:
+			small_h	= self.text_h(self.font_small)
+			self.text(draw, (2, self.height - small_h - 1), self.fit(login, self.font_small, self.width - 4), self.font_small, self.high)
 		self.header(draw, title, f'{temp:.0f}°C' if temp is not None else '')
 
 		# state, large, with a check mark

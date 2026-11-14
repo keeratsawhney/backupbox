@@ -1,0 +1,26 @@
+#!/bin/sh
+# Backup Box: with an Ethernet cable all traffic goes over the cable and the Wi-Fi is switched off
+# (no slower second route, no hotspot next to the studio network). Cable out: the Wi-Fi comes back.
+# Bluetooth for the app stays on either way.
+
+IFACE="$1"
+ACTION="$2"
+
+case "${IFACE}" in
+	eth*|end*|enx*) ;;
+	*) exit 0 ;;
+esac
+
+case "${ACTION}" in
+	up)
+		nmcli radio wifi off
+		;;
+	down)
+		# only when no other cable is connected
+		nmcli -t -f TYPE,STATE device | grep -q '^ethernet:connected' || nmcli radio wifi on
+		;;
+esac
+
+# the new address on the display (the cable's, or the Wi-Fi's again)
+[ -f /var/www/little-backup-box/lib_cron_ip.py ] && (sleep 5; python3 /var/www/little-backup-box/lib_cron_ip.py --display) >/dev/null 2>&1 &
+exit 0
