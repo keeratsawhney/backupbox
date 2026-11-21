@@ -198,6 +198,8 @@ the box is `10.42.0.1` and the computer gets an address by itself):
 ## Safety
 
 - **Every card has its own folder** on the backup drive, named by the date and time of its first backup and the card's name. Backing up the same card again (shot further, not formatted) copies only the new files into that folder.
+- **Every backup is checked, file by file:** after copying, the box looks up every file of the card on the backup drive (name, size and date), independent of what the copy itself reports. The display shows *1234 files verified*, or *N of M not copied!*; the app's System page keeps the result (*Last backup check*), and the full list is in `tmp/verify-last.json`. By hand, with the card plugged in: `sudo python3 /var/www/little-backup-box/lib_verify.py`.
+- **A new photo is never skipped because of its name:** a file counts as the same only if name, size and date match (uncompressed raw files all have the same size). Only trash folders (by their exact names), the box's own ID files and empty files are left out, and the check lists the empty ones.
 - **Nothing on the backup drive is overwritten:** if a card has a different file with the same name (photo numbers used again), the older copy moves to `_replaced/<date>` in the card's folder.
 
 - Backups started from the **OLED menu or the Android app's Bluetooth card always copy**: nothing is deleted from
