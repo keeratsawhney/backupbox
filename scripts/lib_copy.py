@@ -20,44 +20,23 @@
 # is never overwritten (its older version goes to _replaced/<date> next to it). Afterwards every file is
 # looked up in the destination (lib_verify).
 #
-# usage (as root): lib_copy.py [--remount <mount point>] <destination folder> <source> [<source> ...]
+# usage (as root): lib_copy.py [--remount <mount point>] [--progress <file>] <destination folder> <source> [<source> ...]
 #   --remount: the drive is mounted read only (opened in the Files tab): writable for the copy, read only again after it
 
 import os
 import re
 import select
-import shutil
 import subprocess
 import sys
 import time
 
+import lib_task
 import lib_verify
 
 PROGRESS_SEC	= 2
 
-def size_of(Path):
-	if os.path.isfile(Path):
-		return(os.path.getsize(Path))
-	Total	= 0
-	for Dir, SubDirs, FileNames in os.walk(Path):
-		for FileName in FileNames:
-			try:
-				Total	+= os.path.getsize(os.path.join(Dir, FileName))
-			except OSError:
-				pass
-	return(Total)
-
-def human(Bytes):
-	for Unit in ['B', 'KB', 'MB', 'GB']:
-		if Bytes < 1000 or Unit == 'GB':
-			return(f'{Bytes:.0f} {Unit}' if Unit == 'B' else f'{Bytes:.1f} {Unit}')
-		Bytes	/= 1000
-
-def inside(Path, Folder):
-	Path, Folder	= os.path.realpath(Path), os.path.realpath(Folder)
-	return(Path == Folder or Path.startswith(Folder.rstrip('/') + '/'))
-
-def copy_one(Source, Destination, Number, Count, Stamp):
+def copy_one(Source, Destination, Number, Count, Stamp, Progress, Done, Needed):
+	# Done / Needed: bytes of the items before this one / of all items, for the progress bar
 	# returns the exit code of rsync
 	Name	= os.path.basename(Source.rstrip('/'))
 	Command	= ['/usr/bin/rsync', '-rt', '--no-owner', '--no-group', '--no-perms', f'--modify-window={lib_verify.MODIFY_WINDOW_SEC}',
@@ -70,7 +49,7 @@ def copy_one(Source, Destination, Number, Count, Stamp):
 	Process		= subprocess.Popen(Command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
 	Buffer		= b''
 	Current		= ''
-	Progress	= ''
+	ProgressText	= ''
 	Shown		= 0
 	while True:
 		if not select.select([Process.stdout], [], [], 1)[0]:
@@ -89,15 +68,20 @@ def copy_one(Source, Destination, Number, Count, Stamp):
 				if not Line:
 					continue
 				if re.match(r'^[\d.,]+[KMGT]?\s+\d+%', Line):
-					Progress	= ' '.join(Line.split()[:3])
+					ProgressText	= ' '.join(Line.split()[:3])
+					try:
+						Copied	= int(re.sub(r'[^0-9]', '', Line.split()[0]))
+						Progress.write(100 * (Done + Copied) / max(1, Needed), Name, Number - 1, Count, Done + Copied)
+					except (ValueError, IndexError):
+						pass
 				elif Line.startswith(('rsync:', 'rsync error', 'ERROR', 'WARNING')):
 					print(Line, flush=True)
 				elif not Line.endswith('/') and not Line.startswith(('sending', 'sent ', 'total size', 'created')):
 					Current		= Line
 
-		if time.time() - Shown >= PROGRESS_SEC and (Current or Progress):
+		if time.time() - Shown >= PROGRESS_SEC and (Current or ProgressText):
 			Shown	= time.time()
-			print(f"[{Number}/{Count}] {Name}  ·  {Progress}  ·  {os.path.basename(Current)}", flush=True)
+			print(f"[{Number}/{Count}] {Name}  ·  {ProgressText}  ·  {os.path.basename(Current)}", flush=True)
 
 	return(Process.wait())
 
@@ -120,9 +104,12 @@ def verify_one(Source, Destination):
 	return(Same, f"{Name}: verified" if Same else f"{Name}: NOT in the destination")
 
 def main(Arguments):
-	Remount	= None
-	if Arguments and Arguments[0] == '--remount':
-		Remount		= Arguments[1]
+	Remount, ProgressFile	= None, None
+	while Arguments and Arguments[0] in ['--remount', '--progress']:
+		if Arguments[0] == '--remount':
+			Remount	= Arguments[1]
+		else:
+			ProgressFile	= Arguments[1]
 		Arguments	= Arguments[2:]
 	if len(Arguments) < 2:
 		print(__doc__.split('# usage')[-1].strip().split('\n')[0], file=sys.stderr)
@@ -138,15 +125,17 @@ def main(Arguments):
 		if not os.path.exists(Source):
 			print(f'Not found: {Source}')
 			return(2)
-		if os.path.isdir(Source) and inside(Destination, Source):
+		if os.path.isdir(Source) and lib_task.inside(Destination, Source):
 			print(f'A folder can not be copied into itself: {os.path.basename(Source)}')
 			return(2)
 
-	Needed	= sum(size_of(Source) for Source in Sources)
-	Free	= shutil.disk_usage(Destination).free
-	print(f'{len(Sources)} to copy, {human(Needed)}; free in the destination: {human(Free)}', flush=True)
+	Needed	= sum(lib_task.tree_size(Source)[1] for Source in Sources)
+	Free	= lib_task.space(Destination)[0]
+	Progress	= lib_task.progress(ProgressFile, 'copy', Destination)
+	Progress.write(0, '', 0, len(Sources), 0, force=True)
+	print(f'{len(Sources)} to copy, {lib_task.human(Needed)}; free in the destination: {lib_task.human(Free)}', flush=True)
 	if Needed > Free - 64 * 1000 * 1000:
-		print(f'NOT ENOUGH SPACE in the destination: {human(Needed)} needed, {human(Free)} free. Nothing was copied.')
+		print(f'NOT ENOUGH SPACE in the destination: {lib_task.human(Needed)} needed, {lib_task.human(Free)} free. Nothing was copied.')
 		return(3)
 
 	if Remount:
@@ -156,11 +145,14 @@ def main(Arguments):
 	Code	= 0
 	try:
 		Stamp	= time.strftime('%Y-%m-%d_%H-%M-%S')
+		Copied	= 0
 		for Number, Source in enumerate(Sources, 1):
-			Return	= copy_one(Source, Destination, Number, len(Sources), Stamp)
+			Return	= copy_one(Source, Destination, Number, len(Sources), Stamp, Progress, Copied, Needed)
+			Copied	+= lib_task.tree_size(Source)[1]
 			if Return != 0:
 				print(f'rsync ended with code {Return} for {os.path.basename(Source)}: some files could not be copied (see above).', flush=True)
 
+		Progress.write(100, '', len(Sources), len(Sources), Copied, force=True)
 		print('Checking the copy ...', flush=True)
 		for Source in Sources:
 			Complete, Text	= verify_one(Source, Destination)
