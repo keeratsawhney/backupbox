@@ -197,6 +197,9 @@ the box is `10.42.0.1` and the computer gets an address by itself):
 
 ## Safety
 
+- **Every card has its own folder** on the backup drive, named by the date and time of its first backup and the card's name. Backing up the same card again (shot further, not formatted) copies only the new files into that folder.
+- **Nothing on the backup drive is overwritten:** if a card has a different file with the same name (photo numbers used again), the older copy moves to `_replaced/<date>` in the card's folder.
+
 - Backups started from the **OLED menu or the Android app's Bluetooth card always copy**: nothing is deleted from
   the card. Moving files has to be chosen on purpose: in the web interfaces' backup options, or for the default
   backup at boot in Settings (off unless you switch it on).

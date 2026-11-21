@@ -6,6 +6,11 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#41](https://github.com/keeratsawhney/backupbox/pull/41) Every card in its own folder, no file ever overwritten**
+  - **Fix:** the old card IDs made of size and file system only (`lbb_119.3G_exfat_1.0`) were the same for every card of that size. Their photos met in one folder, where files of the same name were skipped or overwritten.
+  - **Such cards get their own folder** (date, time, card name) on their next backup, and the whole card is copied into it. Locked cards: `card_<UUID>`, stable until the card is formatted.
+  - **The same card shot further:** the same folder, only the new files are copied.
+  - **Never overwritten:** a different file of the same name on the card (photo numbers used again) moves the older copy on the SSD to `_replaced/<date>` instead of overwriting it.
 - **[#40](https://github.com/keeratsawhney/backupbox/pull/40) Cable straight from the box to a computer**: when no router answers within 30 s, the box hands out addresses itself (box `10.42.0.1`). With a router, the router's address as before.
 - **[#39](https://github.com/keeratsawhney/backupbox/pull/39) Fix: the display stayed off after an update** (#37 restarted it with a call that sends nothing while the address is unchanged).
 - **[#38](https://github.com/keeratsawhney/backupbox/pull/38) Fix: Finder copies from the network share failed (error 100060)**: the share stored Mac metadata in extended attributes, which exFAT drives don't have. Plain files now; SMB multichannel off (unreliable with Macs that have Wi-Fi and Ethernet).
