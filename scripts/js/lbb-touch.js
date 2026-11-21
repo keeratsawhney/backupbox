@@ -242,7 +242,10 @@
 		if (page === 'backup') loadServices().then(renderWizard);
 		if (page === 'photos') loadPhotos(state.photos.offset);
 		if (page === 'log') loadLog(true);
-		if (page === 'files') loadFiles();
+		if (page === 'files') {
+			loadFiles();
+			resumeTask();
+		}
 		if (page === 'system') loadSystem();
 	}
 
@@ -1053,15 +1056,23 @@
 		body.append(list);
 	}
 
+	function openTaskSheet(task) {
+		$('sheet-title').textContent = task.title;
+		$('sheet-sub').textContent = '';
+		showTask(task);
+		if ($('drive-sheet').hidden) {
+			$('drive-sheet').hidden = false;
+			openOverlay(sheetBack);
+		}
+	}
+
 	async function startCopy() {
 		// 3. confirm, then the copy runs on the box as a task (progress in this sheet, verified file by file)
 		const c = state.copy;
 		if (!(await confirmDialog(fill(T.copy_confirm, { n: c.paths.length, where: copyWhere() }), T.copy_safe, T.copy, 'btn-primary'))) return;
 		const result = await api('copy_start', { medium: c.source, paths: JSON.stringify(c.paths), dest_medium: c.medium, dest_path: c.path }, 'POST');
 		endSelection();
-		$('sheet-title').textContent = result.task.title;
-		$('sheet-sub').textContent = '';
-		showTask(result.task);
+		openTaskSheet(result.task);
 	}
 
 	function driveName() {
@@ -1433,17 +1444,45 @@
 		showTask(result.task);
 	}
 
+	async function resumeTask() {
+		// a copy or deletion still running (the window was closed): shown again
+		try {
+			const task = (await api('disk_task')).task;
+			if (task && task.running && $('drive-sheet').hidden) openTaskSheet(task);
+		} catch (e) {}
+	}
+
+	function taskProgress(task) {
+		// bar, files and free space of a copy or a deletion
+		const p = task.progress;
+		if (!p) return null;
+		const parts = [];
+		if (p.item) parts.push(p.item);
+		if (p.total) parts.push(fill(p.kind === 'delete' ? T.task_files : T.task_items, { done: Math.min(p.done, p.total), total: p.total }));
+		const second = [fill(p.kind === 'delete' ? T.task_freed : T.task_copied, { n: formatBytes(p.change) })];
+		if (p.size) second.push(fill(T.task_free, { free: formatBytes(p.free), size: formatBytes(p.size) }));
+		return el('div', { class: 'task-progress' }, [
+			el('div', { class: 'task-bar' }, el('span', { style: 'width:' + Math.max(0, Math.min(100, p.percent)) + '%' })),
+			el('p', { class: 'task-line', text: Math.round(p.percent) + '%' + (parts.length ? '  ·  ' + parts.join('  ·  ') : '') }),
+			el('p', { class: 'task-line', text: second.join('  ·  ') }),
+		]);
+	}
+
 	function showTask(task) {
 		const body = $('sheet-body');
 		const done = !task.running;
+		// the list behind the window shows the result as soon as the task is over (deleted folders are gone)
+		if (done && state.page === 'files' && state.taskShown !== task.started) {
+			state.taskShown = task.started;
+			loadFiles();
+		}
 		const ok = task.exit === 0;
 		const status = done ? (ok ? T.task_done : fill(T.task_failed, { code: task.exit === null ? '?' : task.exit })) : T.task_running;
 		const log = el('pre', { class: 'task-log', text: (task.log || []).join('\n') });
 		body.replaceChildren(
 			el('h4', { text: task.title }),
 			el('p', { class: 'sheet-note' + (done ? (ok ? ' ok' : ' warn') : ''), text: status }),
-			log,
-			done ? sheetButton('check', T.close, 'btn-primary', async () => closeDriveSheet()) : null,
+			...[taskProgress(task), log, done ? sheetButton('check', T.close, 'btn-primary', async () => closeDriveSheet()) : null].filter(Boolean),
 		);
 		log.scrollTop = log.scrollHeight;
 		clearTimeout(taskTimer);
@@ -1561,7 +1600,10 @@
 			const names = [...f.selected].map((x) => x.split('/').pop());
 			const sub = fill(T.delete_sub, { drive: driveName() }) + '\n' + names.slice(0, 5).join(', ') + (names.length > 5 ? ' …' : '');
 			if (!(await confirmDialog(fill(T.delete_confirm, { n: names.length }), sub, T.delete, 'btn-danger'))) return;
-			await fileOperation('delete');
+			// a task on the box, with its own window: progress, and the free space to see that it is gone
+			const result = await api('delete_start', { medium: f.medium, paths: JSON.stringify([...f.selected]) }, 'POST');
+			endSelection();
+			openTaskSheet(result.task);
 		}));
 
 		$('sheet-close').addEventListener('click', () => closeDriveSheet());

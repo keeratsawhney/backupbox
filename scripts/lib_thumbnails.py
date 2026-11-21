@@ -130,6 +130,10 @@ class thumbnails(object):
 
 		Source	= os.path.join(MountPoint, SourceFilePathName)
 
+		# deleted meanwhile (the Files tab, a computer on the network): nothing to do, and above all no new folder
+		if not os.path.isfile(Source):
+			return(Extra)
+
 		# generate thumbnails
 		TIMS_Dir	= os.path.join(os.path.dirname(SourceFilePathName), 'tims')
 		if not os.path.isdir(os.path.join(MountPoint, TIMS_Dir)):
@@ -139,7 +143,13 @@ class thumbnails(object):
 				Times	= os.stat(Parent)
 			except OSError:
 				Times	= None
-			pathlib.Path(MountPoint, TIMS_Dir).mkdir(parents=True, exist_ok=True)
+			try:
+				# no parents=True: a folder that was deleted meanwhile must not come back
+				os.mkdir(os.path.join(MountPoint, TIMS_Dir))
+			except FileExistsError:
+				pass
+			except OSError:
+				return(Extra)
 			if Times:
 				try:
 					os.utime(Parent, ns=(Times.st_atime_ns, Times.st_mtime_ns))

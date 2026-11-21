@@ -70,6 +70,24 @@ def queue_remove(MountPoint, Done):
 	except FileNotFoundError:
 		pass
 
+def queue_prune(MountPoint, RelativePaths):
+	# files and folders deleted by the user: nothing to do for them any more
+	Prefixes	= [Path.strip('/') for Path in RelativePaths if Path.strip('/')]
+	QueueFile	= os.path.join(MountPoint, QUEUE_FILE)
+	try:
+		with open(QueueFile, 'r+') as f:
+			fcntl.flock(f, fcntl.LOCK_EX)
+			Lines	= [Line for Line in f.read().split('\n') if Line and not any(Line == Prefix or Line.startswith(Prefix + '/') for Prefix in Prefixes)]
+			f.seek(0)
+			f.truncate()
+			if Lines:
+				f.write('\n'.join(Lines) + '\n')
+			else:
+				os.remove(QueueFile)
+			f.flush()
+	except FileNotFoundError:
+		pass
+
 def start(MountPoint):
 	# detached: keeps running when backup.py ends; its errors in tmp/background/errors.log
 	LogDir	= os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', 'background')

@@ -1977,3 +1977,30 @@ button.wifi-row:active {
 	margin: 14px auto 18px;
 	text-align: center;
 }
+
+/* progress of a copy or a deletion in the task window */
+.task-progress {
+	margin: 4px 0 10px;
+}
+
+.task-bar {
+	height: 10px;
+	border-radius: 99px;
+	background: var(--surface-2);
+	overflow: hidden;
+}
+
+.task-bar span {
+	display: block;
+	height: 100%;
+	border-radius: 99px;
+	background: var(--accent);
+	transition: width .4s;
+}
+
+.task-line {
+	margin: 6px 0 0;
+	font-size: 13px;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
