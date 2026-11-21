@@ -367,6 +367,11 @@ class backup(object):
 			# use compression for cloud syncs only
 			if self.TargetDevice.isLocal and self.SourceDevice.isLocal:
 				syncCommand	+= ['--no-compress', '--whole-file']
+
+				# never lose a file on the backup drive: a different file of the same name (photo numbers used again
+				# after deleting in the camera) moves the older one to _replaced/<date> instead of overwriting it
+				if not dry_run:
+					syncCommand	+= ['--backup', f"--backup-dir=_replaced/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"]
 			else:
 				syncCommand	+= ['--compress']
 

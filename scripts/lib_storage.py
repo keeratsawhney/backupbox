@@ -641,26 +641,35 @@ class storage(object):
 
 		return(f'{Date}_{LbbDeviceID}' if LbbDeviceID else Date)
 
+	def __unique_device_id(self, LbbDeviceID):
+		# an ID only this card has: date based (2026-11-14_15-29-07_NAME, lbb_20250920234232-69912) or
+		# the file system's UUID (card_...). The old IDs made of size and file system only
+		# (lbb_119.3G_exfat_1.0) are shared by every card of that size: their files met in one folder,
+		# where same names were skipped or overwritten.
+		return(bool(re.match(r'^(\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d|card_)', LbbDeviceID) or re.search(r'\d{14}-\d{5}', LbbDeviceID)))
+
+	def __filesystem_uuid(self):
+		# UUID of the mounted file system (exFAT/FAT: the volume serial, new with every format)
+		try:
+			Source	= subprocess.check_output(['/usr/bin/findmnt', '-n', '-o', 'SOURCE', self.MountPoint], stderr=subprocess.DEVNULL).decode().strip()
+			return(subprocess.check_output(['/usr/bin/lsblk', '-n', '-d', '-o', 'UUID', Source], stderr=subprocess.DEVNULL).decode().strip())
+		except:
+			return('')
+
 	def __manage_lbb_device_ID(self):
 		if self.mounted():
 
-			# find id file
-			Extension	= 'id'
-			LbbID_FileList	= glob.glob(f"{self.MountPoint}/????[0-9]*[0-9]-[0-9]*[0-9].{Extension}")
-			if not LbbID_FileList:
-				Extension	= 'lbbid'
-				LbbID_FileList	= glob.glob(f"{self.MountPoint}/????[0-9]*[0-9]-[0-9]*[0-9].{Extension}")
-			if not LbbID_FileList:
-				Extension	= 'lbbid'
-				LbbID_FileList	= glob.glob(f"{self.MountPoint}/*.{Extension}")
+			# find id files (.id: older versions); only IDs that belong to this card alone
+			LbbIDs	= []
+			for Extension in ['id', 'lbbid']:
+				for LbbID_File in glob.glob(f"{self.MountPoint}/*.{Extension}"):
+					LbbID	= os.path.basename(LbbID_File)[:-len(Extension) - 1]
+					if self.__unique_device_id(LbbID):
+						LbbIDs.append(LbbID)
 
-			if len(LbbID_FileList) > 1:
-				LbbID_FileList.sort(reverse=True)
-
-			if len(LbbID_FileList) > 0: # ID file exists
-
-				# set global backup parameters
-				self.LbbDeviceID			= LbbID_FileList[0].split('/')[-1].replace(f'.{Extension}','')
+			if LbbIDs: # ID file exists
+				# set global backup parameters (the newest if there are several)
+				self.LbbDeviceID	= sorted(LbbIDs, reverse=True)[0]
 
 			else:	# create ID file
 				DatePart	= datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -672,9 +681,14 @@ class storage(object):
 				self.LbbDeviceID	= self.__calculate_device_id(DatePart, RandomPart)
 
 				try:
-					open(os.path.join(self.MountPoint, f"{self.LbbDeviceID}.lbbid"),'w').close()
+					with open(os.path.join(self.MountPoint, f"{self.LbbDeviceID}.lbbid"),'w') as f:
+						pass
 				except:
-					pass
+					# card not writable (locked, read-only): a date based ID would change with every backup,
+					# the file system's UUID stays the same until the card is formatted
+					UUID	= re.sub(r'[^\w-]+', '', self.__filesystem_uuid())
+					if UUID:
+						self.LbbDeviceID	= f'card_{UUID}'
 
 			self.LbbSourceDescriptor	= f"{self.__lan.l('box_backup_source_id')}: {self.LbbDeviceID}"
 
