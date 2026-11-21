@@ -6,6 +6,11 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#44](https://github.com/keeratsawhney/backupbox/pull/44) Copy to any drive from the Files tab, back gesture, app with Wi-Fi off**
+  - **Files tab, copy:** select folders and files (long-press), tap the copy icon, choose a drive and a folder (new folders can be made) and *Copy here*. The box copies in the background (`lib_copy.py`, progress in the task sheet), checks every file afterwards and keeps an older version of a changed file in `_replaced`. It checks the free space first and never copies a folder into itself. A drive that is opened read only is writable only for the copy.
+  - **Files tab, back:** every folder and drive is a step in the history, so the back gesture (and the app's back button) goes back folder by folder; a reload keeps the folder.
+  - **Files tab:** the *Show more* button is centred.
+  - **App, Wi-Fi off:** it says so instead of "no box found", opens Android's Wi-Fi panel (apps can not switch Wi-Fi on themselves since Android 10) and searches when the phone is connected. *Open box* over Bluetooth does the same.
 - **[#42](https://github.com/keeratsawhney/backupbox/pull/42) Complete copies, proven file by file; all files listed**
   - **Check after every backup** (`lib_verify.py`): every file of the card is looked up on the backup drive by name, size and date. The summary shows *N files verified* or *N of M not copied!*; the app's System page shows *Last backup check*; `tmp/verify-last.json` lists the files. By hand: `sudo python3 lib_verify.py`.
   - **Copy:** a file is the same only if name, size AND date match (it was name and size: a new photo that reused a name and had the same size, e.g. uncompressed raw, was skipped). Daylight saving time (FAT) is tolerated. The exclusion `*trash*` (which hid e.g. a folder `trash_the_dress`) is replaced by the exact names of the trash folders.
