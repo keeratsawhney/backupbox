@@ -47,6 +47,7 @@ import lib_storage
 import lib_system
 import lib_thumbnails
 import lib_socialmedia
+import lib_verify
 import lib_view
 import lib_vpn
 
@@ -241,6 +242,47 @@ class backup(object):
 			self.__display.message([f":{self.__lan.l('box_backup_invalid_mode_combination_1')}", f":{self.__lan.l('box_backup_invalid_mode_combination_2')}", f":{self.__lan.l('box_backup_invalid_mode_combination_3')}"])
 			return(None)
 
+	def __verify_backup(self):
+		# every file of the card, looked up on the backup drive (lib_verify): independent of what rsync reports.
+		# The result is part of the summary on the display, tmp/verify-last.json and the log.
+		try:
+			if (
+				self.TransferMode != 'rsync' or self.__reporter is None or self.move_files or not self.SourceDevice or not self.TargetDevice or
+				not (self.SourceDevice.mountable and self.SourceDevice.isLocal and self.TargetDevice.mountable and self.TargetDevice.isLocal) or
+				not self.SourceDevice.mounted() or not self.TargetDevice.mounted()
+			):
+				return()
+
+			Totals	= {'files': 0, 'ok': 0, 'missing_count': 0, 'different_count': 0, 'empty_count': 0, 'unreadable_count': 0, 'missing': [], 'different': [], 'empty': [], 'unreadable': []}
+			for SubPathAtSource in self.SourceDevice.SubPathsAtSource:
+				SubPath	= SubPathAtSource.strip('/')
+				Target	= os.path.join(self.TargetDevice.MountPoint, self.TargetDevice.CloudBaseDir, self.SourceDevice.SubPathAtTarget)
+				Result	= lib_verify.verify(os.path.join(self.SourceDevice.MountPoint, SubPath), os.path.join(Target, SubPath), self.const_IMAGE_DATABASE_FILENAME)
+				for Key, Value in Result.items():
+					if Key in Totals:
+						Totals[Key]	+= Value
+			Totals['source']	= self.SourceDevice.MountPoint
+			Totals['target']	= os.path.join(self.TargetDevice.MountPoint, self.TargetDevice.CloudBaseDir, self.SourceDevice.SubPathAtTarget)
+			Totals['time']		= int(time.time())
+			lib_verify.save(Totals, os.path.join(self.__WORKING_DIR, 'tmp', 'verify-last.json'))
+
+			Missing	= Totals['missing_count'] + Totals['different_count']
+			Lines	= []
+			if Missing:
+				Lines.append(f":{Missing} {self.__lan.l('box_backup_of')} {Totals['files'] - Totals['empty_count']} {self.__lan.l('box_backup_verify_missing')}")
+				self.__reporter.add_error('Err.: Files missing!')
+				self.__log.message(f"Verification: {Missing} of {Totals['files']} files of the card are not on the backup drive or differ: {', '.join((Totals['missing'] + Totals['different'])[:20])}", 1)
+			else:
+				Lines.append(f":{Totals['ok']} {self.__lan.l('box_backup_verified')}")
+				self.__log.message(f"Verification: all {Totals['ok']} files of the card are on the backup drive.", 2)
+			if Totals['empty_count']:
+				Lines.append(f":{Totals['empty_count']} {self.__lan.l('box_backup_verify_empty')}")
+			if Totals['unreadable_count']:
+				Lines.append(f":{Totals['unreadable_count']} {self.__lan.l('box_backup_verify_unreadable')}")
+			self.__reporter.verify_lines	= Lines
+		except Exception as e:
+			self.__log.message(f"Verification failed: {e}", 1)
+
 	def _signal_handler(self, signum, frame):
 		if self.BackupProcess:
 			self.BackupProcess.terminate()
@@ -256,6 +298,10 @@ class backup(object):
 		# backup
 		if (self.TargetDevice and (self.SourceStorageType not in ['thumbnails', 'database', 'exif', 'rename'])):
 			self.backup()
+
+		# proof that the card is on the backup drive, file by file
+		if self.TargetDevice and self.SourceStorageType not in ['thumbnails', 'database', 'exif', 'rename']:
+			self.__verify_backup()
 
 		if not self.TransferMode is None and not self.TransferMode in ['social']:
 			# rename
@@ -333,7 +379,12 @@ class backup(object):
 		if self.SourceDevice.isLocal and not self.TargetDevice.isLocal:
 			excludeTIMS	= ['*/tims*']
 
-		excludePaths	= self.__const_VIEW_BANNED_PATHS + ['*.id', '*.lbbid', self.const_IMAGE_DATABASE_FILENAME] + excludeTIMS
+		if TransferMode == 'rsync':
+			# only what is not a photo or video on purpose: trash folders (by their exact names, a folder "trash the dress"
+			# is a shoot), the box's ID files and database
+			excludePaths	= lib_verify.NEVER_COPIED_NAMES + lib_verify.NEVER_COPIED_FILES + [self.const_IMAGE_DATABASE_FILENAME] + excludeTIMS
+		else:
+			excludePaths	= self.__const_VIEW_BANNED_PATHS + ['*.id', '*.lbbid', self.const_IMAGE_DATABASE_FILENAME] + excludeTIMS
 
 		if TransferMode	== 'rclone':
 			excludePaths	= [Path.replace('*', '**') for Path in excludePaths]
@@ -358,7 +409,7 @@ class backup(object):
 
 			# basic command
 			rsyncSSH	= self.TargetDevice.rsyncSSH if self.TargetDevice.StorageType == 'cloud_rsync' else self.SourceDevice.rsyncSSH
-			syncCommand		= rsyncSSH + ['/usr/bin/rsync', SourcePath, TargetPath, '-avh', '--info=FLIST0,PROGRESS2', '--stats', '--no-owner', '--no-group', '--no-perms', '--mkpath', '--min-size=1', '--size-only']
+			syncCommand		= rsyncSSH + ['/usr/bin/rsync', SourcePath, TargetPath, '-avh', '--info=FLIST0,PROGRESS2', '--stats', '--no-owner', '--no-group', '--no-perms', '--mkpath', '--min-size=1']
 
 			# checksum if configured
 			if self.DoChecksum and not dry_run:
@@ -367,8 +418,18 @@ class backup(object):
 			# use compression for cloud syncs only
 			if self.TargetDevice.isLocal and self.SourceDevice.isLocal:
 				syncCommand	+= ['--no-compress', '--whole-file']
+
+				# a file is the same when name, size AND date are the same: files of the same size are no reason to
+				# skip a new photo that reuses a name (uncompressed raw files all have the same size). The window
+				# is lib_verify's: FAT keeps local time (one hour off when the clocks change).
+				syncCommand	+= [f'--modify-window={lib_verify.MODIFY_WINDOW_SEC}']
+
+				# never lose a file on the backup drive: a different file of the same name (photo numbers used again
+				# after deleting in the camera) moves the older one to _replaced/<date> instead of overwriting it
+				if not dry_run:
+					syncCommand	+= ['--backup', f"--backup-dir=_replaced/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"]
 			else:
-				syncCommand	+= ['--compress']
+				syncCommand	+= ['--compress', '--size-only']
 
 			if self.move_files:
 				syncCommand	+= ['--remove-source-files']
@@ -1610,6 +1671,9 @@ class backup(object):
 		# hidden files and folders: macOS writes a "._name" metadata file next to every file it copies
 		# to FAT/exFAT drives, plus .Spotlight-V100, .Trashes, ... (used in shell commands, hence quoted)
 		BannedPathsList += ['-not', '-path', "'*/.*'"]
+
+		# older versions of files that a card replaced (_replaced/<date>, see get_syncCommand)
+		BannedPathsList += ['-not', '-path', "'*/_replaced/*'"]
 
 		return(BannedPathsList)
 

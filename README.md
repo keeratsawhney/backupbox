@@ -183,7 +183,8 @@ repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `AND
 
 ## Copy files to a computer (Ethernet)
 
-Plug the box into the studio network with a cable:
+Plug the box into the studio network with a cable, or straight into the computer (no router needed: after 30 s
+the box is `10.42.0.1` and the computer gets an address by itself):
 - **The Wi-Fi switches off** while the cable is in, so everything goes over the cable. Unplug it and the Wi-Fi comes back.
 - **The OLED shows *File transfer*** with the box's address, the link speed (`LAN 1G`) and the share login.
 - **Open the network share** on the computer:
@@ -192,8 +193,14 @@ Plug the box into the studio network with a cable:
 - **Log in as `lbb`** with the password shown on the OLED and in the app (*System › Share login*), or the box's own password if you set one. Recent Windows versions refuse guest access, so the login is needed.
 - **The backup drive is in the `nvme_target` folder** (`usb_target` for a USB drive). The box keeps it mounted while it is idle.
 - **Speed:** the Raspberry Pi 5's port is gigabit, so about 110 MB/s with a gigabit switch or PC. A Cat 6 or Cat 7 cable does not raise that.
+  The computer needs a cable too (a USB-C Ethernet adapter on a MacBook): over its Wi-Fi the copy is only as fast and as steady as that Wi-Fi.
 
 ## Safety
+
+- **Every card has its own folder** on the backup drive, named by the date and time of its first backup and the card's name. Backing up the same card again (shot further, not formatted) copies only the new files into that folder.
+- **Every backup is checked, file by file:** after copying, the box looks up every file of the card on the backup drive (name, size and date), independent of what the copy itself reports. The display shows *1234 files verified*, or *N of M not copied!*; the app's System page keeps the result (*Last backup check*), and the full list is in `tmp/verify-last.json`. By hand, with the card plugged in: `sudo python3 /var/www/little-backup-box/lib_verify.py`.
+- **A new photo is never skipped because of its name:** a file counts as the same only if name, size and date match (uncompressed raw files all have the same size). Only trash folders (by their exact names), the box's own ID files and empty files are left out, and the check lists the empty ones.
+- **Nothing on the backup drive is overwritten:** if a card has a different file with the same name (photo numbers used again), the older copy moves to `_replaced/<date>` in the card's folder.
 
 - Backups started from the **OLED menu or the Android app's Bluetooth card always copy**: nothing is deleted from
   the card. Moving files has to be chosen on purpose: in the web interfaces' backup options, or for the default

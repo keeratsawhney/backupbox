@@ -262,6 +262,21 @@
 		return(array('name' => 'media', 'user' => 'lbb', 'password' => $password === false ? null : trim($password)));
 	}
 
+	function touch_verify_info($constants) {
+		# the check after the last backup (lib_verify): every file of the card against the backup drive
+		$data	= @json_decode((string)@file_get_contents($constants['const_WEB_ROOT_LBB'] . '/tmp/verify-last.json'), true);
+		if (!is_array($data) or !isset($data['files'])) {
+			return(null);
+		}
+		return(array(
+			'date'		=> date('Y-m-d H:i', (int)($data['time'] ?? 0)),
+			'files'		=> (int)$data['files'],
+			'ok'		=> (int)($data['ok'] ?? 0),
+			'missing'	=> (int)($data['missing_count'] ?? 0) + (int)($data['different_count'] ?? 0),
+			'empty'		=> (int)($data['empty_count'] ?? 0),
+		));
+	}
+
 	function touch_ethernet() {
 		# the cable's link speed in Mb/s, null without a cable
 		foreach (glob('/sys/class/net/*') ?: array() as $device) {
@@ -741,7 +756,7 @@
 		$lines	= array();
 		# without hidden files and folders (macOS "._name" metadata files, .Spotlight-V100, .Trashes, ...)
 		# stat in batches: find can not print the birth time
-		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' -not -path ' . escapeshellarg('*/.*') . ' ' . implode(' ', $banned) . " -print0 2>/dev/null | xargs -0 -r stat -c '%Y\t%W\t%n' 2>/dev/null", $lines);
+		exec('find ' . escapeshellarg($path) . ' -type f \\( ' . implode(' -o ', $names) . ' \\) -not -path ' . escapeshellarg('*/tims/*') . ' -not -path ' . escapeshellarg('*/.*') . ' -not -path ' . escapeshellarg('*/_replaced/*') . ' ' . implode(' ', $banned) . " -print0 2>/dev/null | xargs -0 -r stat -c '%Y\t%W\t%n' 2>/dev/null", $lines);
 
 		$prefix	= rtrim($path, '/') . '/';
 		$files	= array();
@@ -1112,15 +1127,30 @@
 			$sub	= ltrim(substr($dir, strlen($root)), '/');
 
 			$extensions	= touch_media_extensions($constants);
-			$entries	= array();
+
+			# every folder entry, sorted first (folders, then files, by name); only the requested page is described
+			# (size, date, thumbnail), so folders of thousands of files stay fast and none is left out
+			$names	= array();
 			foreach (scandir($dir) ?: array() as $name) {
 				# hidden (".name", macOS "._name"), thumbnail folders and the database/ID files of the box
-				if (str_starts_with($name, '.') or $name === 'tims' or $name === $constants['const_IMAGE_DATABASE_FILENAME'] or str_ends_with($name, '.lbbid')) {
+				if ($name === '.' or $name === '..' or str_starts_with($name, '.') or $name === 'tims' or $name === $constants['const_IMAGE_DATABASE_FILENAME'] or str_ends_with($name, '.lbbid')) {
 					continue;
 				}
+				$names[]	= array('name' => $name, 'dir' => is_dir($dir . '/' . $name));
+			}
+			usort($names, function($a, $b) {
+				return(($a['dir'] ? 0 : 1) <=> ($b['dir'] ? 0 : 1) ?: strnatcasecmp($a['name'], $b['name']));
+			});
+			$total	= count($names);
+			$offset	= isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
+			$limit	= isset($_GET['limit']) ? max(1, min(1000, (int)$_GET['limit'])) : 400;
+
+			$entries	= array();
+			foreach (array_slice($names, $offset, $limit) as $item) {
+				$name		= $item['name'];
 				$full		= $dir . '/' . $name;
 				$relative	= ($sub === '' ? '' : $sub . '/') . $name;
-				if (is_dir($full)) {
+				if ($item['dir']) {
 					$entries[]	= array('type' => 'dir', 'name' => $name, 'path' => $relative);
 					continue;
 				}
@@ -1140,18 +1170,15 @@
 				$entries[]	= $entry;
 			}
 
-			# folders first, then files, by name
-			usort($entries, function($a, $b) {
-				return(($a['type'] == 'dir' ? 0 : 1) <=> ($b['type'] == 'dir' ? 0 : 1) ?: strnatcasecmp($a['name'], $b['name']));
-			});
-
 			touch_respond(array(
 				'ok'		=> true,
 				'drives'	=> $drives,
 				'medium'	=> $key,
 				'path'		=> $sub,
-				'entries'	=> array_slice($entries, 0, 3000),
-				'truncated'	=> count($entries) > 3000,
+				'entries'	=> $entries,
+				'total'		=> $total,
+				'offset'	=> $offset,
+				'truncated'	=> $offset + count($entries) < $total,
 			));
 
 		case 'open_drive':
@@ -1279,6 +1306,7 @@
 				# Wi-Fi settings: the box's Wi-Fi interface and its connection
 				'wifi'		=> touch_wifi_device(),
 				'ethernet'	=> touch_ethernet(),
+				'verify'	=> touch_verify_info($constants),
 				'share'		=> touch_share_info(),
 			));
 

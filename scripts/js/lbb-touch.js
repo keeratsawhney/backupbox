@@ -759,11 +759,13 @@
 
 	// ---------- files ----------
 
-	async function loadFiles() {
-		// browse the folders of the mounted drives (hidden files are left out by the box)
+	async function loadFiles(more) {
+		// browse the folders of the mounted drives (hidden files are left out by the box);
+		// a folder comes in pages: "Show more" adds the next one (more === true)
+		const append = more === true;
 		let data;
 		try {
-			data = await api('files', { medium: state.files.medium, path: state.files.path });
+			data = await api('files', { medium: state.files.medium, path: state.files.path, offset: append ? state.files.entries.length : 0 });
 		} catch (e) {
 			toast(e.message, true);
 			return;
@@ -792,15 +794,19 @@
 
 		const current = data.drives.find((x) => x.id === data.medium) || {};
 		const label = current.name || current.label || '';
-		$('files-crumb').textContent = data.path ? label + ' / ' + data.path.split('/').join(' / ') : label;
+		$('files-crumb').textContent = (data.path ? label + ' / ' + data.path.split('/').join(' / ') : label) + (data.total ? '  ·  ' + data.total : '');
 		$('files-up').disabled = !data.path;
 
-		state.files.entries = data.entries || [];
-		endSelection();
-
 		const list = $('files-list');
-		list.replaceChildren();
-		list.scrollTop = 0;
+		if (append) {
+			state.files.entries = state.files.entries.concat(data.entries || []);
+			list.querySelector('.files-more')?.remove();
+		} else {
+			state.files.entries = data.entries || [];
+			endSelection();
+			list.replaceChildren();
+			list.scrollTop = 0;
+		}
 		if (!data.drives.length) {
 			list.append(el('div', { class: 'empty' }, [icon('folder'), el('span', { text: T.no_drive })]));
 			return;
@@ -814,7 +820,6 @@
 			return;
 		}
 
-		const media = data.entries.filter((x) => x.type === 'file' && x.media);
 		data.entries.forEach((entry) => {
 			let preview;
 			if (entry.type === 'dir') {
@@ -846,6 +851,8 @@
 					state.files.path = entry.path;
 					loadFiles();
 				} else if (entry.media) {
+					// every photo and video of the folder loaded so far
+					const media = state.files.entries.filter((x) => x.type === 'file' && x.media);
 					state.viewerFiles = media;
 					openViewer(media.indexOf(entry));
 				} else {
@@ -858,6 +865,12 @@
 			});
 			list.append(row);
 		});
+
+		if (data.truncated) {
+			const more = el('button', { class: 'btn files-more', text: fill(T.files_more, { n: data.total - state.files.entries.length }) });
+			more.addEventListener('click', () => busy(more, () => loadFiles(true)));
+			list.append(more);
+		}
 	}
 
 	// long press (touch, mouse, resistive stylus) and the context menu of a long tap start the selection
@@ -974,6 +987,10 @@
 		if (data.share && ipv4.length) {
 			add(T.share, `\\\\${ipv4[0]}\\${data.share.name}  ·  smb://${ipv4[0]}/${data.share.name}`);
 			add(T.share_login, `${data.share.user}  ·  ${data.share.password || T.share_box_password}`);
+		}
+		// the check after the last backup: every file of the card against the backup drive
+		if (data.verify) {
+			add(T.verify_last, (data.verify.missing ? fill(T.verify_missing, { n: data.verify.missing }) : fill(T.verify_ok, { n: data.verify.ok })) + '  ·  ' + formatDate(data.verify.date));
 		}
 		add(T.temperature, data.temp !== null ? data.temp + ' °C' : '–');
 		add(T.uptime, formatUptime(data.uptime));

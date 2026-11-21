@@ -6,6 +6,22 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#42](https://github.com/keeratsawhney/backupbox/pull/42) Complete copies, proven file by file; all files listed**
+  - **Check after every backup** (`lib_verify.py`): every file of the card is looked up on the backup drive by name, size and date. The summary shows *N files verified* or *N of M not copied!*; the app's System page shows *Last backup check*; `tmp/verify-last.json` lists the files. By hand: `sudo python3 lib_verify.py`.
+  - **Copy:** a file is the same only if name, size AND date match (it was name and size: a new photo that reused a name and had the same size, e.g. uncompressed raw, was skipped). Daylight saving time (FAT) is tolerated. The exclusion `*trash*` (which hid e.g. a folder `trash_the_dress`) is replaced by the exact names of the trash folders.
+  - **Files tab:** folders open in pages of 400 with *Show more* and the folder's total (it stopped at 3000 entries without a hint).
+  - **Photo views:** `.HIF` (Sony HEIF), more raw formats (`arq`, `crm`, `erf`, `iiq`, `mef`) and videos (`mov`, `m4v`, `mts`, `m2ts`, `mxf`, `mkv`, `3gp`, `mpg`); the folder `_replaced` with older versions of replaced files is left out.
+- **[#41](https://github.com/keeratsawhney/backupbox/pull/41) Every card in its own folder, no file ever overwritten**
+  - **Fix:** the old card IDs made of size and file system only (`lbb_119.3G_exfat_1.0`) were the same for every card of that size. Their photos met in one folder, where files of the same name were skipped or overwritten.
+  - **Such cards get their own folder** (date, time, card name) on their next backup, and the whole card is copied into it. Locked cards: `card_<UUID>`, stable until the card is formatted.
+  - **The same card shot further:** the same folder, only the new files are copied.
+  - **Never overwritten:** a different file of the same name on the card (photo numbers used again) moves the older copy on the SSD to `_replaced/<date>` instead of overwriting it.
+- **[#40](https://github.com/keeratsawhney/backupbox/pull/40) Cable straight from the box to a computer**: when no router answers within 30 s, the box hands out addresses itself (box `10.42.0.1`). With a router, the router's address as before.
+- **[#39](https://github.com/keeratsawhney/backupbox/pull/39) Fix: the display stayed off after an update** (#37 restarted it with a call that sends nothing while the address is unchanged).
+- **[#38](https://github.com/keeratsawhney/backupbox/pull/38) Fix: Finder copies from the network share failed (error 100060)**: the share stored Mac metadata in extended attributes, which exFAT drives don't have. Plain files now; SMB multichannel off (unreliable with Macs that have Wi-Fi and Ethernet).
+- **[#37](https://github.com/keeratsawhney/backupbox/pull/37) OLED home screen up to date right after network changes**
+  - Any network change (Wi-Fi or cable connected or lost, internet found) redraws the home screen with the new address and online state at once, not after up to a minute. It no longer says "offline" for the first minute after boot.
+  - An update restarts the display, so new display code runs without a reboot.
 - **[#35](https://github.com/keeratsawhney/backupbox/pull/35) Card folders named by date, folder dates kept, LAN address on the OLED**
   - New cards (or cards formatted in the camera) get a folder named by the date and time of their first backup and the card's name, e.g. `2026-11-14_15-29-07_NIKON_Z_6_2`. Cards backed up before keep their folder.
   - Thumbnails no longer change the photo folders' modified date.

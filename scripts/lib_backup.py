@@ -335,6 +335,7 @@ class reporter(object):
 		self.mail_content_HTML			= ''
 
 		self.display_summary			= []
+		self.verify_lines				= []	# what lib_verify found: shown in the summary
 
 	def new_folder(self, Folder):
 		if not Folder:
@@ -613,6 +614,7 @@ class reporter(object):
 				elif ErrorSign == 'Exception':
 					self.display_summary	+= [f":{self.sync_return_code_decoder(Error.split(':',1)[0])}"]
 
+		self.display_summary += self.verify_lines
 		self.display_summary.append(f":{FilesProcessed} {self.__lan.l('box_backup_of')} {FilesToProcess}{'+' if Report['FilesToProcess_possible_more'] else ''} {self.__lan.l('box_backup_files_copied')}")
 		self.display_summary.append(f":{FailedTriesCountAll} {self.__lan.l('box_backup_failed_attempts')}")
 		self.display_summary.append(f":{self.__lan.l(f'box_backup_report_time_elapsed')}: {self.get_time_elapsed()}")

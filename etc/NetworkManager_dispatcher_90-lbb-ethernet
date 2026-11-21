@@ -2,30 +2,35 @@
 # Backup Box: with an Ethernet cable all traffic goes over the cable and the Wi-Fi is switched off
 # (no slower second route, no hotspot next to the studio network). Cable out: the Wi-Fi comes back.
 # Bluetooth for the app stays on either way.
+# Any network change: the display's home screen shows the new address and online state at once.
 
 IFACE="$1"
 ACTION="$2"
 
-case "${IFACE}" in
-	eth*|end*|enx*) ;;
+case "${ACTION}" in
+	up|down|connectivity-change) ;;
 	*) exit 0 ;;
 esac
 
-case "${ACTION}" in
-	up)
-		# comitup would switch the Wi-Fi on again for its hotspot: paused while the cable is in
-		systemctl stop --no-block comitup 2>/dev/null
-		nmcli radio wifi off
-		;;
-	down)
-		# only when no other cable is connected
-		if ! nmcli -t -f TYPE,STATE device | grep -q '^ethernet:connected'; then
-			nmcli radio wifi on
-			systemctl is-enabled --quiet comitup 2>/dev/null && systemctl start --no-block comitup
-		fi
+case "${IFACE}" in
+	eth*|end*|enx*)
+		case "${ACTION}" in
+			up)
+				# comitup would switch the Wi-Fi on again for its hotspot: paused while the cable is in
+				systemctl stop --no-block comitup 2>/dev/null
+				nmcli radio wifi off
+				;;
+			down)
+				# only when no other cable is connected
+				if ! nmcli -t -f TYPE,STATE device | grep -q '^ethernet:connected'; then
+					nmcli radio wifi on
+					systemctl is-enabled --quiet comitup 2>/dev/null && systemctl start --no-block comitup
+				fi
+				;;
+		esac
 		;;
 esac
 
-# the new address on the display (the cable's, or the Wi-Fi's again)
+# the new address and online state on the display (the internet check needs the network up for a moment)
 [ -f /var/www/little-backup-box/lib_cron_ip.py ] && (sleep 5; python3 /var/www/little-backup-box/lib_cron_ip.py --display) >/dev/null 2>&1 &
 exit 0

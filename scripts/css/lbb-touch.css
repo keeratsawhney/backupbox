@@ -1966,3 +1966,10 @@ button.wifi-row:active {
 	user-select: text;
 	-webkit-user-select: text;
 }
+
+/* a long folder: the next page of files */
+.files-more {
+	display: block;
+	width: calc(100% - 16px);
+	margin: 10px 8px 16px;
+}

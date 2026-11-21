@@ -89,6 +89,26 @@ if [ -d /etc/NetworkManager/dispatcher.d ]; then
 		sudo nmcli radio wifi off
 	fi
 fi
+# a cable straight into a computer (no router): when no router gives an address within 30 s, the box hands out
+# addresses itself (box 10.42.0.1, the computer gets one automatically). With a router the router's profile wins:
+# it is tried first, and again whenever the cable is plugged in.
+if command -v nmcli >/dev/null 2>&1; then
+	ETH=$(nmcli -t -f DEVICE,TYPE device 2>/dev/null | awk -F: '$2=="ethernet"{print $1; exit}')
+	if [ -n "${ETH}" ]; then
+		dpkg -s dnsmasq-base >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q dnsmasq-base >/dev/null 2>&1 || true
+		ROUTER_PROFILES=$(nmcli -t -f NAME,TYPE connection show 2>/dev/null | awk -F: '$2=="802-3-ethernet" && $1!="lbb-direct"{print $1}')
+		if [ -z "${ROUTER_PROFILES}" ]; then
+			sudo nmcli connection add type ethernet ifname "${ETH}" con-name lbb-lan ipv4.method auto >/dev/null
+			ROUTER_PROFILES="lbb-lan"
+		fi
+		printf '%s\n' "${ROUTER_PROFILES}" | while IFS= read -r NAME; do
+			sudo nmcli connection modify "${NAME}" ipv4.dhcp-timeout 30 connection.autoconnect-priority 10 connection.autoconnect-retries 1 >/dev/null 2>&1 || true
+		done
+		if ! nmcli -t -f NAME connection show 2>/dev/null | grep -qx lbb-direct; then
+			sudo nmcli connection add type ethernet ifname "${ETH}" con-name lbb-direct ipv4.method shared ipv4.addresses 10.42.0.1/24 ipv6.method ignore connection.autoconnect yes connection.autoconnect-priority -10 >/dev/null || true
+		fi
+	fi
+fi
 if [ -d /etc/samba ]; then
 	sudo cp -f "${INSTALLER_DIR}/etc/samba_smb.conf" /etc/samba/smb.conf
 	sudo chmod 0440 /etc/samba/smb.conf
@@ -99,6 +119,16 @@ fi
 
 # fan: full speed from 60 °C (after the next reboot)
 bash "${INSTALLER_DIR}/install-fan.sh" || true
+
+# the display runs on until it is stopped: restart it with the new code (the home screen is drawn again at once)
+if pgrep -f "${WEB_ROOT}/displa[y].py" >/dev/null; then
+	echo "Restarting the display ..."
+	sudo pkill -f "${WEB_ROOT}/displa[y].py" || true
+	sleep 1
+fi
+# the home screen again: its message starts the display (lib_cron_ip --display sends nothing while the address is unchanged)
+sudo python3 -c "import sys; sys.path.insert(0, '${WEB_ROOT}'); import lib_cron_ip; lib_cron_ip.ip_info().ready_screen()" >/dev/null 2>&1 || true
+sleep 2
 
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
