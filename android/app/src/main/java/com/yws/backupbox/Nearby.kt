@@ -68,7 +68,16 @@ class Nearby(
 
 	init {
 		pairButton.setOnClickListener { withPermission { pair() } }
-		openButton.setOnClickListener { opening = true; ble.readWifi() }
+		openButton.setOnClickListener {
+			if (!Wifi.isOn(activity)) {
+				// the box is reached over Wi-Fi: Android's panel switches it on with one tap
+				toast(activity.getString(R.string.ble_wifi_off))
+				Wifi.openPanel(activity)
+			} else {
+				opening = true
+				ble.readWifi()
+			}
+		}
 		startButton.setOnClickListener {
 			confirm(if (running) R.string.ble_stop_confirm else R.string.ble_start_confirm) {
 				ble.command(if (running) "stop" else "start")

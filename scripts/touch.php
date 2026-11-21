@@ -112,6 +112,7 @@
 		<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
 		<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></symbol>
 		<symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+		<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
 		<symbol id="i-checks" viewBox="0 0 24 24"><path d="M3 12l4 4 8-8M11 16l1 1 9-9"/></symbol>
 		<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
 		<symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
@@ -220,6 +221,7 @@
 					<button class="btn btn-icon" id="sel-cancel" aria-label="cancel"><svg><use href="#i-close"/></svg></button>
 					<span class="files-crumb" id="sel-count"></span>
 					<button class="btn btn-icon" id="sel-all"><svg><use href="#i-checks"/></svg></button>
+					<button class="btn btn-icon" id="sel-copy"><svg><use href="#i-copy"/></svg></button>
 					<button class="btn btn-icon" id="sel-rename"><svg><use href="#i-edit"/></svg></button>
 					<button class="btn btn-icon btn-danger" id="sel-delete"><svg><use href="#i-trash"/></svg></button>
 				</div>

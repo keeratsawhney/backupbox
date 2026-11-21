@@ -6,6 +6,19 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#45](https://github.com/keeratsawhney/backupbox/pull/45) Deleting: progress window with free space; deleted folders stay deleted**
+  - **Why folders came back:**
+    - the previews job could make a deleted folder again (it created missing parent folders for thumbnails): fixed, a deleted file or folder is left alone;
+    - a big folder took longer than a web request may (about 30 s) and was cut off half way: deleting is now a task on the box (`lib_delete.py`).
+  - **Window:** a bar, *N of M files*, how much was deleted and the **free space** (also before and after in the log: `64.1 GB -> 64.3 GB (+165 MB)`), so you can see that it is gone. The list behind it refreshes when the task ends; a task still running is shown again when you open the Files tab.
+  - **Checked:** after the deletion every path is looked at again, what is still there is deleted once more and reported (`NOT deleted: name` with the reason, e.g. a drive with errors). Links are removed, never what they point to.
+  - Deleted files also leave the photo database of the drive and the list of previews still to do, and a deleted photo's thumbnail goes with it.
+  - The copy window has the same bar and free space of the destination; no stray `null` in the task window.
+- **[#44](https://github.com/keeratsawhney/backupbox/pull/44) Copy to any drive from the Files tab, back gesture, app with Wi-Fi off**
+  - **Files tab, copy:** select folders and files (long-press), tap the copy icon, choose a drive and a folder (new folders can be made) and *Copy here*. The box copies in the background (`lib_copy.py`, progress in the task sheet), checks every file afterwards and keeps an older version of a changed file in `_replaced`. It checks the free space first and never copies a folder into itself. A drive that is opened read only is writable only for the copy.
+  - **Files tab, back:** every folder and drive is a step in the history, so the back gesture (and the app's back button) goes back folder by folder; a reload keeps the folder.
+  - **Files tab:** the *Show more* button is centred.
+  - **App, Wi-Fi off:** it says so instead of "no box found", opens Android's Wi-Fi panel (apps can not switch Wi-Fi on themselves since Android 10) and searches when the phone is connected. *Open box* over Bluetooth does the same.
 - **[#42](https://github.com/keeratsawhney/backupbox/pull/42) Complete copies, proven file by file; all files listed**
   - **Check after every backup** (`lib_verify.py`): every file of the card is looked up on the backup drive by name, size and date. The summary shows *N files verified* or *N of M not copied!*; the app's System page shows *Last backup check*; `tmp/verify-last.json` lists the files. By hand: `sudo python3 lib_verify.py`.
   - **Copy:** a file is the same only if name, size AND date match (it was name and size: a new photo that reused a name and had the same size, e.g. uncompressed raw, was skipped). Daylight saving time (FAT) is tolerated. The exclusion `*trash*` (which hid e.g. a folder `trash_the_dress`) is replaced by the exact names of the trash folders.

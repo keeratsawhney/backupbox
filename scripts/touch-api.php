@@ -557,6 +557,10 @@
 		return(is_array($task) and !is_file($exit) and is_dir('/proc/' . (int)$task['pid']));
 	}
 
+	function touch_task_progress_file($constants) {
+		return($constants['const_WEB_ROOT_LBB'] . '/tmp/touch-task-progress.json');
+	}
+
 	function touch_disk_task_status($constants) {
 		[$json, $log, $exit]	= touch_disk_task_files($constants);
 		$task	= @json_decode((string)@file_get_contents($json), true);
@@ -565,7 +569,15 @@
 		}
 		$lines	= @file($log, FILE_IGNORE_NEW_LINES) ?: array();
 		$code	= is_file($exit) ? (int)trim((string)@file_get_contents($exit)) : null;
+		# bar, files and free space of a copy or deletion (written by the task; only this task's)
+		$progress_file	= touch_task_progress_file($constants);
+		clearstatcache(true, $progress_file);
+		$progress	= @json_decode((string)@file_get_contents($progress_file), true);
+		if (!is_array($progress) or (int)@filemtime($progress_file) < (int)$task['started'] - 2) {
+			$progress	= null;
+		}
 		return(array(
+			'progress'	=> $progress,
 			'title'		=> $task['title'],
 			'device'	=> $task['device'],
 			'started'	=> $task['started'],
@@ -575,14 +587,14 @@
 		));
 	}
 
-	function touch_disk_task_start($constants, $title, $device, $commands) {
+	function touch_disk_task_start($constants, $title, $device, $commands, $echo = true) {
 		# $commands: shell commands run one after another; the first is the task, its exit code is the result
 		# (the others only show the outcome, e.g. lsblk after formatting)
 		[$json, $log, $exit]	= touch_disk_task_files($constants);
 		@unlink($exit);
 		$script	= '';
 		foreach (array_values($commands) as $index => $command) {
-			$script	.= 'echo ' . escapeshellarg('$ ' . $command) . '; ' . $command . ($index === 0 ? '; rc=$?; ' : '; ');
+			$script	.= ($echo ? 'echo ' . escapeshellarg('$ ' . $command) . '; ' : '') . $command . ($index === 0 ? '; rc=$?; ' : '; ');
 		}
 		$script	.= 'sync; echo $rc > ' . escapeshellarg($exit);
 		$pid	= (int)shell_exec('sudo sh -c ' . escapeshellarg($script) . ' > ' . escapeshellarg($log) . ' 2>&1 & echo $!');
@@ -1732,7 +1744,7 @@
 				touch_fail(touch_text(L::touch_mount_failed));
 			}
 			$root	= realpath($root);
-			if (touch_backup_running()) {
+			if (touch_backup_running() or touch_disk_task_running($constants)) {
 				touch_fail(touch_text(L::touch_running));
 			}
 			$paths	= isset($_POST['paths']) ? json_decode((string)$_POST['paths'], true) : null;
@@ -1754,14 +1766,7 @@
 				shell_exec('sudo mount -o remount,rw ' . escapeshellarg($root) . ' > /dev/null 2>&1; sudo mount -o remount,bind,rw ' . escapeshellarg($root) . ' > /dev/null 2>&1');
 			}
 			$failed	= 0;
-			if ($op === 'delete') {
-				foreach ($targets as $full) {
-					# with its thumbnail of the box, if there is one
-					$tims	= dirname($full) . '/tims/' . basename($full) . '.JPG';
-					exec('sudo rm -rf -- ' . escapeshellarg($full) . (is_file($tims) ? ' ' . escapeshellarg($tims) : '') . ' 2>&1', $output, $rc);
-					$failed	+= ($rc !== 0 or file_exists($full)) ? 1 : 0;
-				}
-			} elseif ($op === 'rename' and count($targets) === 1) {
+			if ($op === 'rename' and count($targets) === 1) {
 				$name	= isset($_POST['name']) ? trim((string)$_POST['name']) : '';
 				if (!touch_valid_file_name($name)) {
 					touch_fail(touch_text(L::touch_invalid_name));
@@ -1792,6 +1797,141 @@
 				touch_fail(touch_text(L::touch_file_op_failed));
 			}
 			touch_respond(array('ok' => true));
+
+		case 'file_mkdir':
+			# Files tab: a new folder (destination of a copy); a drive opened read only is writable for this moment only
+			$medium	= isset($_POST['medium']) ? (string)$_POST['medium'] : '';
+			$root	= touch_medium_path($constants, $medium);
+			if ($root === false or $medium === 'internal') {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			if (touch_backup_running() or touch_disk_task_running($constants)) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$root	= realpath($root);
+			$parent	= isset($_POST['path']) ? trim((string)$_POST['path'], '/') : '';
+			$dir	= $parent === '' ? $root : touch_file_target($root, $parent);
+			$name	= isset($_POST['name']) ? trim((string)$_POST['name']) : '';
+			if ($dir === false or !is_dir($dir)) {
+				touch_fail('invalid path');
+			}
+			if (!touch_valid_file_name($name)) {
+				touch_fail(touch_text(L::touch_invalid_name));
+			}
+			if (file_exists($dir . '/' . $name)) {
+				touch_fail(touch_text(L::touch_name_exists));
+			}
+			$readonly	= str_starts_with($medium, 'browse:');
+			if ($readonly) {
+				shell_exec('sudo mount -o remount,rw ' . escapeshellarg($root) . ' > /dev/null 2>&1; sudo mount -o remount,bind,rw ' . escapeshellarg($root) . ' > /dev/null 2>&1');
+			}
+			exec('sudo mkdir -- ' . escapeshellarg($dir . '/' . $name) . ' 2>&1', $output, $rc);
+			if ($readonly) {
+				shell_exec('sudo mount -o remount,bind,ro ' . escapeshellarg($root) . ' > /dev/null 2>&1');
+			}
+			if ($rc !== 0 or !is_dir($dir . '/' . $name)) {
+				touch_fail(touch_text(L::touch_file_op_failed));
+			}
+			touch_respond(array('ok' => true, 'path' => ($parent === '' ? '' : $parent . '/') . $name));
+
+		case 'delete_start':
+			# Files tab: delete folders and files as a task (lib_delete.py): a big folder takes longer than a request may,
+			# and the window shows the progress and the free space before and after
+			if (touch_backup_running() or touch_disk_task_running($constants) or is_file($constants['const_CMD_RUNNER_LOCKFILE'])) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$medium	= isset($_POST['medium']) ? (string)$_POST['medium'] : '';
+			$root	= touch_medium_path($constants, $medium);
+			if ($root === false or $medium === 'internal') {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			$root	= realpath($root);
+			$paths	= isset($_POST['paths']) ? json_decode((string)$_POST['paths'], true) : null;
+			if (!is_array($paths) or !$paths or count($paths) > 500) {
+				touch_fail('nothing selected');
+			}
+			$targets	= array();
+			foreach ($paths as $relative) {
+				$full	= touch_file_target($root, $relative);
+				if ($full === false) {
+					touch_fail('invalid path');
+				}
+				$targets[]	= $full;
+			}
+			$device	= '';
+			$name	= $medium;
+			foreach (touch_attached_drives() as $drive) {
+				if ($drive['mountpoint'] === $root) {
+					$device	= $drive['path'];
+					$name	= $drive['name'];
+				}
+			}
+			@unlink(touch_task_progress_file($constants));
+			$command	= 'python3 ' . escapeshellarg($WORKING_DIR . '/lib_delete.py') . ' --root ' . escapeshellarg($root) . (str_starts_with($medium, 'browse:') ? ' --remount' : '') . ' --progress ' . escapeshellarg(touch_task_progress_file($constants)) . ' --db ' . escapeshellarg($constants['const_IMAGE_DATABASE_FILENAME']);
+			foreach ($targets as $full) {
+				$command	.= ' ' . escapeshellarg($full);
+			}
+			touch_disk_task_start($constants, str_replace(array('{n}', '{drive}'), array(count($targets), $name), touch_text(L::touch_delete_task)), $device, array($command), false);
+			# photo lists read the drive again
+			foreach (glob($constants['const_WEB_ROOT_LBB'] . '/tmp/touch-files-*.json') ?: array() as $cache) {
+				@unlink($cache);
+			}
+			touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
+
+		case 'copy_start':
+			# Files tab: copy the selected folders and files to a folder of any drive (lib_copy.py as a disk task:
+			# progress in the task sheet, the copy is verified file by file). Copy only: nothing is deleted or overwritten.
+			if (touch_backup_running() or touch_disk_task_running($constants) or is_file($constants['const_CMD_RUNNER_LOCKFILE'])) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			$source	= isset($_POST['medium']) ? (string)$_POST['medium'] : '';
+			$dest	= isset($_POST['dest_medium']) ? (string)$_POST['dest_medium'] : '';
+			$sroot	= touch_medium_path($constants, $source);
+			$droot	= touch_medium_path($constants, $dest);
+			if ($sroot === false or $droot === false or $source === 'internal' or $dest === 'internal') {
+				touch_fail(touch_text(L::touch_mount_failed));
+			}
+			$sroot	= realpath($sroot);
+			$droot	= realpath($droot);
+			$paths	= isset($_POST['paths']) ? json_decode((string)$_POST['paths'], true) : null;
+			if (!is_array($paths) or !$paths or count($paths) > 200) {
+				touch_fail('nothing selected');
+			}
+			$sources	= array();
+			foreach ($paths as $relative) {
+				$full	= touch_file_target($sroot, $relative);
+				if ($full === false) {
+					touch_fail('invalid path');
+				}
+				$sources[]	= $full;
+			}
+			$folder	= isset($_POST['dest_path']) ? trim((string)$_POST['dest_path'], '/') : '';
+			$dfull	= $folder === '' ? $droot : touch_file_target($droot, $folder);
+			if ($dfull === false or !is_dir($dfull)) {
+				touch_fail('invalid destination');
+			}
+			foreach ($sources as $full) {
+				if (is_dir($full) and ($dfull === $full or str_starts_with($dfull . '/', $full . '/'))) {
+					touch_fail(touch_text(L::touch_copy_into_itself));
+				}
+			}
+
+			# the drive the copy goes to (named in the task sheet); a drive opened read only is made writable by the copy
+			$device	= '';
+			$name	= $dest;
+			foreach (touch_attached_drives() as $drive) {
+				if ($drive['mountpoint'] === $droot) {
+					$device	= $drive['path'];
+					$name	= $drive['name'];
+				}
+			}
+			@unlink(touch_task_progress_file($constants));
+			$command	= 'python3 ' . escapeshellarg($WORKING_DIR . '/lib_copy.py') . (str_starts_with($dest, 'browse:') ? ' --remount ' . escapeshellarg($droot) : '') . ' --progress ' . escapeshellarg(touch_task_progress_file($constants)) . ' ' . escapeshellarg($dfull);
+			foreach ($sources as $full) {
+				$command	.= ' ' . escapeshellarg($full);
+			}
+			touch_disk_task_start($constants, str_replace(array('{n}', '{drive}'), array(count($sources), $name), touch_text(L::touch_copy_task)), $device, array($command), false);
+			touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
 
 		case 'power':
 			$mode	= isset($_POST['mode']) ? (string)$_POST['mode'] : '';

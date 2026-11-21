@@ -3,8 +3,10 @@ package com.yws.backupbox
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Typeface
 import android.net.ConnectivityManager
 import android.net.Network
@@ -12,6 +14,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
 import android.net.http.SslError
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -59,6 +62,30 @@ class MainActivity : Activity() {
 
 	private val prefs by lazy { getSharedPreferences("app", Context.MODE_PRIVATE) }
 
+	// Android's Wi-Fi panel is opened by itself once per start; after that by its button
+	private var wifiPanelShown = false
+
+	/** Wi-Fi switched on or off (also by the panel): search again, or say what is going on */
+	private val wifiReceiver	= object : BroadcastReceiver() {
+		override fun onReceive(context: Context, intent: Intent) {
+			if (connectView.visibility != View.VISIBLE || currentBox != null) return
+			when (intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN)) {
+				WifiManager.WIFI_STATE_DISABLED -> search()
+				WifiManager.WIFI_STATE_ENABLED -> {
+					// it connects to a known network: the search starts when that is there (keepToWifi);
+					// if there is none, search anyway after a while
+					found.clear()
+					boxesView.removeAllViews()
+					progress.visibility	= View.VISIBLE
+					status.setText(R.string.wifi_connecting)
+					connectView.postDelayed({
+						if (connectView.visibility == View.VISIBLE && currentBox == null && wifi == null) search()
+					}, 12000)
+				}
+			}
+		}
+	}
+
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
@@ -76,6 +103,12 @@ class MainActivity : Activity() {
 		setupWeb()
 		keepToWifi()
 		nearby	= Nearby(this, connectivity, ::openBox, ::pin)
+		val wifiFilter	= IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION)
+		if (android.os.Build.VERSION.SDK_INT >= 33) {
+			registerReceiver(wifiReceiver, wifiFilter, Context.RECEIVER_NOT_EXPORTED)
+		} else {
+			registerReceiver(wifiReceiver, wifiFilter)
+		}
 
 		findViewById<Button>(R.id.search).setOnClickListener { search() }
 		findViewById<Button>(R.id.go).setOnClickListener { connectTyped() }
@@ -155,6 +188,27 @@ class MainActivity : Activity() {
 	private fun search() {
 		found.clear()
 		boxesView.removeAllViews()
+
+		// Wi-Fi is off: say so instead of "no box found", and open Android's Wi-Fi panel (one tap to switch it on);
+		// the search starts by itself when the Wi-Fi is on
+		if (!Wifi.isOn(this)) {
+			finder.stop()
+			progress.visibility	= View.GONE
+			status.setText(R.string.wifi_off)
+			boxesView.addView(Button(this).apply {
+				text	= getString(R.string.wifi_turn_on)
+				isAllCaps	= false
+				setTextColor(getColor(R.color.paper))
+				setBackgroundResource(R.drawable.button)
+				setOnClickListener { Wifi.openPanel(this@MainActivity) }
+			}, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
+			if (!wifiPanelShown) {
+				wifiPanelShown	= true
+				Wifi.openPanel(this)
+			}
+			return
+		}
+
 		progress.visibility	= View.VISIBLE
 		status.setText(R.string.searching)
 
@@ -340,6 +394,10 @@ class MainActivity : Activity() {
 					view.loadUrl("http://${box.address}:8080/touch.php")
 					return
 				}
+				if (!Wifi.isOn(this@MainActivity)) {
+					showConnect()
+					return
+				}
 				showConnect(getString(R.string.load_failed, error.description))
 				addRetry()
 			}
@@ -417,6 +475,7 @@ class MainActivity : Activity() {
 	}
 
 	override fun onDestroy() {
+		try { unregisterReceiver(wifiReceiver) } catch (e: Exception) {}
 		finder.stop()
 		nearby.pause()
 		nearby.leaveBox()

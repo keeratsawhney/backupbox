@@ -107,6 +107,8 @@ It is made for fingers: on the box's own touchscreen, on phones and in the Andro
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/touch-box-home.png" width="280"> | <img src="docs/screenshots/touch-box-photos.png" width="280"> | <img src="docs/screenshots/touch-box-system.png" width="280"> |
 
+**Files tab:** browse any drive. Long-press to select folders and files, then **copy them to any folder of any drive** (for example from the SSD to an external hard disk): choose the drive and the folder (or make a new one) and the box copies and checks every file, with progress. Copy only: nothing is deleted or overwritten, an older version of a changed file goes to `_replaced`. The back gesture of the phone goes back folder by folder.
+
 Themes: dark, light, sepia and **sage**. Under-voltage (a weak power supply) shows as a pill in the top bar,
 and a tap explains it.
 
@@ -163,6 +165,7 @@ Made for the **Waveshare 1.3" OLED HAT** (SH1106, 128×64), and it also works on
   - The app finds the box on your current network, or joins the box's hotspot by itself (Android asks once).
   - Your phone keeps mobile data for everything else.
   - Previews and downloads always go over Wi-Fi, which is fast.
+- **Wi-Fi off:** the app says so instead of "no box found" and opens Android's Wi-Fi panel (one tap; Android does not let an app switch Wi-Fi on by itself). It finds the box as soon as the phone is connected.
 - **Finds boxes** on the Wi-Fi or at the hotspot address (`10.41.0.1`), or by address.
 - **Security:**
   - HTTPS with the box's own certificate, trusted the first time and pinned;

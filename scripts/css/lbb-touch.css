@@ -1967,9 +1967,40 @@ button.wifi-row:active {
 	-webkit-user-select: text;
 }
 
-/* a long folder: the next page of files */
+/* a long folder: the next page of files, centred */
 .files-more {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 220px;
+	max-width: calc(100% - 16px);
+	margin: 14px auto 18px;
+	text-align: center;
+}
+
+/* progress of a copy or a deletion in the task window */
+.task-progress {
+	margin: 4px 0 10px;
+}
+
+.task-bar {
+	height: 10px;
+	border-radius: 99px;
+	background: var(--surface-2);
+	overflow: hidden;
+}
+
+.task-bar span {
 	display: block;
-	width: calc(100% - 16px);
-	margin: 10px 8px 16px;
+	height: 100%;
+	border-radius: 99px;
+	background: var(--accent);
+	transition: width .4s;
+}
+
+.task-line {
+	margin: 6px 0 0;
+	font-size: 13px;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
 }
