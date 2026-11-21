@@ -51,7 +51,8 @@ def never_copied_name(Name):
 def never_copied_file(Name, DatabaseName=''):
 	return(any(fnmatch.fnmatchcase(Name, Pattern) for Pattern in NEVER_COPIED_FILES) or (DatabaseName != '' and Name == DatabaseName))
 
-def verify(SourceRoot, TargetRoot, DatabaseName='images.db'):
+def verify(SourceRoot, TargetRoot, DatabaseName='images.db', Everything=False):
+	# Everything: a copy of a folder (lib_copy.py) leaves nothing out, not even trash folders, ID files and empty files
 	# returns a dict: files (looked at), ok, missing, different (lists of relative paths, at most MAX_LISTED),
 	# empty (not copied on purpose), unreadable (could not be looked at), counts in <name>_count
 	Result	= {
@@ -76,12 +77,12 @@ def verify(SourceRoot, TargetRoot, DatabaseName='images.db'):
 			Result[Kind].append(Path)
 
 	for Dir, SubDirs, FileNames in os.walk(SourceRoot, onerror=lambda e: note('unreadable', str(e.filename))):
-		SubDirs[:]	= sorted(SubDir for SubDir in SubDirs if not never_copied_name(SubDir))
+		SubDirs[:]	= sorted(SubDir for SubDir in SubDirs if Everything or not never_copied_name(SubDir))
 		RelDir		= os.path.relpath(Dir, SourceRoot)
 		RelDir		= '' if RelDir == '.' else RelDir
 
 		for FileName in sorted(FileNames):
-			if never_copied_file(FileName, DatabaseName) or never_copied_name(FileName):
+			if not Everything and (never_copied_file(FileName, DatabaseName) or never_copied_name(FileName)):
 				continue
 
 			Relative	= os.path.join(RelDir, FileName)
@@ -93,7 +94,7 @@ def verify(SourceRoot, TargetRoot, DatabaseName='images.db'):
 				note('unreadable', Relative)
 				continue
 
-			if SourceStat.st_size == 0:
+			if SourceStat.st_size == 0 and not Everything:
 				note('empty', Relative)
 				continue
 

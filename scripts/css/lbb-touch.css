@@ -1967,9 +1967,13 @@ button.wifi-row:active {
 	-webkit-user-select: text;
 }
 
-/* a long folder: the next page of files */
+/* a long folder: the next page of files, centred */
 .files-more {
-	display: block;
-	width: calc(100% - 16px);
-	margin: 10px 8px 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 220px;
+	max-width: calc(100% - 16px);
+	margin: 14px auto 18px;
+	text-align: center;
 }

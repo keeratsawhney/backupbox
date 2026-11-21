@@ -182,8 +182,33 @@
 			return;
 		}
 		const page = location.hash.slice(1) || 'home';
-		if (page !== state.page) showPage(page);
+		const step = history.state && typeof history.state.files === 'string' ? history.state : null;
+		if (page !== state.page) {
+			// back to the Files tab: the folder it was showing
+			if (page === 'files' && step) {
+				state.files.path = step.files;
+				if (step.medium) state.files.medium = step.medium;
+			}
+			showPage(page);
+		} else if (page === 'files') {
+			// back inside the Files tab: the folder (or drive) before
+			const path = step ? step.files : '';
+			const medium = step && step.medium ? step.medium : state.files.medium;
+			if (path !== state.files.path || medium !== state.files.medium) {
+				state.files.path = path;
+				state.files.medium = medium;
+				loadFiles();
+			}
+		}
 	});
+
+	// every folder (and drive) the Files tab shows is a step in the history: the back gesture or button of the phone
+	// goes back to the folder before, like in a file manager
+	function filesStep() {
+		const now = history.state;
+		if (now && now.files === state.files.path && now.medium === state.files.medium) return;
+		history.pushState({ files: state.files.path, medium: state.files.medium }, '', location.hash);
+	}
 
 	// buttons must not fire twice while a request is running (resistive screens bounce)
 	async function busy(button, task) {
@@ -772,6 +797,7 @@
 		}
 		state.files.medium = data.medium || '';
 		state.files.path = data.path;
+		state.files.drives = data.drives || [];
 
 		// every attached drive; tapping one that is not mounted opens it (read only, no backup role;
 		// the backup drive chosen on the home screen is opened as target)
@@ -787,6 +813,7 @@
 				}
 				state.files.medium = drive.id;
 				state.files.path = '';
+				filesStep();
 				await loadFiles();
 			}));
 			drives.append(button);
@@ -849,6 +876,7 @@
 				}
 				if (entry.type === 'dir') {
 					state.files.path = entry.path;
+					filesStep();
 					loadFiles();
 				} else if (entry.media) {
 					// every photo and video of the folder loaded so far
@@ -942,6 +970,98 @@
 		await api('file_op', params, 'POST');
 		endSelection();
 		await loadFiles();
+	}
+
+	// ---------- copy to another folder or drive ----------
+
+	function copyWhere() {
+		const c = state.copy;
+		return (c.name || '') + (c.path ? ' / ' + c.path.split('/').join(' / ') : '');
+	}
+
+	function openCopy() {
+		const f = state.files;
+		const paths = [...f.selected];
+		state.copy = { paths: paths, source: f.medium, drives: f.drives || [], medium: '', path: '', name: '' };
+		$('sheet-title').textContent = T.copy_to;
+		$('sheet-sub').textContent = fill(T.selected, { n: paths.length }) + ': ' + paths.slice(0, 3).map((x) => x.split('/').pop()).join(', ') + (paths.length > 3 ? ' …' : '');
+		renderCopyDrives();
+		if ($('drive-sheet').hidden) {
+			$('drive-sheet').hidden = false;
+			openOverlay(sheetBack);
+		}
+	}
+
+	function renderCopyDrives() {
+		// 1. the drive: any attached drive, also the one the files are on; one that is not open yet is opened (read only)
+		const c = state.copy;
+		const body = $('sheet-body');
+		body.replaceChildren(el('p', { class: 'sheet-note', text: T.copy_choose_drive }));
+		const list = el('div', { class: 'list' });
+		c.drives.forEach((drive) => {
+			const text = [drive.name, drive.label || formatBytes(drive.size)].filter(Boolean).join(' · ') + (drive.id === c.source ? '  (' + T.copy_this_drive + ')' : '');
+			list.append(sheetButton('usb', text, 'btn-wide', async () => {
+				const medium = drive.mounted ? drive.id : (await api('open_drive', { path: drive.path }, 'POST')).medium;
+				c.medium = medium;
+				c.path = '';
+				c.name = drive.name || drive.label || '';
+				await renderCopyFolders();
+			}));
+		});
+		body.append(list);
+	}
+
+	async function renderCopyFolders() {
+		// 2. the folder on that drive: browse, make a new one, "Copy here"
+		const c = state.copy;
+		let data;
+		try {
+			data = await api('files', { medium: c.medium, path: c.path, limit: 1000 });
+		} catch (e) {
+			toast(e.message, true);
+			return;
+		}
+		c.path = data.path;
+		const body = $('sheet-body');
+		const row = el('div', { class: 'btn-row' });
+		row.append(sheetButton('left', T.back, '', async () => {
+			if (c.path) {
+				c.path = c.path.split('/').slice(0, -1).join('/');
+				await renderCopyFolders();
+			} else {
+				renderCopyDrives();
+			}
+		}));
+		row.append(sheetButton('plus', T.copy_new_folder, '', async () => {
+			const name = await confirmDialog(T.copy_new_folder, '', T.ok, 'btn-primary', '');
+			if (!name) return;
+			c.path = (await api('file_mkdir', { medium: c.medium, path: c.path, name: name }, 'POST')).path;
+			await renderCopyFolders();
+		}));
+		body.replaceChildren(
+			el('p', { class: 'sheet-note', text: copyWhere() }),
+			row,
+			sheetButton('check', T.copy_here, 'btn-primary btn-wide', startCopy),
+		);
+		const list = el('div', { class: 'list' });
+		const folders = (data.entries || []).filter((x) => x.type === 'dir');
+		folders.forEach((entry) => list.append(sheetButton('folder', entry.name, 'btn-wide', async () => {
+			c.path = entry.path;
+			await renderCopyFolders();
+		})));
+		if (!folders.length) list.append(el('p', { class: 'sheet-note', text: T.copy_folders_empty }));
+		body.append(list);
+	}
+
+	async function startCopy() {
+		// 3. confirm, then the copy runs on the box as a task (progress in this sheet, verified file by file)
+		const c = state.copy;
+		if (!(await confirmDialog(fill(T.copy_confirm, { n: c.paths.length, where: copyWhere() }), T.copy_safe, T.copy, 'btn-primary'))) return;
+		const result = await api('copy_start', { medium: c.source, paths: JSON.stringify(c.paths), dest_medium: c.medium, dest_path: c.path }, 'POST');
+		endSelection();
+		$('sheet-title').textContent = result.task.title;
+		$('sheet-sub').textContent = '';
+		showTask(result.task);
 	}
 
 	function driveName() {
@@ -1398,7 +1518,7 @@
 		$('log-refresh-label').textContent = T.refresh;
 		$('log-clear-label').textContent = T.clear_log;
 		$('h-storage').textContent = T.drives;
-		[['sel-all', T.select_all], ['sel-rename', T.rename], ['sel-delete', T.delete], ['sel-cancel', T.cancel], ['sheet-close', T.close]].forEach(([id, label]) => {
+		[['sel-all', T.select_all], ['sel-copy', T.copy_to], ['sel-rename', T.rename], ['sel-delete', T.delete], ['sel-cancel', T.cancel], ['sheet-close', T.close]].forEach(([id, label]) => {
 			$(id).setAttribute('aria-label', label);
 			$(id).title = label;
 		});
@@ -1428,6 +1548,7 @@
 			if (!f.selected.size) endSelection();
 			else renderSelection();
 		});
+		$('sel-copy').addEventListener('click', openCopy);
 		$('sel-rename').addEventListener('click', (event) => busy(event.currentTarget, async () => {
 			const path = [...state.files.selected][0];
 			const current = path.split('/').pop();
@@ -1511,6 +1632,7 @@
 		});
 		$('files-up').addEventListener('click', () => {
 			state.files.path = state.files.path.split('/').slice(0, -1).join('/');
+			filesStep();
 			loadFiles();
 		});
 		$('viewer-prev').addEventListener('click', () => stepViewer(-1));
@@ -1573,5 +1695,10 @@
 	updateClock();
 	pollStatus();
 	loadServices().catch((e) => toast(e.message, true));
+	// a reload keeps the folder the Files tab was showing (it is in the history entry)
+	if (history.state && typeof history.state.files === 'string') {
+		state.files.path = history.state.files;
+		if (history.state.medium) state.files.medium = history.state.medium;
+	}
 	showPage(location.hash.slice(1) || 'home');
 })();

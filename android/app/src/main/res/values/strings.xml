@@ -24,6 +24,10 @@
 	<string name="load_failed">The box does not answer (%1$s).</string>
 	<string name="choose_box">Choose box</string>
 	<string name="retry">Retry</string>
+	<string name="wifi_off">Wi-Fi is off. Turn it on to find your box: tap the button, then the Wi-Fi switch.</string>
+	<string name="wifi_turn_on">Turn on Wi-Fi</string>
+	<string name="wifi_connecting">Wi-Fi is on, connecting …</string>
+	<string name="ble_wifi_off">Turn on Wi-Fi, then tap Open box again.</string>
 	<string name="downloading">Downloading %1$s …</string>
 	<string name="downloaded">Saved to %1$s</string>
 	<string name="download_failed">Download failed: %1$s</string>
