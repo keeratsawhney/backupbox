@@ -24,7 +24,8 @@ python3 ${WORKING_DIR}/lib_cron_ip.py --display --mail
 
 # Ethernet cable: Wi-Fi off (also if something switched it on again); no cable: Wi-Fi on (also if the unplug was missed)
 if nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^ethernet:connected'; then
-	if [ "$(nmcli radio wifi 2>/dev/null)" = "enabled" ]; then
+	# not within 30 minutes of "Turn on Wi-Fi" in the Wi-Fi box of the touch UI
+	if [ "$(nmcli radio wifi 2>/dev/null)" = "enabled" ] && [ -z "$(find "${WORKING_DIR}/tmp/wifi-keep-on" -mmin -30 2>/dev/null)" ]; then
 		systemctl stop comitup 2>/dev/null
 		nmcli radio wifi off
 	fi
