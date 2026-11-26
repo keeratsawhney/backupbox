@@ -15,6 +15,12 @@
 	if (!root || root.dataset.lbbDragScroll) return;
 	root.dataset.lbbDragScroll = '1';
 
+	// The classic pages (bootstrap) set scroll-behavior: smooth: every position the drag sets would then glide to its
+	// place a moment later, which feels laggy and jumpy. While dragging, a position has to be set at once.
+	const instant = document.createElement('style');
+	instant.textContent = 'html, body, * { scroll-behavior: auto !important; }';
+	(document.head || root).appendChild(instant);
+
 	let drag = null;
 	let suppressClick = false;
 	let frame = null;
