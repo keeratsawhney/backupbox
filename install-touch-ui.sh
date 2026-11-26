@@ -25,6 +25,14 @@
 
 set -euo pipefail
 
+# the scripts of this fork need Python 3.12 or newer (Raspberry Pi OS Trixie): on Bookworm (Python 3.11) they do not
+# even start. Checked first, so that nothing of an older installation is replaced.
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+	echo "This version of Backup Box needs Raspberry Pi OS Trixie (Python 3.12 or newer); this system has $(python3 --version 2>&1)."
+	echo "Nothing was changed. Install Raspberry Pi OS Trixie (Raspberry Pi Imager, 64-bit) and run install-little-backup-box.sh."
+	exit 1
+fi
+
 INSTALLER_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WEB_ROOT="/var/www/little-backup-box"
 BACKUP_FILE="/var/www/lbb-webroot-backup-$(date +%Y%m%d-%H%M%S).tar.gz"

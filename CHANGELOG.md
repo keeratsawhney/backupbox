@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#47](https://github.com/keeratsawhney/backupbox/pull/47) `install-touch-ui.sh` refuses on Bookworm before changing anything** (the scripts need Python 3.12+; on Bookworm it had already copied them over an old installation when it failed, leaving it half converted).
 - **[#45](https://github.com/keeratsawhney/backupbox/pull/45) Deleting: progress window with free space; deleted folders stay deleted**
   - **Why folders came back:**
     - the previews job could make a deleted folder again (it created missing parent folders for thumbnails): fixed, a deleted file or folder is left alone;

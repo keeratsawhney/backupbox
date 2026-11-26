@@ -242,6 +242,8 @@ Other Little Backup Box hardware (other displays, Raspberry Pi models, touchscre
 
 ### Update
 
+Needs **Raspberry Pi OS Trixie** (Python 3.12 or newer). A box on Bookworm can't be updated: install it fresh.
+
 Use the **Update** button (app view › System, or the full web interface), or run this on the box:
 ```bash
 cd ~ && rm -rf backupbox && git clone --depth 1 --branch main https://github.com/keeratsawhney/backupbox.git && cd backupbox && ./install-touch-ui.sh
