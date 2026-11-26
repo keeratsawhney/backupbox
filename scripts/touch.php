@@ -313,6 +313,7 @@
 			theme: <?php echo json_encode($theme); ?>
 		};
 	</script>
+	<script src="js/lbb-dragscroll.js"></script>
 	<script src="js/lbb-touch.js"></script>
 </body>
 </html>
