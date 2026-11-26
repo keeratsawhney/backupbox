@@ -6,6 +6,8 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#63 Dragging in the full web interface no longer selects or picks things, and is lighter**: the press itself is taken from the browser (no text selection, no dragging of links or pictures) and during a drag nothing is hovered or selected, so the big classic pages do less work per move.
+- **#62 The full web interface scrolls without lag**: its stylesheet (bootstrap) sets `scroll-behavior: smooth`, so every position of the drag glided to its place a moment late. The drag script now switches that off in the pages of the box's screen.
 - **#60 Scrolling by touch in every page, no red bar, invisible pointer actually applied**
   - **Cause of "nothing changed":** the kiosk user's home is private, so the kiosk tweaks and the boot-logo script checked its files as the installing user, found nothing and skipped the red bar, the pointer theme and the kiosk logo. They now check as the kiosk user.
   - **Scrolling:** the drag script is one shared file (`js/lbb-dragscroll.js`), used by the touch UI and by a small add-on of the kiosk browser (`lbb-touch-scroll@little-backup-box`, built by `install-kiosk-tweaks.sh`, installed through the browser policy next to the keyboard add-on) in every page, so the full web interface scrolls by finger too. The red bar is only hidden when the add-on is installed.
