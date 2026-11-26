@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#55](https://github.com/keeratsawhney/backupbox/pull/55) The retained boot logo is removed again**: ending Plymouth with `--retain-splash` (#53) left a frame that showed through as lines and a faded double logo when the kiosk drew its logo over it. Updates remove the drop-in from boxes that got it.
 - **[#53](https://github.com/keeratsawhney/backupbox/pull/53) The kiosk: no Pi desktop, the theme is kept, a plainer Wi-Fi box**
   - **No Pi desktop:** the kiosk user logs in to a plain `labwc` session (the Pi desktop session runs `labwc -m`, which adds the desktop wallpaper and panel to the kiosk start script); the boot logo is retained until the kiosk paints over it.
   - **Theme kept:** a theme picked on the box's own screen is saved in the configuration (`set_theme`, only from the box itself); the kiosk browser (a private window) forgot it at each start.

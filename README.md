@@ -192,7 +192,7 @@ The first seconds after power on (the firmware and the kernel loading) can't sho
 On a box with a screen and the desktop's kiosk browser (`install-kiosk-tweaks.sh`, run by the installers):
 - **Text and buttons as big as in the app:** the page is scaled to the screen (its shorter side is about 320 px: an 800×480 screen shows the page at 1.5×). Change it with `LBB_KIOSK_SCALE=1.8 ./install-kiosk-tweaks.sh` or the `layout.css.devPixelsPerPx` line of `/home/lbb-desktop/.mozilla/firefox-esr/kiosk.default/user.js`.
 - **No mouse pointer** (a transparent pointer theme) **and no red scroll bar:** lists scroll by touch, and a screen that acts like a mouse scrolls them by dragging. The scroll bar is only hidden when the touch UI that scrolls by dragging is installed (run `./install-touch-ui.sh`, which does both).
-- **No Pi desktop:** the automatic login uses a plain `labwc` session, which runs only the kiosk start script (the Pi desktop session adds its wallpaper and panel). The boot logo stays on the screen until the kiosk session paints over it.
+- **No Pi desktop:** the automatic login uses a plain `labwc` session, which runs only the kiosk start script (the Pi desktop session adds its wallpaper and panel). The kiosk session shows the same logo from its first second.
 - **The theme is kept on the box:** a theme picked on the box's own screen is saved as the configured theme (the kiosk browser forgets everything at each start); other devices keep their choice in their own browser.
 
 ## Networking in the field
