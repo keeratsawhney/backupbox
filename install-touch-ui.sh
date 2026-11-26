@@ -138,6 +138,9 @@ fi
 sudo python3 -c "import sys; sys.path.insert(0, '${WEB_ROOT}'); import lib_cron_ip; lib_cron_ip.ip_info().ready_screen()" >/dev/null 2>&1 || true
 sleep 2
 
+# boot screen with the logo, straight into the kiosk (only with a graphical environment; safe to run again)
+bash "${INSTALLER_DIR}/install-boot-splash.sh" || echo "The boot screen could not be set up (see above)."
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."

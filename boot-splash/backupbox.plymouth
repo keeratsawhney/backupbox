@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Backup Box
+Description=The logo on a plain background
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/backupbox
+ScriptFile=/usr/share/plymouth/themes/backupbox/backupbox.script
