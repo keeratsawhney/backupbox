@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#48](https://github.com/keeratsawhney/backupbox/pull/48) Boot screen with the logo, straight into the kiosk**: `install-boot-splash.sh` (Plymouth theme with the logo sized to the screen, no boot messages, cursor or rainbow screen; the kiosk session shows the same logo until the browser is up; a dark browser window). Run by the installers after the kiosk is set up; safe to run again; keeps `.lbb-backup` copies of the files it changes.
 - **[#47](https://github.com/keeratsawhney/backupbox/pull/47) `install-touch-ui.sh` refuses on Bookworm before changing anything** (the scripts need Python 3.12+; on Bookworm it had already copied them over an old installation when it failed, leaving it half converted).
 - **[#45](https://github.com/keeratsawhney/backupbox/pull/45) Deleting: progress window with free space; deleted folders stay deleted**
   - **Why folders came back:**
