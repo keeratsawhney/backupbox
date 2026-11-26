@@ -178,6 +178,15 @@ Signing: the repository is public, so the app's signing key is **never committed
 repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
 `ANDROID_KEY_PASSWORD`). Without them, builds are signed with a temporary debug key.
 
+## Boot screen (box with a DSI / HDMI screen)
+
+`install-boot-splash.sh` (run by the installer and by `install-touch-ui.sh`; it does nothing on a box without the graphical environment) makes the box start like a device:
+- your **logo from the first moment** of the boot (Plymouth), without boot messages, cursor, penguin or rainbow screen;
+- **straight into the kiosk:** the desktop of the Pi is never shown. The kiosk session shows the same logo, in the same place, until the browser covers it, and the browser window is dark from the start (no white flash);
+- the logo is sized to the screen (55 % of its shorter side).
+
+The first seconds after power on (the firmware and the kernel loading) can't show anything, and there can be a blink of a second or two where the boot screen hands over to the kiosk session. To go back: the `.lbb-backup` copies next to `cmdline.txt`, `config.txt` and the kiosk start script, and `sudo plymouth-set-default-theme -R pix`.
+
 ## Networking in the field
 
 - **Hotspot without a sign-in trap:** phones see "no internet" and stay connected; `http://10.41.0.1` opens the box.
@@ -241,6 +250,8 @@ Other Little Backup Box hardware (other displays, Raspberry Pi models, touchscre
    The installer asks for the default backup (started after boot) and whether to install comitup (the box's own Wi-Fi hotspot).
 
 ### Update
+
+Needs **Raspberry Pi OS Trixie** (Python 3.12 or newer). A box on Bookworm can't be updated: install it fresh.
 
 Use the **Update** button (app view › System, or the full web interface), or run this on the box:
 ```bash

@@ -581,6 +581,9 @@ sudo service proftpd restart
 # setup graphical environment
 source "${INSTALLER_DIR}/setup-graphical-environment.sh"
 
+# boot screen with the logo, straight into the kiosk (after the step above: it makes the kiosk start script again)
+bash "${INSTALLER_DIR}/install-boot-splash.sh" || echo "The boot screen could not be set up (see above); everything else is installed."
+
 # install comitup
 if [ "${SCRIPT_MODE}" = "install" ] || [ "${CHOICE_COMITUP}" = "0" ]; then
 

@@ -1,0 +1,12 @@
+# Backup Box boot screen: the logo, centred, on the colour of the touch UI.
+# The logo (logo.png) is made by install-boot-splash.sh in the size of the screen; the kiosk session shows the
+# same picture in the same place (swaybg) until the browser is up, so the two screens are one.
+
+Window.SetBackgroundTopColor(0.07, 0.086, 0.11);
+Window.SetBackgroundBottomColor(0.07, 0.086, 0.11);
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(Window.GetX() + (Window.GetWidth() - logo.image.GetWidth()) / 2);
+logo.sprite.SetY(Window.GetY() + (Window.GetHeight() - logo.image.GetHeight()) / 2);
+logo.sprite.SetOpacity(1);
