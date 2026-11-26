@@ -1622,6 +1622,16 @@
 				'task'			=> touch_wifi_task($constants),
 			));
 
+		case 'wifi_radio':
+			# the Wi-Fi radio on while a network cable is connected (the box keeps it off then, file transfer mode):
+			# stays on for 30 minutes (cron_ip.sh), a newly connected cable resets it
+			if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+				touch_fail('POST required', 405);
+			}
+			@touch($WORKING_DIR . '/tmp/wifi-keep-on');
+			shell_exec('sudo -n nmcli radio wifi on > /dev/null 2>&1');
+			touch_respond(array('ok' => true));
+
 		case 'wifi_connect':
 			# connect to a network; runs in the background: the phone may lose the box when it changes networks
 			if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

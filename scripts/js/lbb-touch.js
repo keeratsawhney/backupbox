@@ -216,6 +216,8 @@
 	function dragScroll() {
 		let drag = null;
 		let suppressClick = false;
+		let frame = null;
+		let glide = null;
 
 		function scroller(node, axis) {
 			for (; node && node !== document.documentElement; node = node.parentElement) {
@@ -226,9 +228,41 @@
 			return null;
 		}
 
+		const position = (node, axis) => (axis === 'x' ? node.scrollLeft : node.scrollTop);
+		const place = (node, axis, value) => {
+			if (axis === 'x') node.scrollLeft = value;
+			else node.scrollTop = value;
+		};
+
+		// after the finger lifts the list keeps gliding and slows down, like on a phone
+		function stopGlide() {
+			if (glide) cancelAnimationFrame(glide.frame);
+			glide = null;
+		}
+
+		function startGlide(node, axis, speed) {
+			stopGlide();
+			glide = { last: performance.now(), frame: 0 };
+			const step = (now) => {
+				if (!glide) return;
+				const dt = Math.min(now - glide.last, 50);
+				glide.last = now;
+				const before = position(node, axis);
+				place(node, axis, before + speed * dt);
+				speed *= Math.exp(-dt / 320);
+				if (Math.abs(speed) < 0.02 || position(node, axis) === before) {
+					glide = null;
+					return;
+				}
+				glide.frame = requestAnimationFrame(step);
+			};
+			glide.frame = requestAnimationFrame(step);
+		}
+
 		document.addEventListener('pointerdown', (event) => {
+			stopGlide();
 			if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('input, textarea, select')) return;
-			drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false };
+			drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false, samples: [], target_position: 0 };
 		});
 
 		document.addEventListener('pointermove', (event) => {
@@ -244,21 +278,37 @@
 					return;
 				}
 				drag.moved = true;
-				drag.start = drag.axis === 'x' ? drag.node.scrollLeft : drag.node.scrollTop;
+				drag.start = position(drag.node, drag.axis);
 				document.body.style.userSelect = 'none';
 				window.getSelection()?.removeAllRanges();
 			}
-			if (drag.axis === 'x') drag.node.scrollLeft = drag.start - dx;
-			else drag.node.scrollTop = drag.start - dy;
+			drag.target_position = drag.start - (drag.axis === 'x' ? dx : dy);
+			drag.samples.push({ t: event.timeStamp, p: drag.target_position });
+			if (drag.samples.length > 6) drag.samples.shift();
+			// once per frame, not once per event (a screen that sends many events makes it jerky)
+			if (!frame) {
+				frame = requestAnimationFrame(() => {
+					frame = null;
+					if (drag && drag.moved) place(drag.node, drag.axis, drag.target_position);
+				});
+			}
 			event.preventDefault();
 		});
 
-		const end = () => {
+		const end = (event) => {
 			if (drag && drag.moved) {
+				place(drag.node, drag.axis, drag.target_position);
 				// the click that follows the drag is not a tap on a button
 				suppressClick = true;
 				setTimeout(() => { suppressClick = false; }, 60);
 				document.body.style.userSelect = '';
+				// the speed of the last moments: the glide
+				const last = drag.samples[drag.samples.length - 1];
+				const first = drag.samples.find((sample) => last.t - sample.t <= 100);
+				if (event.type === 'pointerup' && first && last.t > first.t && event.timeStamp - last.t < 80) {
+					const speed = (last.p - first.p) / (last.t - first.t);
+					if (Math.abs(speed) > 0.1) startGlide(drag.node, drag.axis, speed);
+				}
 			}
 			drag = null;
 		};
@@ -1273,6 +1323,18 @@
 				frame.src = '/comitup/';
 				body.append(frame);
 			}
+			return;
+		}
+
+		if (data.state === 'unavailable') {
+			// the box keeps the Wi-Fi off while a network cable is connected (file transfer mode)
+			$('wifi-sub').textContent = '';
+			$('wifi-scan').hidden = true;
+			body.append(el('p', { class: 'sheet-note', text: T.wifi_cable }), sheetButton('wifi', T.wifi_turn_on, 'btn-primary btn-wide', async () => {
+				await api('wifi_radio', {}, 'POST');
+				body.replaceChildren(el('p', { class: 'sheet-note', text: T.loading }));
+				wifiTimer = setTimeout(() => loadWifi(true), 4000);
+			}));
 			return;
 		}
 
