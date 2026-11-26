@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#71 True black in the dark theme**: the dark theme's background was a blue-grey (`#0f1216`), which on a backlit screen shows as grey. It is now black (`#000000`) with a slightly brighter text, so blacks are as deep as the panel can show them.
 - **#69 Lighter pages while dragging**: shadows, blur and animations are switched off while a page is dragged, so every frame is cheaper to paint on the Pi.
 - **#67 The full web interface scrolls by dragging without the browser add-on**: the classic pages now load the drag script themselves on the box's own screen (only for a browser on the box, not for phones or PCs), so text and elements are no longer selected while scrolling, whether or not the add-on is running.
 - **#65 The drag script can never lock the page**: the page is only switched to "dragging" once a drag really moves, and a release that never arrives (button no longer held) ends the drag, so taps keep working.
