@@ -1292,8 +1292,11 @@
 		const list = el('div', { class: 'list' });
 		if (!data.networks.length) list.append(el('div', { class: 'empty' }, [icon('wifi'), el('span', { text: T.wifi_none })]));
 		data.networks.forEach((network) => {
-			const sub = [network.in_use ? T.wifi_connected : (network.saved ? T.wifi_saved_tag : ''), network.signal + ' %', network.security || T.wifi_open].filter(Boolean).join('  ·  ');
-			list.append(wifiRow('wifi', network.ssid, sub, network.in_use ? null : () => connectWifi(network)));
+			const marks = el('span', { class: 'wifi-marks' }, [network.security ? icon('lock') : null, network.in_use ? icon('check') : null]);
+			const row = wifiRow('wifi', network.ssid, network.in_use ? T.wifi_connected : (network.saved ? T.wifi_saved_tag : ''), network.in_use ? null : () => connectWifi(network), marks);
+			// the signal: a weaker network has a dimmer icon
+			row.querySelector('.drive-icon').style.opacity = network.signal >= 67 ? 1 : (network.signal >= 34 ? 0.7 : 0.45);
+			list.append(row);
 		});
 		body.append(list);
 
@@ -1595,8 +1598,10 @@
 		try {
 			localStorage.setItem('lbb-touch-theme', theme);
 		} catch (e) {
-			// storage not available (private window), theme lasts for this session only
+			// storage not available (private window): the box keeps it (below)
 		}
+		// the kiosk browser forgets everything at each start: the box's own screen keeps the choice on the box
+		api('set_theme', { theme: theme }, 'POST').catch(() => {});
 	}
 
 	// ---------- init ----------

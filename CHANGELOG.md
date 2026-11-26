@@ -6,6 +6,11 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#53](https://github.com/keeratsawhney/backupbox/pull/53) The kiosk: no Pi desktop, the theme is kept, a plainer Wi-Fi box**
+  - **No Pi desktop:** the kiosk user logs in to a plain `labwc` session (the Pi desktop session runs `labwc -m`, which adds the desktop wallpaper and panel to the kiosk start script); the boot logo is retained until the kiosk paints over it.
+  - **Theme kept:** a theme picked on the box's own screen is saved in the configuration (`set_theme`, only from the box itself); the kiosk browser (a private window) forgot it at each start.
+  - **Wi-Fi box:** a network row shows its name, a lock (password), a check (connected), the icon dimmer when the signal is weak, and a word only for connected or saved networks (no percentages, no security names); a shorter hotspot note.
+  - `install-kiosk-tweaks.sh` keeps the red scroll bar until the touch UI that scrolls by dragging is installed.
 - **[#51](https://github.com/keeratsawhney/backupbox/pull/51) The kiosk screen like the app: bigger text and buttons, no pointer, no red scroll bar, dragging scrolls**
   - `install-kiosk-tweaks.sh`: the page is scaled to the screen (shorter side about 320 px, e.g. 1.5× on 800×480; small screens stay as they are), a transparent pointer theme for the kiosk user, touch events on, scroll bars off (the original made a very wide red bar).
   - Touch UI: a mouse-style drag scrolls the list under it (a touchscreen that acts like a mouse could only scroll by the red bar); a drag from a button does not press it; real touch is left alone.
