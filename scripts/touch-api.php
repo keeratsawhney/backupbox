@@ -878,6 +878,19 @@
 		return(null);
 	}
 
+	function touch_wifi_ssid($connection) {
+		# the network name of a saved connection; NetworkManager names a connection made by netplan "netplan-wlan0-<name>"
+		if ($connection === '') {
+			return('');
+		}
+		foreach (touch_nmcli('-f 802-11-wireless.ssid connection show id ' . escapeshellarg($connection)) as $row) {
+			if (isset($row[1]) and $row[1] !== '') {
+				return($row[1]);
+			}
+		}
+		return(preg_replace('/^netplan-[^-]+-/', '', $connection));
+	}
+
 	function touch_wifi_connections() {
 		# saved Wi-Fi connections: name => array(ssid, mode) (mode 'ap': comitup's hotspot)
 		$connections	= array();
@@ -1333,7 +1346,13 @@
 				'branch'	=> isset($constants['const_SOFTWARE_BRANCH']) ? $constants['const_SOFTWARE_BRANCH'] : '',
 				'storages'	=> touch_storages($constants),
 				# Wi-Fi settings: the box's Wi-Fi interface and its connection
-				'wifi'		=> touch_wifi_device(),
+				'wifi'		=> (function() {
+					$wifi	= touch_wifi_device();
+					if ($wifi) {
+						$wifi['ssid']	= touch_wifi_ssid($wifi['connection']);
+					}
+					return($wifi);
+				})(),
 				'ethernet'	=> touch_ethernet(),
 				'verify'	=> touch_verify_info($constants),
 				'share'		=> touch_share_info(),

@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#58](https://github.com/keeratsawhney/backupbox/pull/58) The Wi-Fi button shows the network name**: it showed the connection name of NetworkManager (`netplan-wlan0-Your Wedding Saga`, as netplan names a connection) and now the name of the network (`Your Wedding Saga`).
 - **[#56](https://github.com/keeratsawhney/backupbox/pull/56) Smooth scrolling by dragging; the Wi-Fi box with a network cable**
   - **Scrolling:** moves once per frame (a screen that sends many events made it jerky) and keeps gliding after a flick, slowing down like on a phone; a slow drag stops where the finger stops, a new touch stops the glide.
   - **Wi-Fi box:** while a network cable is connected the box keeps the Wi-Fi radio off (file transfer mode), so the Wi-Fi box opened empty. It now says so and has a *Turn on Wi-Fi* button; the radio then stays on for 30 minutes (`cron_ip.sh`), a newly connected cable resets it.

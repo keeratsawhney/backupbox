@@ -1242,7 +1242,7 @@
 
 		// Wi-Fi settings: the button names the network the box is on
 		$('btn-wifi').hidden = !data.wifi;
-		$('wifi-label').textContent = data.wifi && data.wifi.connection ? T.wifi + ': ' + data.wifi.connection : T.wifi;
+		$('wifi-label').textContent = data.wifi && data.wifi.connection ? T.wifi + ': ' + (data.wifi.ssid || data.wifi.connection) : T.wifi;
 
 		loadDrives();
 	}
