@@ -61,13 +61,12 @@ if [[ -z "${ROOT}" ]]; then
 	fi
 fi
 
-# the logo stays on the screen when Plymouth ends, until the kiosk session paints over it (no black gap)
-if [[ -z "${ROOT}" ]]; then
-	if [[ -x /usr/bin/plymouth ]]; then
-		sudo mkdir -p /etc/systemd/system/plymouth-quit.service.d
-		printf '[Service]\nExecStart=\nExecStart=-/usr/bin/plymouth quit --retain-splash\n' | sudo tee /etc/systemd/system/plymouth-quit.service.d/retain-splash.conf >/dev/null
-		sudo systemctl daemon-reload || true
-	fi
+# An earlier version kept the logo on the screen when Plymouth ends (--retain-splash). With the kiosk drawing the same
+# logo over it, a frame in another size or orientation showed through as lines and a faded double logo: removed again.
+if [[ -z "${ROOT}" && -f /etc/systemd/system/plymouth-quit.service.d/retain-splash.conf ]]; then
+	sudo rm -f /etc/systemd/system/plymouth-quit.service.d/retain-splash.conf
+	sudo rmdir --ignore-fail-on-non-empty /etc/systemd/system/plymouth-quit.service.d 2>/dev/null || true
+	sudo systemctl daemon-reload || true
 fi
 
 # kernel command line: splash on, no boot messages, no cursor, no penguin; one line, only what is missing is added
