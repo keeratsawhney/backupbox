@@ -66,22 +66,11 @@ set_pref "toolkit.telemetry.enabled" "false"
 
 # --- Scrollbar styling for web content (ESR-compatible) ---
 cat <<'EOF' | sudo -u "${USER}" tee "${CHROME_DIR}/userContent.css" >/dev/null
-/* Always-visible, very wide scrollbar with red thumb (Firefox ESR) */
+/* no scroll bars: lists scroll by touch or by dragging (the touch UI does that for a screen that acts like a mouse) */
 :root, * {
-  scrollbar-width: auto !important;
-  scrollbar-color: #ff0000 #000000 !important;
-  /*                ^ thumb   ^ track */
-}
-
-/* Width control (geometry only) */
-scrollbar:vertical {
-  -moz-appearance: none !important;
-  width: 52px !important;
-  min-width: 52px !important;
+  scrollbar-width: none !important;
 }
 EOF
-
-# Optional: UI-level scrollbar consistency
 cat <<'EOF' | sudo -u "${USER}" tee "${CHROME_DIR}/userChrome.css" >/dev/null
 :root {
   scrollbar-width: auto !important;

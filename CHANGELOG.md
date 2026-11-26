@@ -6,6 +6,9 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#51](https://github.com/keeratsawhney/backupbox/pull/51) The kiosk screen like the app: bigger text and buttons, no pointer, no red scroll bar, dragging scrolls**
+  - `install-kiosk-tweaks.sh`: the page is scaled to the screen (shorter side about 320 px, e.g. 1.5× on 800×480; small screens stay as they are), a transparent pointer theme for the kiosk user, touch events on, scroll bars off (the original made a very wide red bar).
+  - Touch UI: a mouse-style drag scrolls the list under it (a touchscreen that acts like a mouse could only scroll by the red bar); a drag from a button does not press it; real touch is left alone.
 - **[#50](https://github.com/keeratsawhney/backupbox/pull/50) Screens on the DSI ribbon cable**: the installer made an SPI screen driver (`piscreen`) for every screen, which for a DSI screen is a display that isn't there. A connected DSI screen now gets driver `none` (new option in Settings → Screen): only `dtoverlay=vc4-kms-v3d`, the kernel finds the screen itself. The kiosk start script draws on the card of a connected DSI screen (it always took `card1`).
 - **[#48](https://github.com/keeratsawhney/backupbox/pull/48) Boot screen with the logo, straight into the kiosk**: `install-boot-splash.sh` (Plymouth theme with the logo sized to the screen, no boot messages, cursor or rainbow screen; the kiosk session shows the same logo until the browser is up; a dark browser window). Run by the installers after the kiosk is set up; safe to run again; keeps `.lbb-backup` copies of the files it changes.
 - **[#47](https://github.com/keeratsawhney/backupbox/pull/47) `install-touch-ui.sh` refuses on Bookworm before changing anything** (the scripts need Python 3.12+; on Bookworm it had already copied them over an old installation when it failed, leaving it half converted).
