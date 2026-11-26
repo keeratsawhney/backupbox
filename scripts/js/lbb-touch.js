@@ -210,6 +210,67 @@
 		history.pushState({ files: state.files.path, medium: state.files.medium }, '', location.hash);
 	}
 
+	// A touchscreen that behaves like a mouse (resistive screens, some kiosk browsers) can only click and drag, and
+	// dragging a list would select text instead of scrolling it: here a mouse-style drag scrolls the list under it,
+	// like a finger on a phone. Real touch input scrolls natively and is left alone.
+	function dragScroll() {
+		let drag = null;
+		let suppressClick = false;
+
+		function scroller(node, axis) {
+			for (; node && node !== document.documentElement; node = node.parentElement) {
+				const style = getComputedStyle(node);
+				if (axis === 'y' && node.scrollHeight > node.clientHeight + 1 && ['auto', 'scroll'].includes(style.overflowY)) return node;
+				if (axis === 'x' && node.scrollWidth > node.clientWidth + 1 && ['auto', 'scroll'].includes(style.overflowX)) return node;
+			}
+			return null;
+		}
+
+		document.addEventListener('pointerdown', (event) => {
+			if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('input, textarea, select')) return;
+			drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false };
+		});
+
+		document.addEventListener('pointermove', (event) => {
+			if (!drag || !(event.buttons & 1)) return;
+			const dx = event.clientX - drag.x;
+			const dy = event.clientY - drag.y;
+			if (!drag.moved) {
+				if (Math.hypot(dx, dy) < 8) return;
+				drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+				drag.node = scroller(drag.target, drag.axis);
+				if (!drag.node) {
+					drag = null;
+					return;
+				}
+				drag.moved = true;
+				drag.start = drag.axis === 'x' ? drag.node.scrollLeft : drag.node.scrollTop;
+				document.body.style.userSelect = 'none';
+				window.getSelection()?.removeAllRanges();
+			}
+			if (drag.axis === 'x') drag.node.scrollLeft = drag.start - dx;
+			else drag.node.scrollTop = drag.start - dy;
+			event.preventDefault();
+		});
+
+		const end = () => {
+			if (drag && drag.moved) {
+				// the click that follows the drag is not a tap on a button
+				suppressClick = true;
+				setTimeout(() => { suppressClick = false; }, 60);
+				document.body.style.userSelect = '';
+			}
+			drag = null;
+		};
+		document.addEventListener('pointerup', end);
+		document.addEventListener('pointercancel', end);
+		document.addEventListener('click', (event) => {
+			if (!suppressClick) return;
+			event.stopPropagation();
+			event.preventDefault();
+		}, true);
+	}
+
 	// buttons must not fire twice while a request is running (resistive screens bounce)
 	async function busy(button, task) {
 		if (button.disabled) return;
@@ -1737,6 +1798,8 @@
 	updateClock();
 	pollStatus();
 	loadServices().catch((e) => toast(e.message, true));
+	dragScroll();
+
 	// a reload keeps the folder the Files tab was showing (it is in the history entry)
 	if (history.state && typeof history.state.files === 'string') {
 		state.files.path = history.state.files;

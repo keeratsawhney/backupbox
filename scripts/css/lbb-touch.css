@@ -2004,3 +2004,12 @@ button.wifi-row:active {
 	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
+
+/* lists scroll by touch (up and down); a mouse-style drag is handled by dragScroll in the script */
+.scroll,
+.files-list,
+.sheet-body,
+.wifi-body,
+.task-log {
+	touch-action: pan-y;
+}

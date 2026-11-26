@@ -86,6 +86,15 @@ gtk-enable-auto-mount=false
 gtk-enable-auto-mount-open=false
 EOF
 
+# a screen on the DSI ribbon cable needs no SPI driver (the default 'piscreen' would make a second, empty display)
+if grep -lqx connected /sys/class/drm/card*-DSI-*/status 2>/dev/null; then
+	DSI_CONFIG="${CONFIG:-/var/www/little-backup-box/config.cfg}"
+	if sudo grep -q "^conf_SCREEN_DRIVER='piscreen'" "${DSI_CONFIG}" 2>/dev/null; then
+		echo "DSI screen found: no SPI screen driver."
+		sudo sed -i "s/^conf_SCREEN_DRIVER=.*/conf_SCREEN_DRIVER='none'/" "${DSI_CONFIG}"
+	fi
+fi
+
 # setup display and touchscreen
 sudo python3 /var/www/little-backup-box/create_screen_config.py
 
@@ -122,6 +131,12 @@ DETECTOR=\$(grep -l "connected" /sys/class/drm/card*-*/status | grep -v "HDMI")
 SPI_CARD_PATH=\$(echo "$DETECTOR" | head -n 1)
 SPI_CARD=\$(echo "\$SPI_CARD_PATH" | cut -d'/' -f5 | cut -d'-' -f1)
 
+# 2b. a connected DSI screen (ribbon cable): its own card
+DSI_STATUS=\$(grep -lx connected /sys/class/drm/card*-DSI-*/status 2>/dev/null | head -n 1)
+if [ -n "\$DSI_STATUS" ]; then
+    SPI_CARD=\$(echo "\$DSI_STATUS" | cut -d'/' -f5 | cut -d'-' -f1)
+fi
+
 # 3. Fallback and Debug
 # If no SPI card is found, we fall back to card1 (typical for Pi 5)
 if [ -z "\$SPI_CARD" ]; then
@@ -132,7 +147,11 @@ else
 fi
 
 # 4. Apply to Environment
-export WLR_DRM_DEVICES=/dev/dri/\$SPI_CARD:/dev/dri/card0
+if [ "\$SPI_CARD" = "card0" ]; then
+    export WLR_DRM_DEVICES=/dev/dri/card0
+else
+    export WLR_DRM_DEVICES=/dev/dri/\$SPI_CARD:/dev/dri/card0
+fi
 export MOZ_ENABLE_WAYLAND=1
 export XDG_RUNTIME_DIR=/run/user/\$(id -u)
 

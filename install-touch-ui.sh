@@ -141,6 +141,9 @@ sleep 2
 # boot screen with the logo, straight into the kiosk (only with a graphical environment; safe to run again)
 bash "${INSTALLER_DIR}/install-boot-splash.sh" || echo "The boot screen could not be set up (see above)."
 
+# kiosk screen like the app: page scaled to the screen, no pointer, no red scroll bar (only with a graphical environment)
+bash "${INSTALLER_DIR}/install-kiosk-tweaks.sh" || echo "The kiosk screen tweaks could not be set up (see above)."
+
 # restart the kiosk browser so it loads the touch UI
 if systemctl is-active --quiet lightdm; then
 	echo "Restarting the screen session ..."

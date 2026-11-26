@@ -187,6 +187,12 @@ repository secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `AND
 
 The first seconds after power on (the firmware and the kernel loading) can't show anything, and there can be a blink of a second or two where the boot screen hands over to the kiosk session. To go back: the `.lbb-backup` copies next to `cmdline.txt`, `config.txt` and the kiosk start script, and `sudo plymouth-set-default-theme -R pix`.
 
+## The kiosk screen (DSI / HDMI)
+
+On a box with a screen and the desktop's kiosk browser (`install-kiosk-tweaks.sh`, run by the installers):
+- **Text and buttons as big as in the app:** the page is scaled to the screen (its shorter side is about 320 px: an 800×480 screen shows the page at 1.5×). Change it with `LBB_KIOSK_SCALE=1.8 ./install-kiosk-tweaks.sh` or the `layout.css.devPixelsPerPx` line of `/home/lbb-desktop/.mozilla/firefox-esr/kiosk.default/user.js`.
+- **No mouse pointer** (a transparent pointer theme) **and no red scroll bar:** lists scroll by touch, and a screen that acts like a mouse scrolls them by dragging.
+
 ## Networking in the field
 
 - **Hotspot without a sign-in trap:** phones see "no internet" and stay connected; `http://10.41.0.1` opens the box.
