@@ -1021,7 +1021,7 @@
     "wifi_connected_to": "Connecté à {ssid}",
     "wifi_not_connected": "Non connecté à un Wi-Fi",
     "wifi_hotspot": "Point d'accès propre « {ssid} »",
-    "wifi_hotspot_hint": "La box gère son propre point d'accès, les sauvegardes fonctionnent sans réseau. Pour connecter la box à un Wi-Fi, choisissez-le ci-dessous.",
+    "wifi_hotspot_hint": "La box utilise son propre point d'accès. Pour la connecter à un Wi-Fi, choisissez-en un ci-dessous.",
     "wifi_password": "Mot de passe pour {ssid}",
     "wifi_password_length": "Le mot de passe doit comporter 8 à 63 caractères.",
     "wifi_switch": "Connecter la box à {ssid} ?",

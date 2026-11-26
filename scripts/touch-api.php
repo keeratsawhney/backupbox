@@ -962,6 +962,23 @@
 			touch_mount_target($WORKING_DIR, $drive);
 			touch_respond(array('ok' => true, 'mounted' => true));
 
+		case 'set_theme':
+			# the theme picked on the box's own screen (the kiosk browser forgets everything at each start): kept as the
+			# configured theme, which the page starts with. Other devices keep their choice in their own browser.
+			$theme	= isset($_POST['theme']) ? (string)$_POST['theme'] : '';
+			if (!in_array($theme, array('light', 'dark', 'sepia', 'sage'), true)) {
+				touch_fail('unknown theme');
+			}
+			if (!in_array($_SERVER['REMOTE_ADDR'], array('127.0.0.1', '::1'), true)) {
+				touch_respond(array('ok' => true, 'saved' => false));
+			}
+			$file	= $WORKING_DIR . '/config.cfg';
+			$text	= (string)@file_get_contents($file);
+			$line	= "conf_THEME='" . $theme . "'";
+			$new	= preg_match('/^conf_THEME=.*$/m', $text) ? preg_replace('/^conf_THEME=.*$/m', $line, $text, 1) : rtrim($text, "\n") . "\n" . $line . "\n";
+			$saved	= $text !== '' && @file_put_contents($file, $new, LOCK_EX) !== false;
+			touch_respond(array('ok' => true, 'saved' => $saved));
+
 		case 'ping':
 			# the app's box search: an answer at once, also while a backup keeps the box busy
 			touch_respond(array('ok' => true, 'box' => 'backupbox'));

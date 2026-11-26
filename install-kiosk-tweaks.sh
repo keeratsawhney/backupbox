@@ -83,9 +83,15 @@ if [[ -d "${PROFILE}" ]]; then
 	# touch events for the page: a touchscreen then scrolls and taps natively
 	set_pref "dom.w3c_touch_events.enabled" "1"
 
-	# no scroll bars: lists scroll by touch or by dragging (the original file made a very wide red bar to drag)
+	# no scroll bars: lists scroll by touch or by dragging (the original file made a very wide red bar to drag).
+	# Only when the touch UI that scrolls by dragging is installed: without it the bar is the only way to scroll.
+	TOUCH_JS="${ROOT}/var/www/little-backup-box/js/lbb-touch.js"
 	if [[ -f "${USER_CONTENT}" ]] && grep -q "very wide scrollbar" "${USER_CONTENT}"; then
-		printf '%s\n' '/* no scroll bars: lists scroll by touch or by dragging */' ':root, * {' '  scrollbar-width: none !important;' '}' | ${AS_USER} tee "${USER_CONTENT}" >/dev/null
+		if grep -qs "dragScroll" "${TOUCH_JS}"; then
+			printf '%s\n' '/* no scroll bars: lists scroll by touch or by dragging */' ':root, * {' '  scrollbar-width: none !important;' '}' | ${AS_USER} tee "${USER_CONTENT}" >/dev/null
+		else
+			echo "  the red scroll bar stays: the touch UI that scrolls by dragging is not installed yet (run ./install-touch-ui.sh)"
+		fi
 	fi
 else
 	echo "  (the browser profile is not there yet: the page scale and the scroll bar are not set)"
@@ -140,6 +146,28 @@ if [[ -d "${HOME_DIR}/.config" ]]; then
 			printf '\n[Settings]\ngtk-cursor-theme-name=lbb-blank\n' | ${AS_USER} tee -a "${GTK_FILE}" >/dev/null
 		fi
 	fi
+fi
+
+# ---------- no Pi desktop: a plain labwc session ----------
+# The session of the Pi desktop starts labwc with -m: the desktop's own start script (wallpaper, panel) runs next to the
+# kiosk's. A plain labwc session runs only the kiosk's start script.
+SESSION_FILE="${ROOT}/usr/share/wayland-sessions/labwc.desktop"
+LIGHTDM_CONF="${ROOT}/etc/lightdm/lightdm.conf"
+if [[ -f "${SESSION_FILE}" && -f "${LIGHTDM_CONF}" ]]; then
+	if ! grep -q "^autologin-session=labwc$" "${LIGHTDM_CONF}"; then
+		[[ -e "${LIGHTDM_CONF}.lbb-backup" ]] || ${SUDO} cp "${LIGHTDM_CONF}" "${LIGHTDM_CONF}.lbb-backup"
+		if grep -qE "^#?autologin-session=" "${LIGHTDM_CONF}"; then
+			${SUDO} sed -i -E "s/^#?autologin-session=.*/autologin-session=labwc/" "${LIGHTDM_CONF}"
+			echo "  kiosk session: plain labwc (no Pi desktop)"
+		elif grep -q "^autologin-user=" "${LIGHTDM_CONF}"; then
+			${SUDO} sed -i "/^autologin-user=/a autologin-session=labwc" "${LIGHTDM_CONF}"
+			echo "  kiosk session: plain labwc (no Pi desktop)"
+		else
+			echo "  (the automatic login is not set in ${LIGHTDM_CONF}: the session is not changed)"
+		fi
+	fi
+else
+	echo "  (no plain labwc session on this system: the Pi desktop stays behind the kiosk)"
 fi
 
 echo "Kiosk screen set up. It applies at the next start."
