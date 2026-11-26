@@ -18,7 +18,9 @@
 	// The classic pages (bootstrap) set scroll-behavior: smooth: every position the drag sets would then glide to its
 	// place a moment later, which feels laggy and jumpy. While dragging, a position has to be set at once.
 	const instant = document.createElement('style');
-	instant.textContent = 'html, body, * { scroll-behavior: auto !important; }';
+	instant.textContent = 'html, body, * { scroll-behavior: auto !important; }'
+		// while dragging nothing is selected, dragged or hovered (hovering a big page on every move makes it slow)
+		+ ' html[data-lbb-dragging] * { user-select: none !important; -moz-user-select: none !important; pointer-events: none !important; }';
 	(document.head || root).appendChild(instant);
 
 	let drag = null;
@@ -73,7 +75,8 @@
 	document.addEventListener('pointerdown', (event) => {
 		stopGlide();
 		if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('input, textarea, select')) return;
-		drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false, samples: [], target_position: 0 };
+		root.dataset.lbbDragging = '1';
+	drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false, samples: [], target_position: 0 };
 	});
 
 	document.addEventListener('pointermove', (event) => {
@@ -85,12 +88,12 @@
 			drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
 			drag.node = scroller(drag.target, drag.axis);
 			if (!drag.node) {
+				delete root.dataset.lbbDragging;
 				drag = null;
 				return;
 			}
 			drag.moved = true;
 			drag.start = position(drag.node, drag.axis);
-			document.body.style.userSelect = 'none';
 			window.getSelection()?.removeAllRanges();
 		}
 		drag.target_position = drag.start - (drag.axis === 'x' ? dx : dy);
@@ -112,7 +115,6 @@
 			// the click that follows the drag is not a tap on a button
 			suppressClick = true;
 			setTimeout(() => { suppressClick = false; }, 60);
-			document.body.style.userSelect = '';
 			// the speed of the last moments: the glide
 			const last = drag.samples[drag.samples.length - 1];
 			const first = drag.samples.find((sample) => last.t - sample.t <= 100);
@@ -121,8 +123,15 @@
 				if (Math.abs(speed) > 0.1) startGlide(drag.node, drag.axis, speed);
 			}
 		}
+		delete root.dataset.lbbDragging;
 		drag = null;
 	};
+	// the browser starts selecting text or dragging a link or picture at the press: stop that (not in fields)
+	document.addEventListener('mousedown', (event) => {
+		if (event.button === 0 && !event.target.closest('input, textarea, select')) event.preventDefault();
+	});
+	document.addEventListener('selectstart', (event) => { if (drag) event.preventDefault(); });
+	document.addEventListener('dragstart', (event) => event.preventDefault());
 	document.addEventListener('pointerup', end);
 	document.addEventListener('pointercancel', end);
 	document.addEventListener('click', (event) => {
