@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#67 The full web interface scrolls by dragging without the browser add-on**: the classic pages now load the drag script themselves on the box's own screen (only for a browser on the box, not for phones or PCs), so text and elements are no longer selected while scrolling, whether or not the add-on is running.
 - **#65 The drag script can never lock the page**: the page is only switched to "dragging" once a drag really moves, and a release that never arrives (button no longer held) ends the drag, so taps keep working.
 - **#63 Dragging in the full web interface no longer selects or picks things, and is lighter**: the press itself is taken from the browser (no text selection, no dragging of links or pictures) and during a drag nothing is hovered or selected, so the big classic pages do less work per move.
 - **#62 The full web interface scrolls without lag**: its stylesheet (bootstrap) sets `scroll-behavior: smooth`, so every position of the drag glided to its place a moment late. The drag script now switches that off in the pages of the box's screen.

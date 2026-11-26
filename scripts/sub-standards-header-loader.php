@@ -26,6 +26,12 @@
 <link rel="stylesheet" href="css/lbb.css">
 <link rel="stylesheet" href="css/lbb-modern.css">
 
+<?php
+// the box's own screen (the kiosk browser) scrolls by dragging in every page; no add-on needed for this
+if (in_array($_SERVER['REMOTE_ADDR'] ?? '', array('127.0.0.1', '::1'), true)) {
+	echo '<script src="js/lbb-dragscroll.js"></script>' . "\n";
+}
+?>
 <link rel="icon" href="favicon.ico" type="image/x-icon"/>
 <link rel="apple-touch-icon" href="/img/icons/favicon-180.png"/>
 <link rel="icon" type="image/png" sizes="192x192" href="/img/icons/favicon-192.png"/>
