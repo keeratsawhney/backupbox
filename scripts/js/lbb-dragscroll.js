@@ -20,7 +20,12 @@
 	const instant = document.createElement('style');
 	instant.textContent = 'html, body, * { scroll-behavior: auto !important; }'
 		// while dragging nothing is selected, dragged or hovered (hovering a big page on every move makes it slow)
-		+ ' html[data-lbb-dragging] * { user-select: none !important; -moz-user-select: none !important; pointer-events: none !important; }';
+		+ ' html[data-lbb-dragging] * { user-select: none !important; -moz-user-select: none !important; pointer-events: none !important; }'
+		// and the costly looks are off while the page moves (shadows, blur, transparency effects: each frame is painted again)
+		+ ' html[data-lbb-dragging] *, html[data-lbb-dragging] *::before, html[data-lbb-dragging] *::after {'
+		+ ' box-shadow: none !important; text-shadow: none !important; filter: none !important;'
+		+ ' backdrop-filter: none !important; -webkit-backdrop-filter: none !important;'
+		+ ' transition: none !important; animation: none !important; }';
 	(document.head || root).appendChild(instant);
 
 	let drag = null;
