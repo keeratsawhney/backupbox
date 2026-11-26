@@ -1436,7 +1436,7 @@ CONFIGDATA;
 						<label for="conf_SCREEN_DRIVER"><?php echo L::config_screen_driver_label; ?></label><br />
 							<select name="conf_SCREEN_DRIVER" id="conf_SCREEN_DRIVER">
 								<?php
-								$screen_drivers=array('piscreen', 'waveshare35a', 'mipi-dbi');
+								$screen_drivers=array('piscreen', 'waveshare35a', 'mipi-dbi', 'none');
 								foreach($screen_drivers as $screen_driver) {
 									echo "<option value='" . $screen_driver . "' " . ($config["conf_SCREEN_DRIVER"] == $screen_driver?" selected":"") . ">" . $screen_driver . "</option>";
 								}
