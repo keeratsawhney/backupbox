@@ -74,13 +74,15 @@
 
 	document.addEventListener('pointerdown', (event) => {
 		stopGlide();
+		delete root.dataset.lbbDragging;
 		if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('input, textarea, select')) return;
-		root.dataset.lbbDragging = '1';
-	drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false, samples: [], target_position: 0 };
+		drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false, samples: [], target_position: 0 };
 	});
 
 	document.addEventListener('pointermove', (event) => {
-		if (!drag || !(event.buttons & 1)) return;
+		// the button is not held any more (a release that never arrived): finish, never leave the page locked
+		if (drag && !(event.buttons & 1)) end(event);
+		if (!drag) return;
 		const dx = event.clientX - drag.x;
 		const dy = event.clientY - drag.y;
 		if (!drag.moved) {
@@ -93,6 +95,7 @@
 				return;
 			}
 			drag.moved = true;
+			root.dataset.lbbDragging = '1';
 			drag.start = position(drag.node, drag.axis);
 			window.getSelection()?.removeAllRanges();
 		}
@@ -109,7 +112,7 @@
 		event.preventDefault();
 	});
 
-	const end = (event) => {
+	function end(event) {
 		if (drag && drag.moved) {
 			place(drag.node, drag.axis, drag.target_position);
 			// the click that follows the drag is not a tap on a button
@@ -125,7 +128,7 @@
 		}
 		delete root.dataset.lbbDragging;
 		drag = null;
-	};
+	}
 	// the browser starts selecting text or dragging a link or picture at the press: stop that (not in fields)
 	document.addEventListener('mousedown', (event) => {
 		if (event.button === 0 && !event.target.closest('input, textarea, select')) event.preventDefault();
