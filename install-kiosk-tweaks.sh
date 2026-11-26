@@ -66,14 +66,88 @@ fi
 set_pref() {
 	local KEY="$1"
 	local VALUE="$2"
-	if [[ -f "${USER_JS}" ]] && grep -qE "user_pref\(\"${KEY}\"," "${USER_JS}"; then
+	if ${AS_USER} test -f "${USER_JS}" && ${AS_USER} grep -qE "user_pref\(\"${KEY}\"," "${USER_JS}"; then
 		${AS_USER} sed -i -E "s|user_pref\(\"${KEY}\",.*\);|user_pref(\"${KEY}\", ${VALUE});|g" "${USER_JS}"
-	elif [[ -d "${PROFILE}" ]]; then
+	elif ${AS_USER} test -d "${PROFILE}"; then
 		echo "user_pref(\"${KEY}\", ${VALUE});" | ${AS_USER} tee -a "${USER_JS}" >/dev/null
 	fi
 }
 
-if [[ -d "${PROFILE}" ]]; then
+# ---------- scrolling by dragging in every page: a small add-on of the kiosk browser ----------
+# The touch UI scrolls by dragging by itself (js/lbb-dragscroll.js). The add-on runs the same script in every page and
+# frame of the box's own browser, e.g. the full web interface. Installed through the browser's policy file, like the
+# keyboard add-on (it must also run in the private window of the kiosk).
+
+ADDON_ID="lbb-touch-scroll@little-backup-box"
+ADDON_DIR="${ROOT}/opt/little-backup-box/touch-scroll"
+POLICY_FILE="${ROOT}/etc/firefox/policies/policies.json"
+DRAG_JS="${ROOT}/var/www/little-backup-box/js/lbb-dragscroll.js"
+ADDON_OK=0
+
+build_addon() {
+	[[ -f "${DRAG_JS}" ]] || return 1
+	if ! command -v zip >/dev/null 2>&1; then
+		${SUDO} env DEBIAN_FRONTEND=noninteractive apt-get install -y -q zip >/dev/null 2>&1 || return 1
+	fi
+	# a version that changes with the script: the browser takes a newer add-on at its next start
+	local VERSION="1.0.$(( $(cksum < "${DRAG_JS}" | cut -d' ' -f1) % 100000000 ))"
+	${SUDO} mkdir -p "${ADDON_DIR}/extension/content"
+	${SUDO} cp -f "${DRAG_JS}" "${ADDON_DIR}/extension/content/lbb-dragscroll.js"
+	cat <<MANIFEST | ${SUDO} tee "${ADDON_DIR}/extension/manifest.json" >/dev/null
+{
+	"manifest_version": 2,
+	"name": "LBB Touch Scroll",
+	"version": "${VERSION}",
+	"description": "Scrolling by dragging for the touchscreen of the Little Backup Box kiosk.",
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "${ADDON_ID}"
+		}
+	},
+	"content_scripts": [
+		{
+			"matches": ["http://*/*", "https://*/*"],
+			"js": ["content/lbb-dragscroll.js"],
+			"run_at": "document_end",
+			"all_frames": true,
+			"match_about_blank": true
+		}
+	]
+}
+MANIFEST
+	(cd "${ADDON_DIR}/extension" && ${SUDO} zip -qr -FS "../lbb-touch-scroll.xpi" .) || return 1
+
+	# the policy file: this add-on is installed (also in private windows), local add-ons without a signature are allowed
+	${SUDO} python3 - "${POLICY_FILE}" "file://${ADDON_DIR}/lbb-touch-scroll.xpi" "${ADDON_ID}" <<'PYEOF' || return 1
+import json, os, sys
+
+path, url, addon = sys.argv[1:4]
+try:
+	with open(path) as f:
+		data = json.load(f)
+except (OSError, ValueError):
+	data = {}
+policies = data.setdefault('policies', {})
+policies.setdefault('ExtensionSettings', {})[addon] = {
+	'installation_mode': 'force_installed',
+	'install_url': url,
+	'private_browsing': True,
+}
+policies.setdefault('Preferences', {})['xpinstall.signatures.required'] = {'Value': False, 'Status': 'locked', 'Type': 'boolean'}
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, 'w') as f:
+	json.dump(data, f, indent=2)
+PYEOF
+}
+
+if build_addon; then
+	ADDON_OK=1
+	echo "  scrolling by dragging in every page: add-on installed"
+else
+	echo "  (the scrolling add-on could not be built: the full web interface can not scroll by dragging)"
+fi
+
+if ${AS_USER} test -d "${PROFILE}"; then
 	if [[ -n "${SCALE}" ]]; then
 		set_pref "layout.css.devPixelsPerPx" "\"${SCALE}\""
 		echo "  page scale ${SCALE}"
@@ -85,12 +159,12 @@ if [[ -d "${PROFILE}" ]]; then
 
 	# no scroll bars: lists scroll by touch or by dragging (the original file made a very wide red bar to drag).
 	# Only when the touch UI that scrolls by dragging is installed: without it the bar is the only way to scroll.
-	TOUCH_JS="${ROOT}/var/www/little-backup-box/js/lbb-touch.js"
-	if [[ -f "${USER_CONTENT}" ]] && grep -q "very wide scrollbar" "${USER_CONTENT}"; then
-		if grep -qs "dragScroll" "${TOUCH_JS}"; then
+	TOUCH_JS="${ROOT}/var/www/little-backup-box/js/lbb-dragscroll.js"
+	if ${AS_USER} test -f "${USER_CONTENT}" && ${AS_USER} grep -q "very wide scrollbar" "${USER_CONTENT}"; then
+		if [[ "${ADDON_OK}" == 1 && -f "${TOUCH_JS}" ]]; then
 			printf '%s\n' '/* no scroll bars: lists scroll by touch or by dragging */' ':root, * {' '  scrollbar-width: none !important;' '}' | ${AS_USER} tee "${USER_CONTENT}" >/dev/null
 		else
-			echo "  the red scroll bar stays: the touch UI that scrolls by dragging is not installed yet (run ./install-touch-ui.sh)"
+			echo "  the red scroll bar stays: the scrolling by dragging is not installed completely yet (run ./install-touch-ui.sh)"
 		fi
 	fi
 else
@@ -129,18 +203,18 @@ PYEOF
 
 # the kiosk session (labwc, then the browser) and GTK use it
 ENV_FILE="${HOME_DIR}/.config/labwc/environment"
-if [[ -d "${HOME_DIR}/.config/labwc" ]]; then
-	if ! grep -qs "^XCURSOR_THEME=" "${ENV_FILE}"; then
+if ${AS_USER} test -d "${HOME_DIR}/.config/labwc"; then
+	if ! ${AS_USER} grep -qs "^XCURSOR_THEME=" "${ENV_FILE}"; then
 		echo "XCURSOR_THEME=lbb-blank" | ${AS_USER} tee -a "${ENV_FILE}" >/dev/null
 	fi
 fi
 GTK_FILE="${HOME_DIR}/.config/gtk-3.0/settings.ini"
-if [[ -d "${HOME_DIR}/.config" ]]; then
+if ${AS_USER} test -d "${HOME_DIR}/.config"; then
 	${AS_USER} mkdir -p "${HOME_DIR}/.config/gtk-3.0"
-	if [[ ! -f "${GTK_FILE}" ]]; then
+	if ! ${AS_USER} test -f "${GTK_FILE}"; then
 		printf '[Settings]\ngtk-cursor-theme-name=lbb-blank\n' | ${AS_USER} tee "${GTK_FILE}" >/dev/null
-	elif ! grep -q "^gtk-cursor-theme-name=" "${GTK_FILE}"; then
-		if grep -q "^\[Settings\]" "${GTK_FILE}"; then
+	elif ! ${AS_USER} grep -q "^gtk-cursor-theme-name=" "${GTK_FILE}"; then
+		if ${AS_USER} grep -q "^\[Settings\]" "${GTK_FILE}"; then
 			${AS_USER} sed -i '/^\[Settings\]/a gtk-cursor-theme-name=lbb-blank' "${GTK_FILE}"
 		else
 			printf '\n[Settings]\ngtk-cursor-theme-name=lbb-blank\n' | ${AS_USER} tee -a "${GTK_FILE}" >/dev/null

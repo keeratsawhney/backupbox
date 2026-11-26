@@ -29,8 +29,13 @@ if [[ ! -f "${LOGO_SOURCE}" ]]; then
 	exit 1
 fi
 
+# the home of the kiosk user is private: what is in it is looked at as that user
 SUDO=""
-[[ -z "${ROOT}" ]] && SUDO="sudo"
+AS_USER=""
+if [[ -z "${ROOT}" ]]; then
+	SUDO="sudo"
+	AS_USER="sudo -u ${KIOSK_USER}"
+fi
 
 echo "Setting up the boot screen ..."
 
@@ -88,11 +93,11 @@ if [[ -f "${CONFIG}" ]] && ! grep -q "^disable_splash=" "${CONFIG}"; then
 fi
 
 # the kiosk session: the logo on the same colour until the browser is up (swaybg, before the wait for the server)
-if [[ -f "${AUTOSTART}" ]] && ! grep -q "splash-logo.png" "${AUTOSTART}"; then
-	[[ -e "${AUTOSTART}.lbb-backup" ]] || ${SUDO} cp "${AUTOSTART}" "${AUTOSTART}.lbb-backup"
+if ${AS_USER} test -f "${AUTOSTART}" && ! ${AS_USER} grep -q "splash-logo.png" "${AUTOSTART}"; then
+	${SUDO} test -e "${AUTOSTART}.lbb-backup" || ${SUDO} cp "${AUTOSTART}" "${AUTOSTART}.lbb-backup"
 	BLOCK=$(mktemp)
 	printf '%s\n' '# boot logo until the browser is up (install-boot-splash.sh)' 'if [ -f /usr/share/backupbox/splash-logo.png ]; then' "	swaybg -c '${COLOR}' -i /usr/share/backupbox/splash-logo.png -m center >/dev/null 2>&1 &" 'fi' '' > "${BLOCK}"
-	if grep -q "^## wait for server" "${AUTOSTART}"; then
+	if ${AS_USER} grep -q "^## wait for server" "${AUTOSTART}"; then
 		${SUDO} sed -i "/^## wait for server/e cat ${BLOCK}" "${AUTOSTART}"
 		${SUDO} chmod +x "${AUTOSTART}"
 	else
@@ -102,7 +107,7 @@ if [[ -f "${AUTOSTART}" ]] && ! grep -q "splash-logo.png" "${AUTOSTART}"; then
 fi
 
 # the browser window: dark from the start
-if [[ -f "${FIREFOX_PREFS}" ]] && ! grep -q "browser.display.background_color" "${FIREFOX_PREFS}"; then
+if ${AS_USER} test -f "${FIREFOX_PREFS}" && ! ${AS_USER} grep -q "browser.display.background_color" "${FIREFOX_PREFS}"; then
 	echo "user_pref(\"browser.display.background_color\", \"${COLOR}\");" | ${SUDO} tee -a "${FIREFOX_PREFS}" >/dev/null
 fi
 

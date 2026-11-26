@@ -6,6 +6,9 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#60 Scrolling by touch in every page, no red bar, invisible pointer actually applied**
+  - **Cause of "nothing changed":** the kiosk user's home is private, so the kiosk tweaks and the boot-logo script checked its files as the installing user, found nothing and skipped the red bar, the pointer theme and the kiosk logo. They now check as the kiosk user.
+  - **Scrolling:** the drag script is one shared file (`js/lbb-dragscroll.js`), used by the touch UI and by a small add-on of the kiosk browser (`lbb-touch-scroll@little-backup-box`, built by `install-kiosk-tweaks.sh`, installed through the browser policy next to the keyboard add-on) in every page, so the full web interface scrolls by finger too. The red bar is only hidden when the add-on is installed.
 - **[#58](https://github.com/keeratsawhney/backupbox/pull/58) The Wi-Fi button shows the network name**: it showed the connection name of NetworkManager (`netplan-wlan0-Your Wedding Saga`, as netplan names a connection) and now the name of the network (`Your Wedding Saga`).
 - **[#56](https://github.com/keeratsawhney/backupbox/pull/56) Smooth scrolling by dragging; the Wi-Fi box with a network cable**
   - **Scrolling:** moves once per frame (a screen that sends many events made it jerky) and keeps gliding after a flick, slowing down like on a phone; a slow drag stops where the finger stops, a new touch stops the glide.

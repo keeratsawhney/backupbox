@@ -210,116 +210,7 @@
 		history.pushState({ files: state.files.path, medium: state.files.medium }, '', location.hash);
 	}
 
-	// A touchscreen that behaves like a mouse (resistive screens, some kiosk browsers) can only click and drag, and
-	// dragging a list would select text instead of scrolling it: here a mouse-style drag scrolls the list under it,
-	// like a finger on a phone. Real touch input scrolls natively and is left alone.
-	function dragScroll() {
-		let drag = null;
-		let suppressClick = false;
-		let frame = null;
-		let glide = null;
-
-		function scroller(node, axis) {
-			for (; node && node !== document.documentElement; node = node.parentElement) {
-				const style = getComputedStyle(node);
-				if (axis === 'y' && node.scrollHeight > node.clientHeight + 1 && ['auto', 'scroll'].includes(style.overflowY)) return node;
-				if (axis === 'x' && node.scrollWidth > node.clientWidth + 1 && ['auto', 'scroll'].includes(style.overflowX)) return node;
-			}
-			return null;
-		}
-
-		const position = (node, axis) => (axis === 'x' ? node.scrollLeft : node.scrollTop);
-		const place = (node, axis, value) => {
-			if (axis === 'x') node.scrollLeft = value;
-			else node.scrollTop = value;
-		};
-
-		// after the finger lifts the list keeps gliding and slows down, like on a phone
-		function stopGlide() {
-			if (glide) cancelAnimationFrame(glide.frame);
-			glide = null;
-		}
-
-		function startGlide(node, axis, speed) {
-			stopGlide();
-			glide = { last: performance.now(), frame: 0 };
-			const step = (now) => {
-				if (!glide) return;
-				const dt = Math.min(now - glide.last, 50);
-				glide.last = now;
-				const before = position(node, axis);
-				place(node, axis, before + speed * dt);
-				speed *= Math.exp(-dt / 320);
-				if (Math.abs(speed) < 0.02 || position(node, axis) === before) {
-					glide = null;
-					return;
-				}
-				glide.frame = requestAnimationFrame(step);
-			};
-			glide.frame = requestAnimationFrame(step);
-		}
-
-		document.addEventListener('pointerdown', (event) => {
-			stopGlide();
-			if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('input, textarea, select')) return;
-			drag = { target: event.target, x: event.clientX, y: event.clientY, node: null, moved: false, samples: [], target_position: 0 };
-		});
-
-		document.addEventListener('pointermove', (event) => {
-			if (!drag || !(event.buttons & 1)) return;
-			const dx = event.clientX - drag.x;
-			const dy = event.clientY - drag.y;
-			if (!drag.moved) {
-				if (Math.hypot(dx, dy) < 8) return;
-				drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-				drag.node = scroller(drag.target, drag.axis);
-				if (!drag.node) {
-					drag = null;
-					return;
-				}
-				drag.moved = true;
-				drag.start = position(drag.node, drag.axis);
-				document.body.style.userSelect = 'none';
-				window.getSelection()?.removeAllRanges();
-			}
-			drag.target_position = drag.start - (drag.axis === 'x' ? dx : dy);
-			drag.samples.push({ t: event.timeStamp, p: drag.target_position });
-			if (drag.samples.length > 6) drag.samples.shift();
-			// once per frame, not once per event (a screen that sends many events makes it jerky)
-			if (!frame) {
-				frame = requestAnimationFrame(() => {
-					frame = null;
-					if (drag && drag.moved) place(drag.node, drag.axis, drag.target_position);
-				});
-			}
-			event.preventDefault();
-		});
-
-		const end = (event) => {
-			if (drag && drag.moved) {
-				place(drag.node, drag.axis, drag.target_position);
-				// the click that follows the drag is not a tap on a button
-				suppressClick = true;
-				setTimeout(() => { suppressClick = false; }, 60);
-				document.body.style.userSelect = '';
-				// the speed of the last moments: the glide
-				const last = drag.samples[drag.samples.length - 1];
-				const first = drag.samples.find((sample) => last.t - sample.t <= 100);
-				if (event.type === 'pointerup' && first && last.t > first.t && event.timeStamp - last.t < 80) {
-					const speed = (last.p - first.p) / (last.t - first.t);
-					if (Math.abs(speed) > 0.1) startGlide(drag.node, drag.axis, speed);
-				}
-			}
-			drag = null;
-		};
-		document.addEventListener('pointerup', end);
-		document.addEventListener('pointercancel', end);
-		document.addEventListener('click', (event) => {
-			if (!suppressClick) return;
-			event.stopPropagation();
-			event.preventDefault();
-		}, true);
-	}
+	// scrolling by dragging for a screen that acts like a mouse: js/lbb-dragscroll.js (loaded by touch.php)
 
 	// buttons must not fire twice while a request is running (resistive screens bounce)
 	async function busy(button, task) {
@@ -1865,8 +1756,6 @@
 	updateClock();
 	pollStatus();
 	loadServices().catch((e) => toast(e.message, true));
-	dragScroll();
-
 	// a reload keeps the folder the Files tab was showing (it is in the history entry)
 	if (history.state && typeof history.state.files === 'string') {
 		state.files.path = history.state.files;
