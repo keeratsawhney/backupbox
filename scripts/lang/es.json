@@ -1021,7 +1021,7 @@
     "wifi_connected_to": "Conectado a {ssid}",
     "wifi_not_connected": "Sin conexión Wi-Fi",
     "wifi_hotspot": "Punto de acceso propio «{ssid}»",
-    "wifi_hotspot_hint": "La caja tiene su propio punto de acceso, las copias funcionan sin red. Para conectar la caja a una Wi-Fi, elíjala abajo.",
+    "wifi_hotspot_hint": "La caja usa su propio punto de acceso. Para conectarla a una Wi-Fi, elija una abajo.",
     "wifi_password": "Contraseña de {ssid}",
     "wifi_password_length": "La contraseña necesita de 8 a 63 caracteres.",
     "wifi_switch": "¿Conectar la caja a {ssid}?",

@@ -1021,7 +1021,7 @@
     "wifi_connected_to": "Connected to {ssid}",
     "wifi_not_connected": "Not connected to a Wi-Fi",
     "wifi_hotspot": "Own hotspot \"{ssid}\"",
-    "wifi_hotspot_hint": "The box runs its own hotspot, backups work without a network. To connect the box to a Wi-Fi, choose it below.",
+    "wifi_hotspot_hint": "The box runs its own hotspot. To connect it to a Wi-Fi, choose one below.",
     "wifi_password": "Password for {ssid}",
     "wifi_password_length": "The password needs 8 to 63 characters.",
     "wifi_switch": "Connect the box to {ssid}?",

@@ -1757,6 +1757,19 @@ svg {
 /* ---------- System: drives ---------- */
 
 .drive-row,
+/* marks at the end of a network row: a lock (password), a check (connected) */
+.wifi-marks {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--muted);
+}
+
+.wifi-marks svg {
+	width: 18px;
+	height: 18px;
+}
+
 .wifi-row {
 	width: 100%;
 	min-height: var(--tap);
