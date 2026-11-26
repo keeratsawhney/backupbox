@@ -52,6 +52,11 @@ class display_config(object):
 		if self.conf_DISP == 'screen':
 			# define driver
 			match self.conf_SCREEN_DRIVER:
+				case 'none':
+					# DSI (ribbon cable) and HDMI screens need no SPI driver: the kernel finds them by itself.
+					# An SPI driver for a screen that is not there makes a second display that the kiosk can draw on
+					# instead of the real screen (grey screen).
+					DRIVER	= ''
 				case 'piscreen':
 					DRIVER	= f'dtoverlay=piscreen,speed={self.conf_SCREEN_SPEED},rotate={self.conf_SCREEN_ROTATE}'
 				case 'waveshare35a':
@@ -65,6 +70,11 @@ dtparam=dc-gpio=24'''
 
 			# Raspberry Pi 4 specific settings
 			Pi4	= '' if rpi >= 5 else 'hdmi_force_hotplug=1'
+
+			if self.conf_SCREEN_DRIVER == 'none':
+				with open(self.CONFIG_FILE, 'w') as config_file:
+					config_file.write('# Display settings: a DSI / HDMI screen, found by the kernel (no SPI driver)\ndtoverlay=vc4-kms-v3d\n')
+				return()
 
 			# assemble include for config.txt
 			CONFIG	= f"""# Display settings
