@@ -6,6 +6,9 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **[#56](https://github.com/keeratsawhney/backupbox/pull/56) Smooth scrolling by dragging; the Wi-Fi box with a network cable**
+  - **Scrolling:** moves once per frame (a screen that sends many events made it jerky) and keeps gliding after a flick, slowing down like on a phone; a slow drag stops where the finger stops, a new touch stops the glide.
+  - **Wi-Fi box:** while a network cable is connected the box keeps the Wi-Fi radio off (file transfer mode), so the Wi-Fi box opened empty. It now says so and has a *Turn on Wi-Fi* button; the radio then stays on for 30 minutes (`cron_ip.sh`), a newly connected cable resets it.
 - **[#55](https://github.com/keeratsawhney/backupbox/pull/55) The retained boot logo is removed again**: ending Plymouth with `--retain-splash` (#53) left a frame that showed through as lines and a faded double logo when the kiosk drew its logo over it. Updates remove the drop-in from boxes that got it.
 - **[#53](https://github.com/keeratsawhney/backupbox/pull/53) The kiosk: no Pi desktop, the theme is kept, a plainer Wi-Fi box**
   - **No Pi desktop:** the kiosk user logs in to a plain `labwc` session (the Pi desktop session runs `labwc -m`, which adds the desktop wallpaper and panel to the kiosk start script); the boot logo is retained until the kiosk paints over it.

@@ -1022,6 +1022,8 @@
     "wifi_not_connected": "Mit keinem WLAN verbunden",
     "wifi_hotspot": "Eigener Hotspot „{ssid}“",
     "wifi_hotspot_hint": "Die Box läuft mit ihrem eigenen Hotspot. Zum Verbinden mit einem WLAN eines unten wählen.",
+    "wifi_cable": "Das WLAN ist aus, solange das Netzwerkkabel angeschlossen ist.",
+    "wifi_turn_on": "WLAN einschalten",
     "wifi_password": "Passwort für {ssid}",
     "wifi_password_length": "Das Passwort braucht 8 bis 63 Zeichen.",
     "wifi_switch": "Box mit {ssid} verbinden?",

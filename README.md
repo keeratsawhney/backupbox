@@ -207,6 +207,7 @@ Plug the box into the studio network with a cable, or straight into the computer
 the box is `10.42.0.1` and the computer gets an address by itself):
 - **The Wi-Fi switches off** while the cable is in, so everything goes over the cable. Unplug it and the Wi-Fi comes back.
 - **The OLED shows *File transfer*** with the box's address, the link speed (`LAN 1G`) and the share login.
+- **The Wi-Fi box** of the app view (System page) shows "Wi-Fi is off while the network cable is connected" with a *Turn on Wi-Fi* button; the radio then stays on for 30 minutes.
 - **Open the network share** on the computer:
   - Windows: `\\<box address>\media`
   - Mac: `smb://<box address>/media`

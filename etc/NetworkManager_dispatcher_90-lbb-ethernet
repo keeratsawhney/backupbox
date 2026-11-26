@@ -16,6 +16,8 @@ case "${IFACE}" in
 	eth*|end*|enx*)
 		case "${ACTION}" in
 			up)
+				# a newly connected cable: the Wi-Fi off again, also after "Turn on Wi-Fi" in the touch UI
+				rm -f /var/www/little-backup-box/tmp/wifi-keep-on
 				# comitup would switch the Wi-Fi on again for its hotspot: paused while the cable is in
 				systemctl stop --no-block comitup 2>/dev/null
 				nmcli radio wifi off
