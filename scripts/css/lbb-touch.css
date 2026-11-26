@@ -3,11 +3,11 @@
    every interactive element is at least 44px, no hover-only states, no gestures required. */
 
 :root {
-	--bg: #0f1216;
-	--surface: #1a1f26;
-	--surface-2: #242b34;
-	--border: #2f3843;
-	--text: #e8edf2;
+	--bg: #000000;
+	--surface: #0d1014;
+	--surface-2: #171c22;
+	--border: #262e38;
+	--text: #f4f7fa;
 	--muted: #95a1ae;
 	--accent: #3b9eff;
 	--accent-text: #ffffff;
