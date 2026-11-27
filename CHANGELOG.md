@@ -6,6 +6,10 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#73 Update button; the Files tab for folders of thousands of files**
+  - **Update (Settings):** looks on GitHub for a newer version (needs internet; says so when the box is offline), then downloads and installs it as a task with a log window, like a copy or a deletion. The screen restarts at the end. The installed version is written to `VERSION` by `install-touch-ui.sh` (an installation from before this has no version: the button then offers the latest).
+  - **Files, no more pressing "Show more":** the next 300 files load by themselves when the end of the list comes into view; the bar shows which files are on screen (`701–1000 / 3000`); two buttons jump to the first and to the last files of a folder.
+  - **Slimmer bars on the box's screen:** the drive row, the folder bar and the rows of the Files tab are smaller on a small screen, so the list has the room.
 - **#71 True black in the dark theme**: the dark theme's background was a blue-grey (`#0f1216`), which on a backlit screen shows as grey. It is now black (`#000000`) with a slightly brighter text, so blacks are as deep as the panel can show them.
 - **#69 Lighter pages while dragging**: shadows, blur and animations are switched off while a page is dragged, so every frame is cheaper to paint on the Pi.
 - **#67 The full web interface scrolls by dragging without the browser add-on**: the classic pages now load the drag script themselves on the box's own screen (only for a browser on the box, not for phones or PCs), so text and elements are no longer selected while scrolling, whether or not the add-on is running.

@@ -55,6 +55,12 @@ echo "Copying web files ..."
 sudo cp -Rf "${INSTALLER_DIR}/scripts/"* "${WEB_ROOT}/"
 sudo chown -R www-data:www-data "${WEB_ROOT}"
 
+# the installed version (the update button of the touch UI compares it with GitHub)
+GIT_VERSION=$(git -C "${INSTALLER_DIR}" rev-parse HEAD 2>/dev/null || true)
+if [[ "${GIT_VERSION}" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "${GIT_VERSION}" | sudo tee "${WEB_ROOT}/VERSION" >/dev/null
+fi
+
 # Tiny File Manager (Files of the classic UI): do not show hidden files
 # (macOS "._name" files next to every photo copied from a Mac, .Spotlight-V100, .Trashes, ...)
 TFM_CONFIG="/var/www/tinyfilemanager/config.php"
