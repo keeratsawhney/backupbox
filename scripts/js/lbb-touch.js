@@ -7,6 +7,8 @@
 	const T = window.LBB_TOUCH.strings;
 	const API = 'touch-api.php';
 	// the box's small screens show one page without scrolling, phones and tablets a scrolling grid
+	// a folder of the Files tab comes in pages of this size; the next one loads by itself at the end of the list
+	const FILES_PER_PAGE = 300;
 	const PHOTOS_PER_PAGE = window.matchMedia('(min-height: 600px)').matches ? 24 : 8;
 	const STATUS_INTERVAL_MS = 2000;
 	const STATUS_IDLE_INTERVAL_MS = 5000;
@@ -789,13 +791,18 @@
 
 	// ---------- files ----------
 
-	async function loadFiles(more) {
+	async function loadFiles(more, jump) {
 		// browse the folders of the mounted drives (hidden files are left out by the box);
-		// a folder comes in pages: "Show more" adds the next one (more === true)
+		// a folder comes in pages: the next one is added by scrolling to the end (more === true), or the list starts at
+		// the first or the last page (jump 'start' / 'end')
 		const append = more === true;
+		let offset = 0;
+		if (append) offset = (state.files.start || 0) + state.files.entries.length;
+		else if (jump === 'end') offset = Math.max(0, (state.files.total || 0) - FILES_PER_PAGE);
+		if (state.files.observer) state.files.observer.disconnect();
 		let data;
 		try {
-			data = await api('files', { medium: state.files.medium, path: state.files.path, offset: append ? state.files.entries.length : 0 });
+			data = await api('files', { medium: state.files.medium, path: state.files.path, offset: offset, limit: FILES_PER_PAGE });
 		} catch (e) {
 			toast(e.message, true);
 			return;
@@ -803,6 +810,9 @@
 		state.files.medium = data.medium || '';
 		state.files.path = data.path;
 		state.files.drives = data.drives || [];
+		state.files.total = data.total || 0;
+		const start = append ? (state.files.start || 0) : (data.offset || 0);
+		state.files.start = start;
 
 		// every attached drive; tapping one that is not mounted opens it (read only, no backup role;
 		// the backup drive chosen on the home screen is opened as target)
@@ -826,7 +836,12 @@
 
 		const current = data.drives.find((x) => x.id === data.medium) || {};
 		const label = current.name || current.label || '';
-		$('files-crumb').textContent = (data.path ? label + ' / ' + data.path.split('/').join(' / ') : label) + (data.total ? '  ·  ' + data.total : '');
+		const shown = (append ? state.files.entries.length : 0) + (data.entries || []).length;
+		const count = data.total > FILES_PER_PAGE ? (start + 1) + '–' + (start + shown) + ' / ' + data.total : data.total;
+		$('files-crumb').textContent = (data.path ? label + ' / ' + data.path.split('/').join(' / ') : label) + (data.total ? '  ·  ' + count : '');
+		// a folder of several pages: jump to the first or the last files
+		$('files-first').hidden = !(data.total > FILES_PER_PAGE);
+		$('files-last').hidden = !(data.total > FILES_PER_PAGE);
 		$('files-up').disabled = !data.path;
 
 		const list = $('files-list');
@@ -900,10 +915,20 @@
 		});
 
 		if (data.truncated) {
-			const more = el('button', { class: 'btn files-more', text: fill(T.files_more, { n: data.total - state.files.entries.length }) });
+			const more = el('button', { class: 'btn files-more', text: fill(T.files_more, { n: data.total - start - state.files.entries.length }) });
 			more.addEventListener('click', () => busy(more, () => loadFiles(true)));
 			list.append(more);
+			// the next page loads by itself when the end of the list comes into view (no need to press it again and again)
+			if ('IntersectionObserver' in window) {
+				state.files.observer = new IntersectionObserver((items) => {
+					if (!items.some((item) => item.isIntersecting) || state.files.loadingMore) return;
+					state.files.loadingMore = true;
+					loadFiles(true).finally(() => { state.files.loadingMore = false; });
+				}, { root: list, rootMargin: '400px' });
+				state.files.observer.observe(more);
+			}
 		}
+		if (!append) list.scrollTop = jump === 'end' ? list.scrollHeight : 0;
 	}
 
 	// long press (touch, mouse, resistive stylus) and the context menu of a long tap start the selection
@@ -1056,6 +1081,41 @@
 		})));
 		if (!folders.length) list.append(el('p', { class: 'sheet-note', text: T.copy_folders_empty }));
 		body.append(list);
+	}
+
+	// update of the box from GitHub (needs internet): looks for a newer version, installs it as a task with a log window
+	async function openUpdate() {
+		$('sheet-title').textContent = T.update;
+		$('sheet-sub').textContent = '';
+		const body = $('sheet-body');
+		body.replaceChildren(el('p', { class: 'sheet-note', text: T.update_checking }));
+		if ($('drive-sheet').hidden) {
+			$('drive-sheet').hidden = false;
+			openOverlay(sheetBack);
+		}
+		const close = () => sheetButton('check', T.close, '', async () => closeDriveSheet());
+		let data;
+		try {
+			data = await api('update_check');
+		} catch (e) {
+			body.replaceChildren(el('p', { class: 'sheet-note warn', text: e.message }), close());
+			return;
+		}
+		if (!data.online) {
+			body.replaceChildren(el('p', { class: 'sheet-note warn', text: T.update_offline }), close());
+			return;
+		}
+		const install = (label, cls) => sheetButton('reboot', label, cls, async () => {
+			if (!(await confirmDialog(T.update_confirm, '', T.update_install, 'btn-primary'))) return;
+			const result = await api('update_start', {}, 'POST');
+			showTask(result.task);
+		});
+		const version = data.installed ? data.installed + '  →  ' + data.remote : data.remote;
+		if (data.current) {
+			body.replaceChildren(el('p', { class: 'sheet-note ok', text: T.update_latest }), el('p', { class: 'sheet-note', text: version }), install(T.update_again, ''), close());
+		} else {
+			body.replaceChildren(el('p', { class: 'sheet-note', text: data.installed ? T.update_available : T.update_unknown }), el('p', { class: 'sheet-note', text: version }), install(T.update_install, 'btn-primary btn-wide'), close());
+		}
 	}
 
 	function openTaskSheet(task) {
@@ -1588,6 +1648,7 @@
 		$('power-pill').title = T.power_warning;
 		$('bg-pill').title = T.background_note;
 		$('classic-label').textContent = T.classic_ui;
+		$('update-label').textContent = T.update;
 		$('wifi-label').textContent = T.wifi;
 		$('wifi-title').textContent = T.wifi;
 		$('wifi-close').setAttribute('aria-label', T.close);
@@ -1627,6 +1688,9 @@
 
 		$('sheet-close').addEventListener('click', () => closeDriveSheet());
 		$('btn-wifi').addEventListener('click', openWifi);
+		$('btn-update').addEventListener('click', openUpdate);
+		$('files-first').addEventListener('click', () => loadFiles(false, 'start'));
+		$('files-last').addEventListener('click', () => loadFiles(false, 'end'));
 		$('wifi-close').addEventListener('click', () => closeWifi());
 		$('wifi-scan').addEventListener('click', () => {
 			$('wifi-body').replaceChildren(el('p', { class: 'sheet-note', text: T.loading }));

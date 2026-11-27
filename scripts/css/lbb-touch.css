@@ -2026,3 +2026,35 @@ button.wifi-row:active {
 .task-log {
 	touch-action: pan-y;
 }
+
+/* Files tab on a small screen (the box's own display): slim bars, so the list has the room (3000 photos are checked there) */
+@media (max-height: 520px) {
+	#page-files {
+		gap: 4px;
+		padding-top: 4px;
+		padding-bottom: 4px;
+	}
+
+	#page-files .files-bar .btn {
+		min-height: 34px;
+	}
+
+	#page-files .files-bar .btn-icon {
+		width: 34px;
+	}
+
+	#page-files .photo-media .btn {
+		min-height: 30px;
+		font-size: 12px;
+	}
+
+	#page-files .file-row {
+		min-height: 42px;
+	}
+
+	#page-files .file-thumb,
+	#page-files .file-icon {
+		width: 36px;
+		height: 36px;
+	}
+}
