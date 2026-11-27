@@ -107,7 +107,7 @@ It is made for fingers: on the box's own touchscreen, on phones and in the Andro
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/touch-box-home.png" width="280"> | <img src="docs/screenshots/touch-box-photos.png" width="280"> | <img src="docs/screenshots/touch-box-system.png" width="280"> |
 
-**Files tab:** browse any drive. Long-press to select folders and files, then **copy them to any folder of any drive** (for example from the SSD to an external hard disk): choose the drive and the folder (or make a new one) and the box copies and checks every file, with progress. Copy only: nothing is deleted or overwritten, an older version of a changed file goes to `_replaced`. The back gesture of the phone goes back folder by folder.
+**Files tab:** browse any drive. Long-press to select folders and files, then **copy them to any folder of any drive** (for example from the SSD to an external hard disk): choose the drive and the folder (or make a new one) and the box copies and checks every file, with progress. Copy only: nothing is deleted or overwritten, an older version of a changed file goes to `_replaced`. The back gesture of the phone goes back folder by folder. A folder of thousands of files loads page by page by itself while you scroll, and two buttons jump to its first and last files.
 
 Themes: dark, light, sepia and **sage**. Under-voltage (a weak power supply) shows as a pill in the top bar,
 and a tap explains it.

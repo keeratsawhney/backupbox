@@ -587,6 +587,11 @@
 		));
 	}
 
+	function touch_update_url() {
+		# where the box takes its updates from
+		return('https://github.com/keeratsawhney/backupbox.git');
+	}
+
 	function touch_disk_task_start($constants, $title, $device, $commands, $echo = true) {
 		# $commands: shell commands run one after another; the first is the task, its exit code is the result
 		# (the others only show the outcome, e.g. lsblk after formatting)
@@ -1561,6 +1566,33 @@
 				);
 			}
 			touch_respond(array('ok' => true, 'drives' => $drives, 'task' => touch_disk_task_status($constants), 'running' => touch_backup_running()));
+
+		case 'update_check':
+			# Settings: is a newer version of the box on GitHub? (needs internet: offline = online false)
+			$remote	= '';
+			if (preg_match('/^([0-9a-f]{40})\s/', (string)shell_exec('timeout 12 git ls-remote ' . escapeshellarg(touch_update_url()) . ' HEAD 2>/dev/null'), $match)) {
+				$remote	= $match[1];
+			}
+			$installed	= preg_match('/^[0-9a-f]{40}/', trim((string)@file_get_contents($WORKING_DIR . '/VERSION')), $match) ? $match[0] : '';
+			touch_respond(array(
+				'ok'		=> true,
+				'online'	=> $remote !== '',
+				'remote'	=> substr($remote, 0, 7),
+				'installed'	=> substr($installed, 0, 7),
+				'current'	=> $remote !== '' and $installed === $remote,
+			));
+
+		case 'update_start':
+			# Settings: download the latest version and install it (install-touch-ui.sh) as a task with a log window;
+			# the screen session restarts at the end
+			if (touch_backup_running() or touch_disk_task_running($constants) or is_file($constants['const_CMD_RUNNER_LOCKFILE'])) {
+				touch_fail(touch_text(L::touch_running));
+			}
+			@unlink(touch_task_progress_file($constants));
+			$folder	= '/tmp/lbb-update';
+			$command	= 'rm -rf ' . $folder . '; git clone --depth 1 ' . escapeshellarg(touch_update_url()) . ' ' . $folder . ' && cd ' . $folder . ' && bash ./install-touch-ui.sh';
+			touch_disk_task_start($constants, touch_text(L::touch_update_task), '', array($command), false);
+			touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));
 
 		case 'disk_task':
 			touch_respond(array('ok' => true, 'task' => touch_disk_task_status($constants)));

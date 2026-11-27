@@ -107,6 +107,8 @@
 		<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
 		<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 		<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+		<symbol id="i-top" viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M6 14l6-6 6 6"/></symbol>
+		<symbol id="i-bottom" viewBox="0 0 24 24"><path d="M5 20h14"/><path d="M12 4v11"/><path d="M6 10l6 6 6-6"/></symbol>
 		<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
 		<symbol id="i-up" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></symbol>
 		<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -216,6 +218,8 @@
 				<div class="files-bar" id="files-bar">
 					<button class="btn btn-icon" id="files-up" aria-label="up"><svg><use href="#i-left"/></svg></button>
 					<span class="files-crumb" id="files-crumb"></span>
+					<button class="btn btn-icon" id="files-first" aria-label="first" hidden><svg><use href="#i-top"/></svg></button>
+					<button class="btn btn-icon" id="files-last" aria-label="last" hidden><svg><use href="#i-bottom"/></svg></button>
 				</div>
 				<!-- long-press a file or folder: selection with its actions -->
 				<div class="files-bar files-select" id="files-select" hidden>
@@ -241,6 +245,7 @@
 						<button class="btn" id="btn-theme"><svg><use href="#i-theme"/></svg><span id="theme-label"></span></button>
 						<a class="btn" href="index.php" id="btn-classic"><svg><use href="#i-web"/></svg><span id="classic-label"></span></a>
 						<button class="btn" id="btn-wifi" hidden><svg><use href="#i-wifi"/></svg><span id="wifi-label"></span></button>
+						<button class="btn" id="btn-update"><svg><use href="#i-reboot"/></svg><span id="update-label"></span></button>
 					</div>
 
 					<h3 id="h-power"></h3>
