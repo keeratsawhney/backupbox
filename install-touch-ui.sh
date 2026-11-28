@@ -157,7 +157,7 @@ fi
 sudo python3 -c "import sys; sys.path.insert(0, '${WEB_ROOT}'); import lib_cron_ip; lib_cron_ip.ip_info().ready_screen()" >/dev/null 2>&1 || true
 sleep 2
 
-# battery monitor (INA219 on I2C): the service looks for the module, nothing shows without one
+# battery monitor (INA231 / INA219 on I2C): the service looks for the module, nothing shows without one
 bash "${INSTALLER_DIR}/install-battery.sh" || echo "The battery monitor could not be set up (see above)."
 
 # boot screen with the logo, straight into the kiosk (only with a graphical environment; safe to run again)

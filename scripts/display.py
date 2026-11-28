@@ -712,7 +712,7 @@ class DISPLAY(object):
 		return(self.home_render.screen(title='BACKUP BOX', lines=Rows, temp=self.__temperature(), task=Task, battery=self.__battery_text()))
 
 	def __battery_text(self):
-		# the charge of the battery (INA219, lib_battery.py) for the title bar: '78%', '78%+' while charging; '' without
+		# the charge of the battery (INA231 / INA219, lib_battery.py) for the title bar: '78%', '78%+' while charging; '' without
 		try:
 			with open('/run/lbb-battery.json', 'r') as f:
 				data	= json.load(f)

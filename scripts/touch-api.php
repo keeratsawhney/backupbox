@@ -407,7 +407,7 @@
 	}
 
 	function touch_battery() {
-		# the battery monitor (INA219, lib_battery.py writes /run/lbb-battery.json every 2 s): null without a sensor
+		# the battery monitor (INA231 / INA219, lib_battery.py writes /run/lbb-battery.json every 2 s): null without a sensor
 		$data	= @json_decode((string)@file_get_contents('/run/lbb-battery.json'), true);
 		if (!is_array($data) or !isset($data['time'], $data['percent'], $data['voltage']) or time() - (int)$data['time'] > 15) {
 			return(null);

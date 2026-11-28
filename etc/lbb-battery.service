@@ -1,6 +1,6 @@
-# Backup Box: battery monitor with an INA219 current / power module (scripts/lib_battery.py)
+# Backup Box: battery monitor with an INA231 / INA219 current / power module (scripts/lib_battery.py)
 [Unit]
-Description=Backup Box battery monitor (INA219)
+Description=Backup Box battery monitor (INA231 / INA219)
 After=multi-user.target
 
 [Service]
