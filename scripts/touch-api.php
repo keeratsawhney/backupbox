@@ -827,7 +827,7 @@
 		return($item);
 	}
 
-	function touch_make_thumb($source, $thumb, $video, $raw) {
+	function touch_make_thumb($source, $thumb, $video, $raw, $size = 480) {
 		# preview for a file without thumbnail: a video frame, the preview image embedded by the camera,
 		# or the scaled picture. Never written to the drive, only into the cache on the system disk.
 		$s		= escapeshellarg($source);
@@ -854,15 +854,15 @@
 		$why	= array();
 		if (!$raw) {
 			$output	= array();
-			exec("$sudo timeout 30 $magick -define jpeg:size=960x960 " . escapeshellarg($source . '[0]') . " -auto-orient -thumbnail 480x480 -quality 80 jpg:$t 2>&1", $output, $rc);
+			exec("$sudo timeout 30 $magick -define jpeg:size=" . ($size * 2) . 'x' . ($size * 2) . ' ' . escapeshellarg($source . '[0]') . " -auto-orient -thumbnail {$size}x{$size} -quality " . ($size > 480 ? 88 : 80) . " jpg:$t 2>&1", $output, $rc);
 			if (@filesize($thumb) > 0) {
 				return;
 			}
 			$why[]	= 'magick: ' . (end($output) ?: "exit $rc");
 			# no ImageMagick (or it refuses the file): Pillow does the same
-			$python	= 'import sys; from PIL import Image, ImageOps; im = Image.open(sys.argv[1]); im.draft("RGB", (960, 960)); im = ImageOps.exif_transpose(im).convert("RGB"); im.thumbnail((480, 480)); im.save(sys.argv[2], "JPEG", quality=80)';
+			$python	= 'import sys; from PIL import Image, ImageOps; im = Image.open(sys.argv[1]); im.draft("RGB", (int(sys.argv[3]) * 2, int(sys.argv[3]) * 2)); im = ImageOps.exif_transpose(im).convert("RGB"); im.thumbnail((int(sys.argv[3]), int(sys.argv[3]))); im.save(sys.argv[2], "JPEG", quality=int(sys.argv[4]))';
 			$output	= array();
-			exec("$sudo timeout 30 python3 -c " . escapeshellarg($python) . " $s $t 2>&1", $output, $rc);
+			exec("$sudo timeout 30 python3 -c " . escapeshellarg($python) . " $s $t $size " . ($size > 480 ? 88 : 80) . ' 2>&1', $output, $rc);
 			if (@filesize($thumb) > 0) {
 				return;
 			}
@@ -874,7 +874,7 @@
 		foreach (array('PreviewImage', 'JpgFromRaw', 'ThumbnailImage') as $tag) {
 			exec("$sudo timeout 20 exiftool -b -$tag $s > " . escapeshellarg($tmp) . " 2>/dev/null");
 			if (@filesize($tmp) > 0) {
-				exec("timeout 30 $magick " . escapeshellarg($tmp) . " -rotate $rotate -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
+				exec("timeout 30 $magick " . escapeshellarg($tmp) . " -rotate $rotate -thumbnail {$size}x{$size} -quality " . ($size > 480 ? 88 : 80) . " jpg:$t 2>/dev/null");
 				break;
 			}
 		}
@@ -1308,7 +1308,7 @@
 			$stat	= stat($file);
 			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
 			@mkdir($dir, 0755, true);
-			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime'] . '|3') . '.jpg';
+			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime'] . '|3|' . (!empty($_GET['large']) ? 1 : 0)) . '.jpg';
 			# a preview that could not be made is not tried again for 10 minutes (the photo lists refresh often)
 			$failed	= $thumb . '.failed';
 			if (!is_file($thumb) and is_file($failed) and time() - filemtime($failed) < 600) {
@@ -1321,7 +1321,7 @@
 					flock($lock, LOCK_EX);
 				}
 				if (!is_file($thumb)) {
-					$error	= touch_make_thumb($file, $thumb, touch_is_video($ext, $constants), in_array($ext, explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']), true));
+					$error	= touch_make_thumb($file, $thumb, touch_is_video($ext, $constants), in_array($ext, explode(';', $constants['const_FILE_EXTENSIONS_LIST_RAW']), true), !empty($_GET['large']) ? 1600 : 480);
 					if (!is_file($thumb) or filesize($thumb) == 0) {
 						@unlink($thumb);
 						@touch($failed);
