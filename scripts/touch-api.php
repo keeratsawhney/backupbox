@@ -849,23 +849,37 @@
 			return(implode('; ', $errors));
 		}
 
+		# a file the web server may not read (files copied as root onto a drive with owners): read as root, a preview only
+		$sudo	= is_readable($source) ? '' : 'sudo -n ';
+		$why	= array();
 		if (!$raw) {
-			exec("timeout 30 $magick -define jpeg:size=960x960 " . escapeshellarg($source . '[0]') . " -auto-orient -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
+			$output	= array();
+			exec("$sudo timeout 30 $magick -define jpeg:size=960x960 " . escapeshellarg($source . '[0]') . " -auto-orient -thumbnail 480x480 -quality 80 jpg:$t 2>&1", $output, $rc);
 			if (@filesize($thumb) > 0) {
 				return;
 			}
+			$why[]	= 'magick: ' . (end($output) ?: "exit $rc");
+			# no ImageMagick (or it refuses the file): Pillow does the same
+			$python	= 'import sys; from PIL import Image, ImageOps; im = Image.open(sys.argv[1]); im.draft("RGB", (960, 960)); im = ImageOps.exif_transpose(im).convert("RGB"); im.thumbnail((480, 480)); im.save(sys.argv[2], "JPEG", quality=80)';
+			$output	= array();
+			exec("$sudo timeout 30 python3 -c " . escapeshellarg($python) . " $s $t 2>&1", $output, $rc);
+			if (@filesize($thumb) > 0) {
+				return;
+			}
+			$why[]	= 'pillow: ' . (end($output) ?: "exit $rc");
 		}
 
 		# the embedded preview is stored unrotated: the raw file says how to turn it
-		$rotate	= array('3' => 180, '6' => 90, '8' => 270)[trim((string)shell_exec("timeout 20 exiftool -n -s3 -Orientation $s 2>/dev/null"))] ?? 0;
+		$rotate	= array('3' => 180, '6' => 90, '8' => 270)[trim((string)shell_exec("$sudo timeout 20 exiftool -n -s3 -Orientation $s 2>/dev/null"))] ?? 0;
 		foreach (array('PreviewImage', 'JpgFromRaw', 'ThumbnailImage') as $tag) {
-			exec("timeout 20 exiftool -b -$tag $s > " . escapeshellarg($tmp) . " 2>/dev/null");
+			exec("$sudo timeout 20 exiftool -b -$tag $s > " . escapeshellarg($tmp) . " 2>/dev/null");
 			if (@filesize($tmp) > 0) {
 				exec("timeout 30 $magick " . escapeshellarg($tmp) . " -rotate $rotate -thumbnail 480x480 -quality 80 jpg:$t 2>/dev/null");
 				break;
 			}
 		}
 		@unlink($tmp);
+		return($why ? implode('; ', $why) : null);
 	}
 
 	# ---------- Wi-Fi (NetworkManager) ----------
@@ -1283,7 +1297,7 @@
 			$stat	= stat($file);
 			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
 			@mkdir($dir, 0755, true);
-			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime'] . '|2') . '.jpg';
+			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime'] . '|3') . '.jpg';
 			# a preview that could not be made is not tried again for 10 minutes (the photo lists refresh often)
 			$failed	= $thumb . '.failed';
 			if (!is_file($thumb) and is_file($failed) and time() - filemtime($failed) < 600) {
