@@ -1,0 +1,13 @@
+# Backup Box: battery monitor with an INA219 current / power module (scripts/lib_battery.py)
+[Unit]
+Description=Backup Box battery monitor (INA219)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /var/www/little-backup-box/lib_battery.py --daemon
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

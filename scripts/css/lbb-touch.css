@@ -46,6 +46,23 @@
 	color-scheme: light;
 }
 
+/* studio: the dark look of the studio (Your Wedding Saga): warm black, ivory text, the sage of the logo (#a9af90) as the accent.
+   All colors of this theme are here: change them to match the CRM / the studio display. */
+:root[data-theme="studio"] {
+	--bg: #0b0c09;
+	--surface: #141611;
+	--surface-2: #1e211a;
+	--border: #2c3025;
+	--text: #ece9df;
+	--muted: #8f9482;
+	--accent: #a9af90;
+	--accent-text: #14170e;
+	--ok: #8fb98a;
+	--warn: #d9b45a;
+	--danger: #d9685b;
+	color-scheme: dark;
+}
+
 :root[data-theme="sepia"] {
 	--bg: #f1e7d6;
 	--surface: #fbf4e8;
@@ -2162,4 +2179,40 @@ button.wifi-row:active {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	user-select: text;
+}
+
+/* battery (INA219): charge in the top bar */
+.battery-pill {
+	font-weight: 700;
+}
+
+.battery-pill svg {
+	width: 20px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+}
+
+.battery-pill svg .fill {
+	fill: var(--ok);
+	stroke: none;
+}
+
+.battery-pill.low {
+	background: var(--warn);
+	color: #1d1300;
+}
+
+.battery-pill.low svg .fill {
+	fill: currentColor;
+}
+
+.battery-pill.critical {
+	background: var(--danger);
+	color: #fff;
+}
+
+.battery-pill:not([hidden]) ~ .pill {
+	margin-left: 0;
 }
