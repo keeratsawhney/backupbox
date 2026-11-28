@@ -1115,8 +1115,8 @@
 			if (entry.type === 'dir') {
 				preview = el('span', { class: 'file-icon folder' }, icon('folder'));
 			} else if (entry.thumb) {
-				// only a preview that exists (made during an earlier backup or by opening the file): none is made for a list
-				preview = el('img', { class: 'file-thumb', src: entry.thumb + '&cached=1', alt: '', loading: 'lazy' });
+				// a preview is made when the row comes into view (fast: no full decode, a raw file's embedded preview)
+				preview = el('img', { class: 'file-thumb', src: entry.thumb, alt: '', loading: 'lazy' });
 				preview.addEventListener('error', () => preview.replaceWith(el('span', { class: 'file-icon' }, el('b', { text: entry.ext }))), { once: true });
 			} else {
 				preview = el('span', { class: 'file-icon' }, el('b', { text: entry.ext || '' }));
