@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 
-# Battery monitor with an INA219 current / power module (I2C).
+# Battery monitor with an INA231 (or INA226 / INA230 / INA219) current / power module (I2C).
 #
-# The INA219 sits in the battery line. It measures the voltage and, over its shunt resistor, the current in both
+# The module sits in the battery line. It measures the voltage and, over its shunt resistor, the current in both
 # directions. From the voltage per cell the charge is estimated (Li-ion curve), the sign of the current says charging or
 # discharging, and with the capacity of the pack the time left can be estimated.
+#
+# INA231 / INA226 / INA230 (TI, 16 bit, up to 28 V, shunt up to +-81.92 mV) and INA219 (12 bit, +-320 mV) are recognised by
+# themselves: the first three have an ID register (0xFE = 0x5449).
 #
 # lbb-battery.service runs "lib_battery.py --daemon": every 2 s it reads the sensor and writes /run/lbb-battery.json,
 # which the touch UI (touch-api.php) and the OLED display (display.py) read. No sensor: nothing is written.
 #
 # Optional settings in data/battery.json (next to the web files); everything has a default:
-#   address            I2C address (default: looks at 0x40 .. 0x45)
+#   address            I2C address (default: looks at 0x40 .. 0x4F)
 #   cells              cells in series, 1 .. 4 (default 0: from the voltage)
-#   shunt_ohm          shunt resistor of the module (default 0.1, Waveshare UPS modules 0.01)
+#   shunt_ohm          shunt resistor of the module, as printed on it: R100 = 0.1, R010 = 0.01, R002 = 0.002 ohm
+#                      (default: 0.01 for an INA231 / INA226, 0.1 for an INA219). It sets the largest current:
+#                      81.92 mV / R for an INA231 (8.2 A at 0.01 ohm), 320 mV / R for an INA219
 #   capacity_mah       capacity of the pack in mAh (default 0: no time left shown)
 #   invert_current     true (default): the battery is on VIN+ of the module, current out of the battery shows as
 #                      discharging. false: the battery is wired to VIN-.
@@ -30,7 +35,7 @@ import time
 
 STATE_FILE		= '/run/lbb-battery.json'
 SETTINGS_FILE	= os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'battery.json')
-ADDRESSES		= [0x40, 0x41, 0x42, 0x43, 0x44, 0x45]
+ADDRESSES		= list(range(0x40, 0x50))
 
 # open circuit voltage of one Li-ion cell -> charge in percent
 CURVE = [
@@ -40,7 +45,7 @@ CURVE = [
 ]
 
 DEFAULTS = {
-	'address': 0, 'cells': 0, 'shunt_ohm': 0.1, 'capacity_mah': 0, 'invert_current': True, 'internal_mohm': 0,
+	'address': 0, 'cells': 0, 'shunt_ohm': 0, 'capacity_mah': 0, 'invert_current': True, 'internal_mohm': 0,
 	'shutdown_percent': 0,
 }
 
@@ -101,26 +106,34 @@ def estimate(volt, amps, settings):
 	}
 
 
-class ina219(object):
+class ina_chip(object):
+	# INA219: bus voltage 4 mV per step (bits 15:3), shunt 10 uV per step, shunt up to +-320 mV
+	# INA231 / INA226 / INA230: bus voltage 1.25 mV per step, shunt 2.5 uV per step, shunt up to +-81.92 mV
 	REG_SHUNT = 0x01
 	REG_BUS = 0x02
+	REG_MANUFACTURER = 0xFE
 
-	def __init__(self, bus, address):
+	def __init__(self, bus, address, family):
 		self.bus = bus
 		self.address = address
+		self.family = family			# 'ina231' or 'ina219'
+		self.name = 'INA231' if family == 'ina231' else 'INA219'
+		self.default_shunt = 0.01 if family == 'ina231' else 0.1
 
 	def _word(self, register):
 		raw = self.bus.read_word_data(self.address, register)
 		return ((raw & 0xFF) << 8) | (raw >> 8)		# the chip sends the high byte first
 
 	def bus_volt(self):
+		if self.family == 'ina231':
+			return self._word(self.REG_BUS) * 0.00125
 		return (self._word(self.REG_BUS) >> 3) * 0.004
 
 	def shunt_volt(self):
 		raw = self._word(self.REG_SHUNT)
 		if raw & 0x8000:
 			raw -= 0x10000
-		return raw * 10e-6
+		return raw * (2.5e-6 if self.family == 'ina231' else 10e-6)
 
 
 def open_bus():
@@ -135,12 +148,14 @@ def find_sensor(bus, settings):
 	addresses = [int(settings['address'])] if settings.get('address') else ADDRESSES
 	for address in addresses:
 		try:
-			chip = ina219(bus, address)
+			# the INA231 family answers the manufacturer ID "TI" (0x5449); the INA219 has no ID register
+			family = 'ina231' if ina_chip(bus, address, 'ina231')._word(ina_chip.REG_MANUFACTURER) == 0x5449 else 'ina219'
+			chip = ina_chip(bus, address, family)
 			volt = chip.bus_volt()
 		except OSError:
 			continue
 		# a plausible battery voltage (other chips answer at some of these addresses too)
-		if 2.5 <= volt <= 26:
+		if 2.5 <= volt <= 28:
 			return chip
 	return None
 
@@ -149,7 +164,7 @@ def read_once(chip, settings):
 	volt = chip.bus_volt()
 	# at the chip a positive current flows from VIN+ to VIN-: with the battery on VIN+ that is the battery discharging.
 	# Here a positive current is the battery charging.
-	amps = chip.shunt_volt() / float(settings['shunt_ohm'])
+	amps = chip.shunt_volt() / (float(settings['shunt_ohm']) or chip.default_shunt)
 	if settings.get('invert_current'):
 		amps = -amps
 	return volt, amps
@@ -215,7 +230,7 @@ if __name__ == '__main__':
 			sys.exit(1)
 		volt, amps = read_once(sensor, settings)
 		result = estimate(volt, amps, settings)
-		result.update({'address': hex(sensor.address), 'voltage': round(volt, 3), 'current': round(amps, 3), 'power': round(volt * abs(amps), 2)})
+		result.update({'sensor': sensor.name, 'address': hex(sensor.address), 'voltage': round(volt, 3), 'current': round(amps, 3), 'power': round(volt * abs(amps), 2)})
 		print(json.dumps(result, indent=1))
 	else:
 		print(__doc__)

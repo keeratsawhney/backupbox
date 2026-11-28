@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Battery monitor with an INA219 current / power module on the I2C bus: installs what it needs and the service that
+# Battery monitor with an INA231 (or INA226 / INA219) current / power module on the I2C bus: installs what it needs and the service that
 # reads the module (scripts/lib_battery.py). Safe to run again. Without a module the service only looks now and then.
 # I2C is switched on if it was not (a restart is then needed once). Settings: see lib_battery.py (data/battery.json).
 #
@@ -31,4 +31,4 @@ if [[ -z "${FORCE:-}" ]]; then
 	${SUDO} systemctl enable lbb-battery.service >/dev/null 2>&1 || true
 	${SUDO} systemctl restart lbb-battery.service || true
 fi
-echo "Battery monitor (INA219) set up. It shows when the module is found on the I2C bus (0x40 .. 0x45)."
+echo "Battery monitor (INA231 / INA219) set up. It shows when the module is found on the I2C bus (0x40 .. 0x4F)."
