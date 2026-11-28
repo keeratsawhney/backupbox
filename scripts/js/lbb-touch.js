@@ -700,7 +700,7 @@
 		if ($('viewer').hidden) openOverlay(hideViewer);
 		$('viewer-download').hidden = !item.url;
 		if (item.url) {
-			$('viewer-download').href = item.url;
+			$('viewer-download').href = item.url + (item.url.includes('action=file') ? '&dl=1' : '');
 			$('viewer-download').setAttribute('download', item.name);
 		}
 		const caption = item.name + (item.date ? '  ·  ' + formatDate(item.date) : '');
@@ -757,6 +757,7 @@
 					}
 				};
 				img.onerror = () => {
+					jslog('picture failed: ' + img.getAttribute('src'));
 					// the preview could not be made: a picture the browser can show itself is shown as it is
 					if (webImage && item.url && !triedOriginal) {
 						triedOriginal = true;
@@ -970,7 +971,7 @@
 				} else {
 					// other files: what it is, then download (the box's own screen can not save a file: it only shows the line)
 					toast(entry.name + '  ·  ' + formatBytes(entry.size) + '  ·  ' + formatDate(entry.date));
-					const link = el('a', { href: entry.url, download: entry.name });
+					const link = el('a', { href: entry.url + (entry.url.includes('action=file') ? '&dl=1' : ''), download: entry.name });
 					document.body.append(link);
 					link.click();
 					link.remove();
