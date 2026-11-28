@@ -256,7 +256,7 @@ class setup(object):
 					'conf_BACKUP_SYNC_METHOD_CLOUDS':					{'value': 'rsync', 'type': 'str'},
 					'conf_BACKUP_RENAME_FILES':							{'value': False, 'type': 'bool'},
 					'conf_BACKUP_CHECKSUM':								{'value': False, 'type': 'bool'},
-					'conf_BACKUP_GENERATE_THUMBNAILS':					{'value': True, 'type': 'bool'},
+					'conf_BACKUP_GENERATE_THUMBNAILS':					{'value': False, 'type': 'bool'},
 					'conf_BACKUP_UPDATE_EXIF':							{'value': False, 'type': 'bool'},
 					'conf_BACKUP_TARGET_SIZE_MIN':						{'value': 0, 'type': 'int'},
 					'conf_BACKUP_MOVE_FILES':							{'value': False, 'type': 'bool'},
