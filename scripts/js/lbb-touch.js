@@ -106,6 +106,15 @@
 	window.addEventListener('error', (event) => jslog('error: ' + event.message + ' @' + String(event.filename || '').split('/').pop() + ':' + event.lineno));
 	window.addEventListener('unhandledrejection', (event) => jslog('rejected: ' + (event.reason && event.reason.message ? event.reason.message : event.reason)));
 
+	// the first taps, as the page receives them: does a tap on a file reach the page at all?
+	let tapsLogged = 0;
+	document.addEventListener('click', (event) => {
+		if (tapsLogged++ >= 12) return;
+		const node = event.target instanceof Element ? event.target.closest('button, a, .file-row') || event.target : null;
+		const row = node && node.closest ? node.closest('.file-row') : null;
+		jslog('click: ' + (node ? node.tagName + '.' + String(node.className).slice(0, 40) : '?') + (row ? ' row=' + row.dataset.path : '') + ' selecting=' + !!(state.files && state.files.selecting));
+	}, true);
+
 	let toastTimer = null;
 	function toast(message, isError) {
 		const node = $('toast');
@@ -728,7 +737,25 @@
 				const webImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((item.ext || '').toLowerCase());
 				let triedOriginal = false;
 				note(T.preview_loading);
-				img.onload = () => { $('viewer-caption').textContent = caption; };
+				// the sharp picture of the file follows the thumbnail (large=1: the full-screen size)
+				const sharp = () => {
+					// a 1600 px preview made by the box for every kind of file: light for the Pi (a 24 MP original would take long
+					// to decode), sharp on the 800 x 480 screen
+					if (!state.viewerFiles || !state.files.medium || !item.path) return;
+					const source = 'touch-api.php?action=thumb&medium=' + encodeURIComponent(state.files.medium) + '&path=' + encodeURIComponent(item.path) + '&large=1';
+					const big = new Image();
+					big.onload = () => {
+						if (state.photos.viewer === index && !$('viewer').hidden && img.dataset.sharp === item.name) img.src = source;
+					};
+					big.src = source;
+				};
+				img.onload = () => {
+					$('viewer-caption').textContent = caption;
+					if (img.dataset.sharp !== item.name) {
+						img.dataset.sharp = item.name;
+						sharp();
+					}
+				};
 				img.onerror = () => {
 					// the preview could not be made: a picture the browser can show itself is shown as it is
 					if (webImage && item.url && !triedOriginal) {

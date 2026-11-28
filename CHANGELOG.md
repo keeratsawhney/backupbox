@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#85 Opening a file shows it sharp**: the viewer of the Files tab showed the 480 px list thumbnail. It now follows with a 1600 px preview of the file made by the box (JPG, RAW, HEIC, TIFF, video frame), light enough for the Pi and sharp on the 800 x 480 screen. The support log `tmp/touch-js.log` also notes the first taps the page receives.
 - **#83 The on-screen keyboard appears on the box**: a precedence slip (`$x = A or B` is `($x = A) or B`) switched the keyboard off whenever the setting existed in `config.cfg`, which is the case on every installed box, so it only worked on a box without the setting. Checked with the setting `True`, `true` and `false`.
   - **Support log:** errors of the pages in the box's own browser (it has no console), and a note when a file is tapped or the viewer opens, are written to `tmp/touch-js.log`.
 - **#81 A keyboard that fits the box's small screen**: the keyboard covered 80 % of the 320 px high screen and hid the field it types into. Keys and rows are slimmer on a small screen, and a dialog with a field (Wi-Fi password, a name) moves to the top while the keyboard is open, so the field stays in view above it.
