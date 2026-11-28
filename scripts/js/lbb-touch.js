@@ -93,6 +93,29 @@
 		return data;
 	}
 
+	function batteryTime(minutes) {
+		return minutes >= 60 ? Math.floor(minutes / 60) + ' h ' + String(minutes % 60).padStart(2, '0') + ' min' : minutes + ' min';
+	}
+
+	function showBattery(battery) {
+		const pill = $('battery-pill');
+		pill.hidden = !battery;
+		if (!battery) return;
+		$('battery-text').textContent = battery.percent + '%' + (battery.state === 'charging' ? ' ⚡' : '');
+		$('battery-fill').setAttribute('width', String(Math.round(13 * battery.percent / 100)));
+		pill.classList.toggle('low', battery.percent <= 20 && battery.state !== 'charging');
+		pill.classList.toggle('critical', battery.percent <= 10 && battery.state !== 'charging');
+		pill.title = batteryDetail(battery);
+	}
+
+	function batteryDetail(battery) {
+		const parts = [battery.voltage.toFixed(2) + ' V', Math.abs(battery.current).toFixed(2) + ' A', battery.power.toFixed(1) + ' W', T['battery_' + battery.state] || battery.state];
+		if (battery.minutes !== null && battery.minutes !== undefined) {
+			parts.push((battery.state === 'charging' ? T.battery_full_in : T.battery_left).replace('{time}', batteryTime(battery.minutes)));
+		}
+		return parts.join('  ·  ');
+	}
+
 	// what goes wrong in the box's own browser (no console there): tmp/touch-js.log, read by support
 	let logged = 0;
 	function jslog(text) {
@@ -358,6 +381,9 @@
 				);
 			}
 		}
+
+		// battery (INA219): charge in the top bar, charging with a bolt; the details are in the System tab
+		showBattery(data.battery);
 
 		// Bluetooth pairing of the app: the code to type on the phone, a pill in the top bar while it is asked for
 		$('pair-pill').hidden = !data.pairing;
@@ -1421,6 +1447,7 @@
 		const ipv4 = data.ips.filter((ip) => !ip.includes(':'));
 		const ips = ipv4.length ? ipv4 : data.ips;
 		add(T.ip, ips.length ? ips.join(', ') : T.no_network);
+		if (data.battery) add(T.battery, data.battery.percent + '%  ·  ' + batteryDetail(data.battery));
 		if (data.ethernet) add(T.ethernet, data.ethernet.speed ? data.ethernet.speed + ' Mb/s' : T.ethernet_connected);
 		// network share: copy files to a computer (Windows \\box\media, Mac smb://box/media)
 		if (data.share && ipv4.length) {

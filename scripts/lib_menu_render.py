@@ -453,7 +453,7 @@ class renderer(object):
 			y	+= self.text_h(self.font_bold) + 2
 		return(image)
 
-	def home(self, title, state, ip, network, online, drive, temp, no_drive='No drive', login=''):
+	def home(self, title, state, ip, network, online, drive, temp, no_drive='No drive', login='', battery=''):
 		# the box's home screen (instead of text lines and the status bar):
 		#   title bar with the temperature, the state, IP and network state, the backup drive with a fill bar
 		# drive: dict name, used (0..1), size (text) or None
@@ -462,7 +462,7 @@ class renderer(object):
 		if login:
 			small_h	= self.text_h(self.font_small)
 			self.text(draw, (2, self.height - small_h - 1), self.fit(login, self.font_small, self.width - 4), self.font_small, self.high)
-		self.header(draw, title, f'{temp:.0f}°C' if temp is not None else '')
+		self.header(draw, title, ' '.join(part for part in (battery, f'{temp:.0f}°C' if temp is not None else '') if part))
 
 		# state, large, with a check mark
 		icon_w	= 8 * self.icon_px
@@ -502,11 +502,11 @@ class renderer(object):
 			self.text(draw, (2 + icon_w + 4, y), no_drive, self.font_small, self.fg)
 		return(image)
 
-	def screen(self, title, lines, temp, task=''):
+	def screen(self, title, lines, temp, task='', battery=''):
 		# any other message (comitup, backup progress, power off ...) under the same title bar as the home screen
 		# lines: dicts text, style ('h' message, 'b' earlier lines, 'a' alert, 'hc' highlighted), progress (0..100 or None)
 		image, draw	= self.new()
-		self.header(draw, title, f'{temp:.0f}°C' if temp is not None else '')
+		self.header(draw, title, ' '.join(part for part in (battery, f'{temp:.0f}°C' if temp is not None else '') if part))
 
 		bottom	= self.height
 		if task:

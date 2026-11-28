@@ -27,7 +27,7 @@
 	include("sub-i18n-loader.php");
 	include_once("sub-touch-services.php");
 
-	$theme	= in_array($config['conf_THEME'], array('light', 'dark', 'sepia', 'sage')) ? $config['conf_THEME'] : 'dark';
+	$theme	= in_array($config['conf_THEME'], array('light', 'dark', 'sepia', 'sage', 'studio')) ? $config['conf_THEME'] : 'dark';
 
 	$strings	= array();
 	foreach ((new ReflectionClass('L'))->getConstants() as $key => $value) {
@@ -68,6 +68,7 @@
 		'dark'	=> touch_text(L::config_view_theme_dark),
 		'sepia'	=> touch_text(L::config_view_theme_sepia),
 		'sage'	=> touch_text(L::config_view_theme_sage),
+		'studio'	=> touch_text(L::touch_theme_studio),
 	);
 ?>
 <!doctype html>
@@ -134,6 +135,7 @@
 			<span class="brand"><img src="img/icons/favicon-180.png" alt="Your Wedding Saga"><span class="brand-name">Backup Box</span></span>
 			<span class="pill pair-pill" id="pair-pill" hidden><svg><use href="#i-bluetooth"/></svg><span id="pair-pill-text"></span></span>
 			<span class="pill transfer-pill" id="transfer-pill" hidden><svg><use href="#i-folder"/></svg><span id="transfer-pill-text"></span></span>
+			<span class="pill battery-pill" id="battery-pill" hidden><svg viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 10v4"/><rect id="battery-fill" x="4" y="9" width="0" height="6" class="fill"/></svg><span id="battery-text"></span></span>
 			<span class="pill bg-pill" id="bg-pill" hidden><span class="dot"></span><span id="bg-pill-text"></span></span>
 			<button class="pill power-pill" id="power-pill" aria-expanded="false" aria-controls="power-note" hidden><svg><use href="#i-bolt"/></svg><span id="power-pill-text"></span></button>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>

@@ -406,6 +406,23 @@
 		return(null);
 	}
 
+	function touch_battery() {
+		# the battery monitor (INA219, lib_battery.py writes /run/lbb-battery.json every 2 s): null without a sensor
+		$data	= @json_decode((string)@file_get_contents('/run/lbb-battery.json'), true);
+		if (!is_array($data) or !isset($data['time'], $data['percent'], $data['voltage']) or time() - (int)$data['time'] > 15) {
+			return(null);
+		}
+		return(array(
+			'percent'	=> (int)$data['percent'],
+			'state'		=> (string)($data['state'] ?? 'idle'),
+			'voltage'	=> (float)$data['voltage'],
+			'current'	=> (float)($data['current'] ?? 0),
+			'power'		=> (float)($data['power'] ?? 0),
+			'cells'		=> (int)($data['cells'] ?? 0),
+			'minutes'	=> isset($data['minutes']) ? (int)$data['minutes'] : null,
+		));
+	}
+
 	function touch_transfer_info() {
 		# file transfer mode: a network cable with an address and the network share of the box (Samba), else null
 		$ethernet	= touch_ethernet();
@@ -1201,7 +1218,7 @@
 			# the theme picked on the box's own screen (the kiosk browser forgets everything at each start): kept as the
 			# configured theme, which the page starts with. Other devices keep their choice in their own browser.
 			$theme	= isset($_POST['theme']) ? (string)$_POST['theme'] : '';
-			if (!in_array($theme, array('light', 'dark', 'sepia', 'sage'), true)) {
+			if (!in_array($theme, array('light', 'dark', 'sepia', 'sage', 'studio'), true)) {
 				touch_fail('unknown theme');
 			}
 			if (!in_array($_SERVER['REMOTE_ADDR'], array('127.0.0.1', '::1'), true)) {
@@ -1233,6 +1250,7 @@
 				'background'	=> touch_background($constants),
 				'pairing'	=> touch_pairing($constants),
 				'transfer'	=> touch_transfer_info(),
+				'battery'	=> touch_battery(),
 				'copying'	=> $running ? touch_copying($constants) : null,
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),
@@ -1601,6 +1619,7 @@
 					return($wifi);
 				})(),
 				'ethernet'	=> touch_ethernet(),
+				'battery'	=> touch_battery(),
 				'verify'	=> touch_verify_info($constants),
 				'share'		=> touch_share_info(),
 			));
