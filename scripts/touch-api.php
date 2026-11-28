@@ -79,22 +79,28 @@
 		return(@file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) !== false);
 	}
 
-	function touch_projects_add($client, $crew = null, $card = null) {
-		# remembers a client, its crew and card (newest first)
+	function touch_projects_add($client, $event = null, $crew = null, $card = null) {
+		# remembers a client, its event, the crew and the card (newest first)
 		$data	= touch_projects_load();
-		$entry	= isset($data['clients'][$client]) && is_array($data['clients'][$client]) ? $data['clients'][$client] : array('crews' => array());
-		$entry['used']	= time();
-		$entry['crews']	= isset($entry['crews']) && is_array($entry['crews']) ? $entry['crews'] : array();
-		if ($crew !== null) {
-			$crewEntry	= isset($entry['crews'][$crew]) && is_array($entry['crews'][$crew]) ? $entry['crews'][$crew] : array('cards' => array());
-			$crewEntry['used']	= time();
-			$crewEntry['cards']	= isset($crewEntry['cards']) && is_array($crewEntry['cards']) ? $crewEntry['cards'] : array();
-			if ($card !== null and !in_array($card, $crewEntry['cards'], true)) {
-				$crewEntry['cards'][]	= $card;
+		$entry	= isset($data['clients'][$client]) && is_array($data['clients'][$client]) ? $data['clients'][$client] : array();
+		$entry['used']		= time();
+		$entry['events']	= isset($entry['events']) && is_array($entry['events']) ? $entry['events'] : array();
+		if ($event !== null) {
+			$eventEntry	= isset($entry['events'][$event]) && is_array($entry['events'][$event]) ? $entry['events'][$event] : array();
+			$eventEntry['used']		= time();
+			$eventEntry['crews']	= isset($eventEntry['crews']) && is_array($eventEntry['crews']) ? $eventEntry['crews'] : array();
+			if ($crew !== null) {
+				$crewEntry	= isset($eventEntry['crews'][$crew]) && is_array($eventEntry['crews'][$crew]) ? $eventEntry['crews'][$crew] : array();
+				$crewEntry['used']	= time();
+				$crewEntry['cards']	= isset($crewEntry['cards']) && is_array($crewEntry['cards']) ? $crewEntry['cards'] : array();
+				if ($card !== null and !in_array($card, $crewEntry['cards'], true)) {
+					$crewEntry['cards'][]	= $card;
+				}
+				$eventEntry['crews'][$crew]	= $crewEntry;
+				$data['crews']	= array_values(array_unique(array_merge(array($crew), $data['crews'])));
+				$data['crews']	= array_slice($data['crews'], 0, 100);
 			}
-			$entry['crews'][$crew]	= $crewEntry;
-			$data['crews']	= array_values(array_unique(array_merge(array($crew), $data['crews'])));
-			$data['crews']	= array_slice($data['crews'], 0, 100);
+			$entry['events'][$event]	= $eventEntry;
 		}
 		$data['clients'][$client]	= $entry;
 		return(touch_projects_save($data));
@@ -135,17 +141,18 @@
 	}
 
 	function touch_project_from_post() {
-		# client / crew / card of a backup start: null (none: the usual folders) or array(client, crew, card)
+		# client / event / crew / card of a backup start: null (none: the usual folders) or array(client, event, crew, card)
 		$client	= touch_project_name($_POST['client'] ?? '');
 		if ($client === null) {
 			return(null);
 		}
+		$event	= touch_project_name($_POST['event'] ?? '');
 		$crew	= touch_project_name($_POST['crew'] ?? '');
 		$card	= touch_project_name($_POST['card'] ?? '');
-		if ($crew === null or $card === null) {
-			touch_fail('client, crew and card are needed');
+		if ($event === null or $crew === null or $card === null) {
+			touch_fail('client, event, crew and card are needed');
 		}
-		return(array($client, $crew, $card));
+		return(array($client, $event, $crew, $card));
 	}
 
 	function touch_bool($value) {
@@ -1596,7 +1603,7 @@
 				" --power-off " . touch_bool($_POST['power_off'] ?? false);
 
 			if ($project && in_array($Target, array('usb', 'nvme'), true)) {
-				touch_projects_add($project[0], $project[1], $project[2]);
+				touch_projects_add($project[0], $project[1], $project[2], $project[3]);
 			}
 			touch_run_backup($WORKING_DIR, $args);
 			touch_respond(array('ok' => true, 'message' => touch_text(L::main_backup_backup . ' ' . touch_service_label($Source) . ' ' . L::main_backup_to . ' ' . touch_service_label($Target) . ' ' . L::main_backup_initiated . '.')));
@@ -1684,7 +1691,7 @@
 
 			$project	= touch_project_from_post();
 			if ($project) {
-				touch_projects_add($project[0], $project[1], $project[2]);
+				touch_projects_add($project[0], $project[1], $project[2], $project[3]);
 			}
 			touch_run_backup($WORKING_DIR,
 				"--SourceName usb --TargetName " . escapeshellarg($target_kind) .
@@ -1702,16 +1709,20 @@
 			touch_respond(array('ok' => true, 'message' => $source['name'] . ' → ' . $flow['target']['name']));
 
 		case 'projects':
-			# the saved clients and crews, with the folders of the backup drive; with client (and crew) its crews (cards)
+			# the saved clients, events and crews, with the folders of the backup drive:
+			# nothing -> clients; client -> its events; client + event -> its crews (with their cards)
 			$target	= isset($_GET['target']) ? (string)$_GET['target'] : '';
 			$client	= touch_project_name($_GET['client'] ?? '');
-			$crew	= touch_project_name($_GET['crew'] ?? '');
+			$event	= touch_project_name($_GET['event'] ?? '');
 			$data	= touch_projects_load();
 			$root	= touch_projects_root($constants, $target);
+			$byUse	= function($saved) {
+				return(function($a, $b) use ($saved) {return(((int)($saved[$b]['used'] ?? 0)) <=> ((int)($saved[$a]['used'] ?? 0)) ?: strnatcasecmp((string)$b, (string)$a));});
+			};
 
 			if ($client === null) {
 				$names	= array_keys($data['clients']);
-				usort($names, function($a, $b) use ($data) {return(((int)($data['clients'][$b]['used'] ?? 0)) <=> ((int)($data['clients'][$a]['used'] ?? 0)) ?: strnatcasecmp($a, $b));});
+				usort($names, $byUse($data['clients']));
 				if ($root !== false) {
 					foreach (touch_project_dirs($root) as $name) {
 						if (!in_array($name, $names, true)) {
@@ -1719,54 +1730,67 @@
 						}
 					}
 				}
-				touch_respond(array('ok' => true, 'clients' => array_map('strval', $names), 'crews' => $data['crews']));
+				touch_respond(array('ok' => true, 'clients' => array_map('strval', $names)));
 			}
 
-			$crews	= array();
-			$saved	= isset($data['clients'][$client]['crews']) && is_array($data['clients'][$client]['crews']) ? $data['clients'][$client]['crews'] : array();
+			$savedEvents	= isset($data['clients'][$client]['events']) && is_array($data['clients'][$client]['events']) ? $data['clients'][$client]['events'] : array();
+			if ($event === null) {
+				$names	= array_keys($savedEvents);
+				usort($names, $byUse($savedEvents));
+				if ($root !== false and is_dir($root . '/' . $client)) {
+					foreach (touch_project_dirs($root . '/' . $client) as $name) {
+						if (!in_array($name, $names, true)) {
+							$names[]	= $name;
+						}
+					}
+				}
+				touch_respond(array('ok' => true, 'client' => $client, 'events' => array_map('strval', $names)));
+			}
+
+			$saved	= isset($savedEvents[$event]['crews']) && is_array($savedEvents[$event]['crews']) ? $savedEvents[$event]['crews'] : array();
 			$names	= array_keys($saved);
-			usort($names, function($a, $b) use ($saved) {return(((int)($saved[$b]['used'] ?? 0)) <=> ((int)($saved[$a]['used'] ?? 0)) ?: strnatcasecmp($a, $b));});
-			if ($root !== false and is_dir($root . '/' . $client)) {
-				foreach (touch_project_dirs($root . '/' . $client) as $name) {
+			usort($names, $byUse($saved));
+			$base	= $client . '/' . $event;
+			if ($root !== false and is_dir($root . '/' . $base)) {
+				foreach (touch_project_dirs($root . '/' . $base) as $name) {
 					if (!in_array($name, $names, true)) {
 						$names[]	= $name;
 					}
 				}
 			}
+			$crews	= array();
 			foreach ($names as $name) {
 				$name	= (string)$name;
 				$cards	= isset($saved[$name]['cards']) && is_array($saved[$name]['cards']) ? $saved[$name]['cards'] : array();
-				if ($root !== false and is_dir($root . '/' . $client . '/' . $name)) {
-					$cards	= array_values(array_unique(array_merge($cards, touch_project_dirs($root . '/' . $client . '/' . $name))));
+				if ($root !== false and is_dir($root . '/' . $base . '/' . $name)) {
+					$cards	= array_values(array_unique(array_merge($cards, touch_project_dirs($root . '/' . $base . '/' . $name))));
 				}
 				natcasesort($cards);
 				$crews[]	= array('name' => $name, 'cards' => array_values($cards));
 			}
-			touch_respond(array('ok' => true, 'client' => $client, 'crews' => $crews, 'saved_crews' => $data['crews']));
+			touch_respond(array('ok' => true, 'client' => $client, 'event' => $event, 'crews' => $crews, 'saved_crews' => $data['crews']));
 
 		case 'project_create':
-			# a new client (and crew): saved, and its folder is made at once when the backup drive is connected
+			# a new client (and event, crew): saved, and its folder is made at once when the backup drive is connected
 			$client	= touch_project_name($_POST['client'] ?? '');
+			$event	= touch_project_name($_POST['event'] ?? '');
 			$crew	= touch_project_name($_POST['crew'] ?? '');
-			if ($client === null) {
+			if ($client === null or (($_POST['event'] ?? '') !== '' and $event === null) or (($_POST['crew'] ?? '') !== '' and $crew === null) or ($crew !== null and $event === null)) {
 				touch_fail(touch_text(L::touch_project_name_invalid));
 			}
-			if (($_POST['crew'] ?? '') !== '' and $crew === null) {
-				touch_fail(touch_text(L::touch_project_name_invalid));
-			}
-			if (!touch_projects_add($client, $crew)) {
+			if (!touch_projects_add($client, $event, $crew)) {
 				touch_fail('could not save');
 			}
 			$root	= touch_projects_root($constants, isset($_POST['target']) ? (string)$_POST['target'] : '');
 			$made	= false;
 			if ($root !== false) {
-				$folder	= $root . '/' . $client . ($crew !== null ? '/' . $crew : '');
+				$folder	= $root . '/' . implode('/', array_filter(array($client, $event, $crew), function($part) {return($part !== null);}));
 				if (!is_dir($folder)) {
 					shell_exec('sudo mkdir -p ' . escapeshellarg($folder) . ' 2>/dev/null');
 				}
 				$made	= is_dir($folder);
 			}
-			touch_respond(array('ok' => true, 'client' => $client, 'crew' => $crew, 'folder_made' => $made));
+			touch_respond(array('ok' => true, 'client' => $client, 'event' => $event, 'crew' => $crew, 'folder_made' => $made));
 
 		case 'clearlog':
 			# same as "Delete log" of the classic UI
