@@ -1027,6 +1027,14 @@
 		# a file the web server may not read (files copied as root onto a drive with owners): read as root, a preview only
 		$sudo	= is_readable($source) ? '' : 'sudo -n ';
 		$why	= array();
+		# first the fast way, like a file manager: the picture decoded at a fraction of its size (JPEG draft mode), or the
+		# preview the camera stored in a raw file; ImageMagick only if that does not work
+		$output	= array();
+		exec("$sudo timeout 40 python3 " . escapeshellarg(__DIR__ . '/lib_thumb_fast.py') . " $s $t $size " . ($size > 480 ? 88 : 80) . ' 2>&1', $output, $rc);
+		if (@filesize($thumb) > 0) {
+			return;
+		}
+		$why[]	= 'fast: ' . (end($output) ?: "exit $rc");
 		if (!$raw) {
 			$output	= array();
 			exec("$sudo timeout 30 $magick -define jpeg:size=" . ($size * 2) . 'x' . ($size * 2) . ' ' . escapeshellarg($source . '[0]') . " -auto-orient -thumbnail {$size}x{$size} -quality " . ($size > 480 ? 88 : 80) . " jpg:$t 2>&1", $output, $rc);
