@@ -106,6 +106,7 @@
 		<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
 		<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
 		<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+		<symbol id="i-bluetooth" viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></symbol>
 		<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
 		<symbol id="i-top" viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M6 14l6-6 6 6"/></symbol>
 		<symbol id="i-bottom" viewBox="0 0 24 24"><path d="M5 20h14"/><path d="M12 4v11"/><path d="M6 10l6 6 6-6"/></symbol>
@@ -131,6 +132,7 @@
 	<div class="app">
 		<header class="topbar">
 			<span class="brand"><img src="img/icons/favicon-180.png" alt="Your Wedding Saga"><span class="brand-name">Backup Box</span></span>
+			<span class="pill pair-pill" id="pair-pill" hidden><svg><use href="#i-bluetooth"/></svg><span id="pair-pill-text"></span></span>
 			<span class="pill bg-pill" id="bg-pill" hidden><span class="dot"></span><span id="bg-pill-text"></span></span>
 			<button class="pill power-pill" id="power-pill" aria-expanded="false" aria-controls="power-note" hidden><svg><use href="#i-bolt"/></svg><span id="power-pill-text"></span></button>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>

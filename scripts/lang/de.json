@@ -1078,6 +1078,7 @@
     "files": "Dateien",
     "empty_folder": "Dieser Ordner ist leer.",
     "files_more": "Mehr anzeigen ({n} übrig)",
+    "ble_pair_short": "Bluetooth-Code",
     "update": "Aktualisieren",
     "update_checking": "Suche nach Updates …",
     "update_offline": "Die Box hat keine Internetverbindung. Mit einem Netzwerk mit Internet verbinden (Ethernet oder WLAN) und erneut versuchen.",
