@@ -73,8 +73,11 @@ class backup(object):
 		TelegramChatID=None,
 		MatrixRoomID=None,
 		PowerOff='setup',
-		SecondaryBackupFollows=False
+		SecondaryBackupFollows=False,
+		TargetFolder=''
 	):
+
+		self.TargetFolder	= TargetFolder
 
 		# SourceName:											one of ['anyusb', 'usb', 'internal', 'nvme', 'camera', 'cloud:SERVICE_NAME', 'cloud_rsync', 'ftp'] or functions: ['thumbnails', 'database', 'exif', 'rename]
 		# TargetName:											one of ['anyusb', 'usb', 'internal', 'nvme', 'cloud:SERVICE_NAME', 'cloud_rsync', 'social:telegram']
@@ -679,6 +682,10 @@ class backup(object):
 				self.SourceDevice	= lib_storage.storage(StorageName=(SourceStorageType if not SourceService else f'{SourceStorageType}:{SourceService}'), Role=lib_storage.role_Source, WaitForDevice=True, DeviceIdentifierPresetThis=Identifier, DeviceIdentifierPresetOther=self.TargetDevice.DeviceIdentifier, PartnerDevice=self.TargetDevice)
 				self.__display.message([f":{self.__lan.l('box_backup_mounting_source')}", f":{self.__lan.l(f'box_backup_mode_{self.SourceDevice.StorageType}')} {self.SourceDevice.ServiceName}"])
 				self.SourceDevice.mount()
+				# organised by project: <client>/<crew>/<card> instead of the folder named after the card
+				if self.TargetFolder and self.TargetDevice.isLocal:
+					self.SourceDevice.SubPathAtTarget	= self.TargetFolder
+					self.__log.message(f"{self.TargetFolder}", 1)
 			elif SourceStorageType in ['thumbnails', 'database', 'exif']:
 				pass
 			else:
@@ -1884,7 +1891,20 @@ if __name__ == "__main__":
 		help		= 'Remove source files after backup from secondary storage? [\'True\', \'False\']'
 	)
 
+	parser.add_argument(
+		'--target-folder',
+		required	= False,
+		default		= '',
+		help		= 'Folder below the target drive for this backup, e.g. "Client/Crew/Card 1" (organised by project). Default: the folder named after the card.'
+	)
+
 	args	= vars(parser.parse_args())
+
+	# the project folder: relative, clean names only (never leaves the target drive)
+	TargetFolderParts	= [Part.strip() for Part in str(args['target_folder']).replace('\\', '/').split('/') if Part.strip()]
+	if any(Part in ('.', '..') or Part.startswith('.') for Part in TargetFolderParts):
+		TargetFolderParts	= []
+	args['target_folder']	= '/'.join(TargetFolderParts)
 
 	# clean boolean args
 
@@ -1931,7 +1951,8 @@ if __name__ == "__main__":
 		TelegramChatID						= args['telegram_chat_id'],
 		MatrixRoomID						= args['matrix_room_id'],
 		PowerOff							= args['power_off'],
-		SecondaryBackupFollows				= SecondaryBackupFollows
+		SecondaryBackupFollows				= SecondaryBackupFollows,
+		TargetFolder						= args['target_folder']
 	)
 	backup_primary.run()
 

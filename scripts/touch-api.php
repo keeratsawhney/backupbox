@@ -47,6 +47,107 @@
 		touch_respond(array('ok' => false, 'error' => $message), $status);
 	}
 
+	# ---------- projects: client / crew / card ----------
+	# A backup can go to <client>/<crew>/<card> on the backup drive. The names are saved on the box (data/projects.json),
+	# so that they are offered again; the folders of the drive are listed too.
+
+	function touch_project_name($value) {
+		# a folder name: letters, numbers, spaces and - _ ( ) & . , ' ; never a path, never hidden; null if nothing is left
+		$value	= preg_replace('/[^\p{L}\p{N} _().&,\'-]+/u', ' ', (string)$value);
+		$value	= trim(preg_replace('/\s+/u', ' ', $value), " .\t");
+		$value	= mb_substr($value, 0, 60);
+		$value	= trim($value, " .");
+		return($value === '' ? null : $value);
+	}
+
+	function touch_projects_file() {
+		global $WORKING_DIR;
+		return($WORKING_DIR . '/data/projects.json');
+	}
+
+	function touch_projects_load() {
+		$data	= @json_decode((string)@file_get_contents(touch_projects_file()), true);
+		$data	= is_array($data) ? $data : array();
+		$data['clients']	= isset($data['clients']) && is_array($data['clients']) ? $data['clients'] : array();
+		$data['crews']		= isset($data['crews']) && is_array($data['crews']) ? array_values($data['crews']) : array();
+		return($data);
+	}
+
+	function touch_projects_save($data) {
+		$file	= touch_projects_file();
+		@mkdir(dirname($file), 0775, true);
+		return(@file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) !== false);
+	}
+
+	function touch_projects_add($client, $crew = null, $card = null) {
+		# remembers a client, its crew and card (newest first)
+		$data	= touch_projects_load();
+		$entry	= isset($data['clients'][$client]) && is_array($data['clients'][$client]) ? $data['clients'][$client] : array('crews' => array());
+		$entry['used']	= time();
+		$entry['crews']	= isset($entry['crews']) && is_array($entry['crews']) ? $entry['crews'] : array();
+		if ($crew !== null) {
+			$crewEntry	= isset($entry['crews'][$crew]) && is_array($entry['crews'][$crew]) ? $entry['crews'][$crew] : array('cards' => array());
+			$crewEntry['used']	= time();
+			$crewEntry['cards']	= isset($crewEntry['cards']) && is_array($crewEntry['cards']) ? $crewEntry['cards'] : array();
+			if ($card !== null and !in_array($card, $crewEntry['cards'], true)) {
+				$crewEntry['cards'][]	= $card;
+			}
+			$entry['crews'][$crew]	= $crewEntry;
+			$data['crews']	= array_values(array_unique(array_merge(array($crew), $data['crews'])));
+			$data['crews']	= array_slice($data['crews'], 0, 100);
+		}
+		$data['clients'][$client]	= $entry;
+		return(touch_projects_save($data));
+	}
+
+	function touch_projects_root($constants, $target) {
+		# the mounted backup drive, or false (the lists then come from the saved names only)
+		if ($target === 'flow') {
+			# the drive chosen on the home screen
+			$choice	= touch_target_choice($constants);
+			$target	= is_array($choice) ? (string)($choice['kind'] ?? '') : '';
+		}
+		if (!in_array($target, array('usb', 'nvme'), true)) {
+			return(false);
+		}
+		$path	= touch_medium_path($constants, 'target_' . $target);
+		return($path === false ? false : realpath($path));
+	}
+
+	function touch_project_dirs($path) {
+		# folders of a folder on the drive that can be client / crew / card names
+		$names	= array();
+		foreach (@scandir($path) ?: array() as $name) {
+			if ($name === '.' or $name === '..' or str_starts_with($name, '.') or str_starts_with($name, '_') or !@is_dir($path . '/' . $name)) {
+				continue;
+			}
+			if (in_array(strtolower($name), array('tims', 'internal', 'lost+found', 'system volume information', '$recycle.bin', 'recycler'), true)) {
+				continue;
+			}
+			# folders made by earlier backups (named after the card), not clients
+			if (preg_match('/^(\d{4}-\d\d-\d\d_|card_|\d{14}-\d{5})/', $name)) {
+				continue;
+			}
+			$names[]	= $name;
+		}
+		natcasesort($names);
+		return(array_values($names));
+	}
+
+	function touch_project_from_post() {
+		# client / crew / card of a backup start: null (none: the usual folders) or array(client, crew, card)
+		$client	= touch_project_name($_POST['client'] ?? '');
+		if ($client === null) {
+			return(null);
+		}
+		$crew	= touch_project_name($_POST['crew'] ?? '');
+		$card	= touch_project_name($_POST['card'] ?? '');
+		if ($crew === null or $card === null) {
+			touch_fail('client, crew and card are needed');
+		}
+		return(array($client, $crew, $card));
+	}
+
 	function touch_bool($value) {
 		return(in_array($value, array(true, 1, '1', 'true', 'True', 'on'), true) ? 'True' : 'False');
 	}
@@ -1482,8 +1583,10 @@
 				touch_fail(touch_text(L::box_backup_invalid_mode_combination_1 . ' ' . L::box_backup_invalid_mode_combination_2));
 			}
 
+			$project	= touch_project_from_post();
 			$args	= "--SourceName " . escapeshellarg($Source) .
 				" --TargetName " . escapeshellarg($Target) .
+				($project && in_array($Target, array('usb', 'nvme'), true) ? ' --target-folder ' . escapeshellarg(implode('/', $project)) : '') .
 				" --move-files " . touch_bool($_POST['move_files'] ?? false) .
 				" --rename-files " . touch_bool($_POST['rename_files'] ?? false) .
 				" --force-sync-database False" .
@@ -1492,6 +1595,9 @@
 				" --checksum " . touch_bool($_POST['checksum'] ?? false) .
 				" --power-off " . touch_bool($_POST['power_off'] ?? false);
 
+			if ($project && in_array($Target, array('usb', 'nvme'), true)) {
+				touch_projects_add($project[0], $project[1], $project[2]);
+			}
 			touch_run_backup($WORKING_DIR, $args);
 			touch_respond(array('ok' => true, 'message' => touch_text(L::main_backup_backup . ' ' . touch_service_label($Source) . ' ' . L::main_backup_to . ' ' . touch_service_label($Target) . ' ' . L::main_backup_initiated . '.')));
 
@@ -1576,8 +1682,13 @@
 			$target_kind	= explode('_', $flow['target']['id'])[0];
 			$target_device	= $flow['target']['path'];
 
+			$project	= touch_project_from_post();
+			if ($project) {
+				touch_projects_add($project[0], $project[1], $project[2]);
+			}
 			touch_run_backup($WORKING_DIR,
 				"--SourceName usb --TargetName " . escapeshellarg($target_kind) .
+				($project ? ' --target-folder ' . escapeshellarg(implode('/', $project)) : '') .
 				" --device-identifier-preset-source " . escapeshellarg($source['path']) .
 				" --device-identifier-preset-target " . escapeshellarg($target_device) .
 				" --move-files " . touch_bool($config['conf_BACKUP_MOVE_FILES']) .
@@ -1589,6 +1700,73 @@
 				" --power-off " . touch_bool($config['conf_POWER_OFF'])
 			);
 			touch_respond(array('ok' => true, 'message' => $source['name'] . ' → ' . $flow['target']['name']));
+
+		case 'projects':
+			# the saved clients and crews, with the folders of the backup drive; with client (and crew) its crews (cards)
+			$target	= isset($_GET['target']) ? (string)$_GET['target'] : '';
+			$client	= touch_project_name($_GET['client'] ?? '');
+			$crew	= touch_project_name($_GET['crew'] ?? '');
+			$data	= touch_projects_load();
+			$root	= touch_projects_root($constants, $target);
+
+			if ($client === null) {
+				$names	= array_keys($data['clients']);
+				usort($names, function($a, $b) use ($data) {return(((int)($data['clients'][$b]['used'] ?? 0)) <=> ((int)($data['clients'][$a]['used'] ?? 0)) ?: strnatcasecmp($a, $b));});
+				if ($root !== false) {
+					foreach (touch_project_dirs($root) as $name) {
+						if (!in_array($name, $names, true)) {
+							$names[]	= $name;
+						}
+					}
+				}
+				touch_respond(array('ok' => true, 'clients' => array_map('strval', $names), 'crews' => $data['crews']));
+			}
+
+			$crews	= array();
+			$saved	= isset($data['clients'][$client]['crews']) && is_array($data['clients'][$client]['crews']) ? $data['clients'][$client]['crews'] : array();
+			$names	= array_keys($saved);
+			usort($names, function($a, $b) use ($saved) {return(((int)($saved[$b]['used'] ?? 0)) <=> ((int)($saved[$a]['used'] ?? 0)) ?: strnatcasecmp($a, $b));});
+			if ($root !== false and is_dir($root . '/' . $client)) {
+				foreach (touch_project_dirs($root . '/' . $client) as $name) {
+					if (!in_array($name, $names, true)) {
+						$names[]	= $name;
+					}
+				}
+			}
+			foreach ($names as $name) {
+				$name	= (string)$name;
+				$cards	= isset($saved[$name]['cards']) && is_array($saved[$name]['cards']) ? $saved[$name]['cards'] : array();
+				if ($root !== false and is_dir($root . '/' . $client . '/' . $name)) {
+					$cards	= array_values(array_unique(array_merge($cards, touch_project_dirs($root . '/' . $client . '/' . $name))));
+				}
+				natcasesort($cards);
+				$crews[]	= array('name' => $name, 'cards' => array_values($cards));
+			}
+			touch_respond(array('ok' => true, 'client' => $client, 'crews' => $crews, 'saved_crews' => $data['crews']));
+
+		case 'project_create':
+			# a new client (and crew): saved, and its folder is made at once when the backup drive is connected
+			$client	= touch_project_name($_POST['client'] ?? '');
+			$crew	= touch_project_name($_POST['crew'] ?? '');
+			if ($client === null) {
+				touch_fail(touch_text(L::touch_project_name_invalid));
+			}
+			if (($_POST['crew'] ?? '') !== '' and $crew === null) {
+				touch_fail(touch_text(L::touch_project_name_invalid));
+			}
+			if (!touch_projects_add($client, $crew)) {
+				touch_fail('could not save');
+			}
+			$root	= touch_projects_root($constants, isset($_POST['target']) ? (string)$_POST['target'] : '');
+			$made	= false;
+			if ($root !== false) {
+				$folder	= $root . '/' . $client . ($crew !== null ? '/' . $crew : '');
+				if (!is_dir($folder)) {
+					shell_exec('sudo mkdir -p ' . escapeshellarg($folder) . ' 2>/dev/null');
+				}
+				$made	= is_dir($folder);
+			}
+			touch_respond(array('ok' => true, 'client' => $client, 'crew' => $crew, 'folder_made' => $made));
 
 		case 'clearlog':
 			# same as "Delete log" of the classic UI

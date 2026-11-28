@@ -529,12 +529,139 @@
 		return (list || []).find((service) => service.id === id);
 	}
 
+	// ---------- project: client / crew / card ----------
+	// A backup goes to <client>/<crew>/<card> on the backup drive. The sheet offers the saved clients and crews or a new
+	// name (typed with the on-screen keyboard); the answer is {client, crew, card}, {} for "without" or null when closed.
+
+	let sheetOnClose = null;
+
+	function chooseProject(targetKind) {
+		// local backup drives only (a cloud target has its own folders)
+		if (!['usb', 'nvme', 'flow'].includes(targetKind)) return Promise.resolve({});
+		return new Promise((resolve) => {
+			const body = $('sheet-body');
+			const pick = { client: '', crew: '' };
+			let finished = false;
+			const finish = (value) => {
+				if (finished) return;
+				finished = true;
+				sheetOnClose = null;
+				if (!$('drive-sheet').hidden) closeDriveSheet();
+				resolve(value);
+			};
+			// closed by its X or the back gesture: nothing is started
+			sheetOnClose = () => {
+				if (finished) return;
+				finished = true;
+				resolve(null);
+			};
+			const show = (title, sub) => {
+				$('sheet-title').textContent = title;
+				$('sheet-sub').textContent = sub || '';
+				if ($('drive-sheet').hidden) {
+					$('drive-sheet').hidden = false;
+					openOverlay(sheetBack);
+				}
+			};
+			const askName = async (label) => {
+				const name = await confirmDialog(label, '', T.ok, 'btn-primary', '');
+				return name || null;
+			};
+			const fail = (e) => {
+				toast(e.message, true);
+				finish(null);
+			};
+
+			async function stepClient() {
+				show(T.project_choose_client);
+				body.replaceChildren(el('p', { class: 'sheet-note', text: '…' }));
+				let data;
+				try {
+					data = await api('projects', { target: targetKind });
+				} catch (e) {
+					fail(e);
+					return;
+				}
+				const list = el('div', { class: 'list' });
+				data.clients.forEach((name) => list.append(sheetButton('folder', name, 'btn-wide', async () => {
+					pick.client = name;
+					await stepCrew();
+				})));
+				body.replaceChildren(
+					sheetButton('plus', T.project_new_client, 'btn-primary btn-wide', async () => {
+						const name = await askName(T.project_client_name);
+						if (!name) return;
+						pick.client = (await api('project_create', { target: targetKind, client: name }, 'POST')).client;
+						await stepCrew();
+					}),
+					data.clients.length ? list : el('p', { class: 'sheet-note', text: T.project_none }),
+					sheetButton('right', T.project_skip, 'btn-wide', async () => finish({})),
+				);
+			}
+
+			async function stepCrew() {
+				show(T.project_choose_crew.replace('{client}', pick.client));
+				body.replaceChildren(el('p', { class: 'sheet-note', text: '…' }));
+				let data;
+				try {
+					data = await api('projects', { target: targetKind, client: pick.client });
+				} catch (e) {
+					fail(e);
+					return;
+				}
+				const crews = data.crews.slice();
+				// crews of other clients are offered too (the same crew often works for several clients)
+				(data.saved_crews || []).forEach((name) => {
+					if (!crews.some((crew) => crew.name === name)) crews.push({ name: name, cards: [], other: true });
+				});
+				const list = el('div', { class: 'list' });
+				crews.forEach((crew) => list.append(sheetButton('folder', crew.name, 'btn-wide' + (crew.other ? ' muted' : ''), async () => {
+					pick.crew = crew.name;
+					await stepCard(crew.cards);
+				})));
+				body.replaceChildren(
+					sheetButton('plus', T.project_new_crew, 'btn-primary btn-wide', async () => {
+						const name = await askName(T.project_crew_name);
+						if (!name) return;
+						pick.crew = (await api('project_create', { target: targetKind, client: pick.client, crew: name }, 'POST')).crew;
+						await stepCard([]);
+					}),
+					crews.length ? list : el('div'),
+					sheetButton('left', T.back, '', async () => stepClient()),
+				);
+			}
+
+			async function stepCard(cards) {
+				show(T.project_choose_card.replace('{crew}', pick.crew), pick.client + ' / ' + pick.crew);
+				// Card 1, Card 2 ...: the next number is offered, a card already backed up can be continued
+				const numbers = cards.map((name) => Number((/^card (\d+)$/i.exec(name) || [])[1] || 0));
+				const next = 'Card ' + (Math.max(0, ...numbers) + 1);
+				const choose = (card) => finish({ client: pick.client, crew: pick.crew, card: card });
+				const list = el('div', { class: 'list' });
+				cards.forEach((name) => list.append(sheetButton('folder', T.project_card_again.replace('{name}', name), 'btn-wide', async () => choose(name))));
+				body.replaceChildren(
+					sheetButton('plus', T.project_new_card.replace('{name}', next), 'btn-primary btn-wide', async () => choose(next)),
+					cards.length ? list : el('div'),
+					sheetButton('edit', T.project_other_card, 'btn-wide', async () => {
+						const name = await askName(T.project_card_name);
+						if (name) choose(name);
+					}),
+					sheetButton('left', T.back, '', async () => stepCrew()),
+				);
+			}
+
+			stepClient();
+		});
+	}
+
 	async function startBackup(source, target, options) {
 		if (state.running) {
 			const ok = await confirmDialog(T.start + '?', T.busy_warning, T.start);
 			if (!ok) return;
 		}
-		const params = { source: source, target: target };
+		const project = await chooseProject(target);
+		if (project === null) return;
+		const params = Object.assign({ source: source, target: target }, project);
 		for (const [key, value] of Object.entries(options)) {
 			params[key] = value ? '1' : '0';
 		}
@@ -1475,6 +1602,11 @@
 		clearTimeout(taskTimer);
 		taskTimer = null;
 		$('drive-sheet').hidden = true;
+		if (sheetOnClose) {
+			const callback = sheetOnClose;
+			sheetOnClose = null;
+			callback();
+		}
 		if (!fromBack) closeOverlay(sheetBack);
 		if (state.page === 'system') loadDrives();
 	}
@@ -1777,7 +1909,9 @@
 		});
 
 		$('btn-default-backup').addEventListener('click', (event) => busy(event.currentTarget, async () => {
-			const result = await api('start', {}, 'POST');
+			const project = await chooseProject('flow');
+			if (project === null) return;
+			const result = await api('start', project, 'POST');
 			toast(result.message);
 			state.running = true;
 			refreshStatusSoon();
