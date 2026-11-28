@@ -673,6 +673,7 @@ class DISPLAY(object):
 			temp	= Temp,
 			no_drive	= self.home_no_drive,
 			login		= Login,
+			battery		= self.__battery_text(),
 		))
 
 	def __screen_image(self, Lines):
@@ -708,7 +709,18 @@ class DISPLAY(object):
 
 		self.__drive_status()
 
-		return(self.home_render.screen(title='BACKUP BOX', lines=Rows, temp=self.__temperature(), task=Task))
+		return(self.home_render.screen(title='BACKUP BOX', lines=Rows, temp=self.__temperature(), task=Task, battery=self.__battery_text()))
+
+	def __battery_text(self):
+		# the charge of the battery (INA219, lib_battery.py) for the title bar: '78%', '78%+' while charging; '' without
+		try:
+			with open('/run/lbb-battery.json', 'r') as f:
+				data	= json.load(f)
+			if time.time() - data['time'] > 15:
+				return('')
+			return(f"{data['percent']}%{'+' if data['state'] == 'charging' else ''}")
+		except Exception:
+			return('')
 
 	def __temperature(self):
 		try:

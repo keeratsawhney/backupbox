@@ -899,6 +899,7 @@ CONFIGDATA;
 						<option value="dark" <?php echo $config["conf_THEME"] == "dark"?" selected":""; ?>><?php echo L::config_view_theme_dark; ?></option>
 						<option value="sepia" <?php echo $config["conf_THEME"] == "sepia"?" selected":""; ?>><?php echo L::config_view_theme_sepia; ?></option>
 						<option value="sage" <?php echo $config["conf_THEME"] == "sage"?" selected":""; ?>><?php echo L::config_view_theme_sage; ?></option>
+						<option value="studio" <?php echo $config["conf_THEME"] == "studio"?" selected":""; ?>><?php echo L::touch_theme_studio; ?></option>
 					</select>
 
 				<h3><?php echo L::config_view_bg_image_header; ?></h3>

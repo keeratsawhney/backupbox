@@ -232,6 +232,29 @@ the box is `10.42.0.1` and the computer gets an address by itself):
 - The Wi-Fi password and the box's commands over Bluetooth need pairing with the code on the box's display.
 - The installer no longer prints the box's TLS private key.
 
+## Battery monitor (INA219)
+
+An **INA219** current / power module (I2C) shows the charge of a battery pack: a pill in the top bar of the touch UI, the System tab and the title bar of the OLED. `./install-touch-ui.sh` sets it up (I2C on, a restart once); without a module nothing shows.
+
+**Wiring** (Raspberry Pi 5 / 4, I2C bus 1):
+
+| Module | Connects to |
+|---|---|
+| VCC | Pi **3.3 V** (pin 1) |
+| GND | Pi GND (pin 6) |
+| SDA | Pi **GPIO 2 / SDA** (pin 3) |
+| SCL | Pi **GPIO 3 / SCL** (pin 5) |
+| VIN+ | **battery +** |
+| VIN− | **+ input of the converter / load** that powers the Pi |
+
+The battery −, the converter − and the Pi GND must be **one common ground**. The module sits in the battery's plus line, so all the current of the Pi passes through it. An OLED on the same two pins (address 0x3C) can share the bus; the INA219 answers at 0x40 (0x41 … 0x45 with the address jumpers).
+
+Check: `sudo i2cdetect -y 1` shows `40`, and `python3 /var/www/little-backup-box/lib_battery.py --once` prints a reading.
+
+Mind the limits: the INA219 measures up to 26 V and, with the usual 0.1 Ω shunt, **±3.2 A**. A Pi 5 with an NVMe drive and a screen can draw more on the battery side (a 20 W load from 7.4 V is 2.7 A, peaks more). For more, use a module with a 0.01 Ω shunt (±32 A) and set `"shunt_ohm": 0.01`.
+
+Settings, all optional, in `/var/www/little-backup-box/data/battery.json`, for example `{"cells": 2, "capacity_mah": 6000}`: `cells` (1–4, default: from the voltage; a 3S and a 4S pack are not told apart around 12 V), `shunt_ohm`, `capacity_mah` (adds the time left), `invert_current` (default `true`: battery on VIN+; `false` if it is on VIN−), `internal_mohm`, `shutdown_percent` (switches the box off below this charge, default off).
+
 ## Power and heat
 
 - **The display loop no longer starts processes every couple of seconds.** It caches the Wi-Fi state and skips redrawing unchanged frames.

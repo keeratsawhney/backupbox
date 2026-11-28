@@ -115,6 +115,44 @@ html[data-theme='dark'] {
 	--m-shadow-lg:     0 20px 46px rgba(0,0,0,0.55);
 }
 
+/* studio: the dark look of the studio (Your Wedding Saga): warm black, ivory text, the sage of the logo (#a9af90) as accent */
+html[data-theme='studio'] {
+	--m-bg:            #0b0c09;
+	--m-bg-grad:       radial-gradient(1200px 600px at 100% -10%, rgba(169,175,144,0.10) 0%, rgba(11,12,9,0) 55%),
+	                   radial-gradient(1000px 600px at -10% 110%, rgba(169,175,144,0.06) 0%, rgba(11,12,9,0) 50%);
+	--m-surface:       #141611;
+	--m-surface-2:     #1e211a;
+	--m-surface-soft:  rgba(20,22,17,0.72);
+	--m-border:        #2c3025;
+	--m-border-strong: #3a3f31;
+	--m-fg:            #ece9df;
+	--m-muted:         #8f9482;
+	--m-heading:       #f6f3e9;
+
+	--m-accent:        #a9af90;
+	--m-accent-2:      #c3c9a8;
+	--m-accent-soft:   rgba(169,175,144,0.14);
+	--m-accent-ring:   rgba(169,175,144,0.45);
+
+	--m-usb:           #8fb98a;
+	--m-usb-soft:      rgba(143,185,138,0.14);
+	--m-anyusb:        #d9b45a;
+	--m-anyusb-soft:   rgba(217,180,90,0.14);
+	--m-camera:        #d99a5a;
+	--m-camera-soft:   rgba(217,154,90,0.14);
+	--m-cloud:         #8fb4c4;
+	--m-cloud-soft:    rgba(143,180,196,0.14);
+	--m-social:        #b9a3c9;
+	--m-social-soft:   rgba(185,163,201,0.14);
+	--m-danger:        #d9685b;
+	--m-danger-soft:   rgba(217,104,91,0.16);
+	--m-disabled:      #5b5f50;
+
+	--m-shadow-sm:     0 1px 2px rgba(0,0,0,0.4);
+	--m-shadow-md:     0 8px 24px rgba(0,0,0,0.45);
+	--m-shadow-lg:     0 20px 46px rgba(0,0,0,0.55);
+}
+
 /* sage: the Your Wedding Saga color #a9af90 as background, darker sage for text and buttons (readable) */
 html[data-theme='sage'] {
 	--m-bg:            #a9af90;
@@ -242,6 +280,7 @@ hr { border: 0; border-top: 1px solid var(--m-border); margin: 1.2rem 0; }
 	box-shadow: 0 4px 12px rgba(16,163,74,0.35);
 }
 html[data-theme='dark'] .navbar .nav-link.lbb-update { color: #06210f !important; }
+html[data-theme='studio'] .navbar .nav-link.lbb-update { color: #06210f !important; }
 
 /* brand injected by sub-menu.php */
 .navbar .lbb-brand {
@@ -276,6 +315,7 @@ html[data-theme='dark'] .navbar .nav-link.lbb-update { color: #06210f !important
 	box-shadow: 0 4px 12px var(--m-accent-ring);
 }
 html[data-theme='dark'] .navbar .nav-link.active { color: #0b0e14 !important; }
+html[data-theme='studio'] .navbar .nav-link.active { color: #0b0e14 !important; }
 .navbar .nav-link.disabled { opacity: 0.45; }
 
 .navbar-toggler {
@@ -691,6 +731,7 @@ details.card .row { margin: 0; }
 }
 /* the log is a plain text file: invert it to match the dark theme */
 html[data-theme='dark'] .lbb-logmonitor iframe { filter: invert(0.9) hue-rotate(180deg); }
+html[data-theme='studio'] .lbb-logmonitor iframe { filter: invert(0.9) hue-rotate(180deg); }
 
 .lbb-actions-row {
 	display: flex;
@@ -734,6 +775,7 @@ html[data-theme='dark'] .lbb-logmonitor iframe { filter: invert(0.9) hue-rotate(
 	background: linear-gradient(90deg, var(--m-accent), var(--m-accent-2));
 }
 html[data-theme='dark'] .lbb-savebar button[name="save"] { color: #0b0e14; }
+html[data-theme='studio'] .lbb-savebar button[name="save"] { color: #0b0e14; }
 .lbb-savebar-sticky {
 	position: sticky;
 	bottom: 0.6rem;
@@ -825,6 +867,7 @@ button.lbb-chip[aria-selected="true"] {
 	background: linear-gradient(90deg, var(--m-accent), var(--m-accent-2));
 }
 html[data-theme='dark'] button.lbb-chip[aria-selected="true"] { color: #0b0e14; }
+html[data-theme='studio'] button.lbb-chip[aria-selected="true"] { color: #0b0e14; }
 .lbb-chip-count {
 	min-width: 1.6rem;
 	padding: 0.05rem 0.45rem;

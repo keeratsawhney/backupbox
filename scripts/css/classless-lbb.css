@@ -47,7 +47,8 @@ html[data-theme='light'], :root {
 	--font-c: 12pt monospace;
 }
 
-html[data-theme='dark'] {
+html[data-theme='dark'],
+html[data-theme='studio'] {
 	--clight: #333;
 	--cdark: #999;
 	--cmed: #566;
