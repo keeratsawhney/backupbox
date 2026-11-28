@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#81 A keyboard that fits the box's small screen**: the keyboard covered 80 % of the 320 px high screen and hid the field it types into. Keys and rows are slimmer on a small screen, and a dialog with a field (Wi-Fi password, a name) moves to the top while the keyboard is open, so the field stays in view above it.
 - **#79 Previews of pictures the box could not make one for**: a picture without a ready-made thumbnail got "No preview available" when ImageMagick failed or the web server may not read the file. The preview is now also tried with Pillow, a file the web server may not read is read as root (a preview only, nothing is changed), and the reason a preview fails is written to `tmp/touch-thumbs/errors.log` (ImageMagick's own message included). Earlier failures are tried again at once.
 - **#77 On-screen keyboard that does not depend on the browser add-on; no Photos tab; the file preview says what it does**
   - **Keyboard:** the box's own screen now loads the keyboard (KioskBoard, bundled in `js/vendor/kioskboard`, MIT) from the pages themselves, for the Wi-Fi password and every other text field, also the ones that appear later. It follows the settings (keyboard on/off, language) and does not need the browser add-on, which did not show up on some boxes. A field never gets two keyboards. Slimmer keys on a small screen.

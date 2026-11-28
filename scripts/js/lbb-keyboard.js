@@ -67,9 +67,16 @@
 		if (node.querySelectorAll) node.querySelectorAll(SELECTOR).forEach(prepare);
 	}
 
+	// the pages move out of the way while the keyboard is open (a dialog goes to the top)
+	function markOpen() {
+		if (document.querySelector('.kioskboard-wrapper')) root.dataset.lbbKeyboard = '1';
+		else delete root.dataset.lbbKeyboard;
+	}
+
 	tree(document);
 	document.addEventListener('focusin', (event) => prepare(event.target), true);
 	new MutationObserver((mutations) => {
 		mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => { if (node instanceof HTMLElement) tree(node); }));
+		markOpen();
 	}).observe(root, { childList: true, subtree: true });
 })();
