@@ -2088,3 +2088,8 @@ button.wifi-row:active {
 		display: none;
 	}
 }
+
+/* project sheet (client / crew / card): crews of other clients a little quieter */
+.btn.muted {
+	opacity: .75;
+}
