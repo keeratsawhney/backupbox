@@ -2093,3 +2093,73 @@ button.wifi-row:active {
 .btn.muted {
 	opacity: .75;
 }
+
+/* file transfer mode: a network cable is connected */
+.transfer-pill {
+	background: var(--accent);
+	color: var(--accent-text);
+	font-weight: 700;
+}
+
+.transfer-pill svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+}
+
+.transfer-pill:not([hidden]) ~ .pill {
+	margin-left: 0;
+}
+
+.transfer-card {
+	flex: none;
+	padding: 8px 12px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	background: var(--surface);
+	font-size: 13px;
+}
+
+.transfer-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 4px;
+	font-weight: 700;
+	color: var(--accent);
+}
+
+.transfer-head svg {
+	width: 18px;
+	height: 18px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+}
+
+.transfer-head small {
+	margin-left: auto;
+	color: var(--muted);
+	font-weight: 400;
+}
+
+.transfer-line {
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	padding: 1px 0;
+}
+
+.transfer-line span {
+	color: var(--muted);
+}
+
+.transfer-line b {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	user-select: text;
+}
