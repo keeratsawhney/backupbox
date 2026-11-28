@@ -237,6 +237,15 @@
 		return(array('undervoltage' => (bool)($flags & 0x1), 'undervoltage_since_boot' => (bool)($flags & 0x10000)));
 	}
 
+	function touch_pairing($constants) {
+		# Bluetooth pairing of the Android app: the 6-digit code the phone asks for (lib_ble.py leaves it for a minute)
+		$data	= @json_decode((string)@file_get_contents($constants['const_WEB_ROOT_LBB'] . '/tmp/ble-pairing.json'), true);
+		if (!is_array($data) or !isset($data['code'], $data['time']) or time() - (int)$data['time'] > 60 or !preg_match('/^\d{6}$/', (string)$data['code'])) {
+			return(null);
+		}
+		return(substr($data['code'], 0, 3) . ' ' . substr($data['code'], 3));
+	}
+
 	function touch_background($constants) {
 		# thumbnails and database made after a backup (background.py): files done of all, or null
 		$done	= 0;
@@ -1014,6 +1023,7 @@
 				'flow'		=> touch_flow($config, $constants, $storages, $running),
 				'power'		=> touch_power($constants),
 				'background'	=> touch_background($constants),
+				'pairing'	=> touch_pairing($constants),
 				'copying'	=> $running ? touch_copying($constants) : null,
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),

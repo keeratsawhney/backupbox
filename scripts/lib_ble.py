@@ -401,6 +401,15 @@ def run_service():
 			if entered == 0:
 				Code	= f'{int(passkey):06d}'
 				print(f'pairing code {Code} for {device}', flush=True)
+				# the touch UI shows it as a pill in its status bar (touch-api.php reads this file for a minute)
+				try:
+					File	= os.path.join(state.tmp_dir, 'ble-pairing.json')
+					with open(File + '.new', 'w') as f:
+						json.dump({'code': Code, 'time': int(time.time())}, f)
+					os.chmod(File + '.new', 0o644)
+					os.replace(File + '.new', File)
+				except Exception as e:
+					print(f'pairing code file: {e}', flush=True)
 				display.message([
 					'set:clear,temp,time=40',
 					f":{text('box_ble_pairing', 'Bluetooth pairing')}",
@@ -432,7 +441,10 @@ def run_service():
 
 		@dbus.service.method(AGENT_IFACE)
 		def Cancel(self):
-			pass
+			try:
+				os.remove(os.path.join(state.tmp_dir, 'ble-pairing.json'))
+			except OSError:
+				pass
 
 	# the first Bluetooth adapter that can do GATT and advertising
 	Objects	= dbus.Interface(bus.get_object(BLUEZ, '/'), OM_IFACE).GetManagedObjects()

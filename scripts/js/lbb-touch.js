@@ -315,6 +315,10 @@
 		$('power-pill').classList.toggle('now', !!power.undervoltage);
 		if ($('power-pill').hidden) showPowerNote(false);
 
+		// Bluetooth pairing of the app: the code to type on the phone, a pill in the top bar while it is asked for
+		$('pair-pill').hidden = !data.pairing;
+		if (data.pairing) $('pair-pill-text').textContent = T.ble_pair_short + ' ' + data.pairing;
+
 		// thumbnails and database after a backup (background.py): the card can already be removed
 		const background = data.background;
 		$('bg-pill').hidden = !background;

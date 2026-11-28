@@ -1078,6 +1078,7 @@
     "files": "Fichiers",
     "empty_folder": "Ce dossier est vide.",
     "files_more": "Afficher plus ({n} restants)",
+    "ble_pair_short": "Code Bluetooth",
     "update": "Mettre à jour",
     "update_checking": "Recherche de mises à jour …",
     "update_offline": "Le boîtier n'a pas de connexion internet. Connectez-le à un réseau avec internet (Ethernet ou Wi-Fi) et réessayez.",
