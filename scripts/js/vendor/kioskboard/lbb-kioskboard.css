@@ -17,10 +17,70 @@
 	font-size: 18px !important;
 }
 
-/* the box's own small screen: slimmer keys, so the field stays in view */
+/* the box's own small screen (533 x 320 css px): a slim keyboard, so the field stays in view above it */
 @media (max-height: 520px) {
-	.kioskboard-key {
-		min-height: 30px !important;
-		font-size: 15px !important;
+	.kioskboard-row {
+		padding-bottom: 4px !important;
+	}
+
+	.kioskboard-row-top {
+		padding-top: 2px !important;
+		margin-bottom: 2px !important;
+	}
+
+	.kioskboard-row-bottom {
+		margin-top: 2px !important;
+		padding-top: 2px !important;
+	}
+
+	html .kioskboard-wrapper .kioskboard-row-bottom .kioskboard-key,
+	html .kioskboard-wrapper .kioskboard-row-bottom .kioskboard-key-capslock,
+	html .kioskboard-wrapper .kioskboard-row-bottom .kioskboard-key-specialcharacters,
+	html .kioskboard-wrapper .kioskboard-row-bottom .kioskboard-key-space,
+	html .kioskboard-wrapper .kioskboard-row-bottom .kioskboard-key-enter,
+	html .kioskboard-wrapper .kioskboard-row-bottom .kioskboard-key-backspace {
+		height: 28px !important;
+		min-height: 0 !important;
+	}
+
+	html .kioskboard-wrapper .kioskboard-row .kioskboard-key {
+		min-height: 0 !important;
+		height: 28px !important;
+		padding: 3px 0 !important;
+		font-size: 14px !important;
+		line-height: 20px !important;
+		margin: 2px !important;
+	}
+
+	/* the dialog with the field (Wi-Fi password, a name) moves to the top while the keyboard is open */
+	html[data-lbb-keyboard] .modal {
+		align-items: flex-start;
+		padding-top: 6px;
+	}
+
+	html[data-lbb-keyboard] .modal-box {
+		padding: 8px 12px;
+	}
+
+	html[data-lbb-keyboard] .modal-box p {
+		margin-bottom: 4px;
+		font-size: 14px;
+	}
+
+	html[data-lbb-keyboard] .modal-sub {
+		display: none;
+	}
+
+	html[data-lbb-keyboard] .modal-input {
+		padding: 4px 10px;
+		font-size: 15px;
+	}
+
+	html[data-lbb-keyboard] .modal-buttons .btn {
+		min-height: 32px;
+	}
+
+	html[data-lbb-keyboard] .modal-buttons {
+		margin-top: 6px;
 	}
 }
