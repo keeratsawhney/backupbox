@@ -61,6 +61,19 @@ if [[ "${GIT_VERSION}" =~ ^[0-9a-f]{40}$ ]]; then
 	echo "${GIT_VERSION}" | sudo tee "${WEB_ROOT}/VERSION" >/dev/null
 fi
 
+# previews (thumbnails) are no longer made after a backup: the Files tab makes one when a file is opened.
+# Switched off once (a box that wants them again switches them on in the settings and keeps them).
+THUMBS_MARK="${WEB_ROOT}/data/.thumbnails-off"
+if [[ ! -e "${THUMBS_MARK}" && -f "${WEB_ROOT}/config.cfg" ]]; then
+	CONFIG_OWNER=$(stat -c '%U:%G' "${WEB_ROOT}/config.cfg")
+	sudo sed -i 's/^conf_BACKUP_GENERATE_THUMBNAILS=.*/conf_BACKUP_GENERATE_THUMBNAILS=False/;s/^conf_BACKUP_DEFAULT_GENERATE_THUMBNAILS=.*/conf_BACKUP_DEFAULT_GENERATE_THUMBNAILS=False/' "${WEB_ROOT}/config.cfg"
+	sudo chown "${CONFIG_OWNER}" "${WEB_ROOT}/config.cfg"
+	sudo mkdir -p "${WEB_ROOT}/data"
+	sudo touch "${THUMBS_MARK}"
+	sudo chown -R www-data:www-data "${WEB_ROOT}/data"
+	echo "Previews after a backup: off (they are made when a file is opened)."
+fi
+
 # Tiny File Manager (Files of the classic UI): do not show hidden files
 # (macOS "._name" files next to every photo copied from a Mac, .Spotlight-V100, .Trashes, ...)
 TFM_CONFIG="/var/www/tinyfilemanager/config.php"

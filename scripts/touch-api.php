@@ -1491,6 +1491,10 @@
 			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
 			@mkdir($dir, 0755, true);
 			$thumb	= $dir . '/' . md5($file . '|' . $stat['size'] . '|' . $stat['mtime'] . '|3|' . (!empty($_GET['large']) ? 1 : 0)) . '.jpg';
+			# cached=1 (lists): only a preview that exists is served, none is made (opening the file makes it)
+			if (!empty($_GET['cached']) and !is_file($thumb)) {
+				touch_fail('no preview yet', 404);
+			}
 			# a preview that could not be made is not tried again for 10 minutes (the photo lists refresh often)
 			$failed	= $thumb . '.failed';
 			if (!is_file($thumb) and is_file($failed) and time() - filemtime($failed) < 600) {

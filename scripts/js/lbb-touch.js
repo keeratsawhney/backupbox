@@ -987,6 +987,8 @@
 
 	async function loadHomeRecent() {
 		clearTimeout(homeRecentTimer);
+		// the list of the newest files is gone (Files tab only): nothing is made for it
+		return;
 		if (state.page !== 'home' || !roomForRecent.matches) return;
 		homeRecentTimer = setTimeout(loadHomeRecent, 20000);
 		if (document.hidden || !$('viewer').hidden) return;
@@ -1113,7 +1115,8 @@
 			if (entry.type === 'dir') {
 				preview = el('span', { class: 'file-icon folder' }, icon('folder'));
 			} else if (entry.thumb) {
-				preview = el('img', { class: 'file-thumb', src: entry.thumb, alt: '', loading: 'lazy' });
+				// only a preview that exists (made during an earlier backup or by opening the file): none is made for a list
+				preview = el('img', { class: 'file-thumb', src: entry.thumb + '&cached=1', alt: '', loading: 'lazy' });
 				preview.addEventListener('error', () => preview.replaceWith(el('span', { class: 'file-icon' }, el('b', { text: entry.ext }))), { once: true });
 			} else {
 				preview = el('span', { class: 'file-icon' }, el('b', { text: entry.ext || '' }));
