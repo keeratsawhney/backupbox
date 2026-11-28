@@ -1003,6 +1003,17 @@
 			touch_mount_target($WORKING_DIR, $drive);
 			touch_respond(array('ok' => true, 'mounted' => true));
 
+		case 'jslog':
+			# errors of the page in the box's own browser (it has no console): tmp/touch-js.log, short, for support
+			if (in_array($_SERVER['REMOTE_ADDR'], array('127.0.0.1', '::1'), true)) {
+				$log	= $WORKING_DIR . '/tmp/touch-js.log';
+				if (@filesize($log) > 50000) {
+					@unlink($log);
+				}
+				@file_put_contents($log, date('Y-m-d H:i:s') . "\t" . substr(str_replace(array("\r", "\n", "\t"), ' ', (string)($_POST['text'] ?? '')), 0, 300) . "\n", FILE_APPEND);
+			}
+			touch_respond(array('ok' => true));
+
 		case 'set_theme':
 			# the theme picked on the box's own screen (the kiosk browser forgets everything at each start): kept as the
 			# configured theme, which the page starts with. Other devices keep their choice in their own browser.

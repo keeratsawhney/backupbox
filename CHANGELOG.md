@@ -6,6 +6,8 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#83 The on-screen keyboard appears on the box**: a precedence slip (`$x = A or B` is `($x = A) or B`) switched the keyboard off whenever the setting existed in `config.cfg`, which is the case on every installed box, so it only worked on a box without the setting. Checked with the setting `True`, `true` and `false`.
+  - **Support log:** errors of the pages in the box's own browser (it has no console), and a note when a file is tapped or the viewer opens, are written to `tmp/touch-js.log`.
 - **#81 A keyboard that fits the box's small screen**: the keyboard covered 80 % of the 320 px high screen and hid the field it types into. Keys and rows are slimmer on a small screen, and a dialog with a field (Wi-Fi password, a name) moves to the top while the keyboard is open, so the field stays in view above it.
 - **#79 Previews of pictures the box could not make one for**: a picture without a ready-made thumbnail got "No preview available" when ImageMagick failed or the web server may not read the file. The preview is now also tried with Pillow, a file the web server may not read is read as root (a preview only, nothing is changed), and the reason a preview fails is written to `tmp/touch-thumbs/errors.log` (ImageMagick's own message included). Earlier failures are tried again at once.
 - **#77 On-screen keyboard that does not depend on the browser add-on; no Photos tab; the file preview says what it does**

@@ -93,6 +93,19 @@
 		return data;
 	}
 
+	// what goes wrong in the box's own browser (no console there): tmp/touch-js.log, read by support
+	let logged = 0;
+	function jslog(text) {
+		if (logged++ > 40) return;
+		try {
+			api('jslog', { text: text }, 'POST').catch(() => {});
+		} catch (e) {
+			// nothing to do
+		}
+	}
+	window.addEventListener('error', (event) => jslog('error: ' + event.message + ' @' + String(event.filename || '').split('/').pop() + ':' + event.lineno));
+	window.addEventListener('unhandledrejection', (event) => jslog('rejected: ' + (event.reason && event.reason.message ? event.reason.message : event.reason)));
+
 	let toastTimer = null;
 	function toast(message, isError) {
 		const node = $('toast');
@@ -731,6 +744,7 @@
 		}
 		if (item.video && item.file) $('viewer-caption').textContent = caption;
 		$('viewer').hidden = false;
+		jslog('viewer open: ' + item.name + ' ' + img.hidden + ' ' + (img.getAttribute('src') || ''));
 		if (state.viewerFiles) {
 			$('viewer-prev').disabled = index <= 0;
 			$('viewer-next').disabled = index >= list.length - 1;
@@ -921,6 +935,7 @@
 					filesStep();
 					loadFiles();
 				} else if (entry.media) {
+					jslog('file tap: ' + entry.name + ' media=' + entry.media + ' thumb=' + entry.thumb);
 					// every photo and video of the folder loaded so far
 					const media = state.files.entries.filter((x) => x.type === 'file' && x.media);
 					state.viewerFiles = media;
