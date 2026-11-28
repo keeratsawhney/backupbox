@@ -339,6 +339,26 @@
 		$('power-pill').classList.toggle('now', !!power.undervoltage);
 		if ($('power-pill').hidden) showPowerNote(false);
 
+		// file transfer mode: a network cable is connected, the box shares its drives (Windows \\box\media, Mac smb://box/media)
+		const transfer = data.transfer;
+		$('transfer-pill').hidden = !transfer;
+		$('transfer-card').hidden = !transfer;
+		if (transfer) {
+			$('transfer-pill-text').textContent = T.transfer_pill;
+			const card = $('transfer-card');
+			const signature = JSON.stringify(transfer);
+			if (card.dataset.signature !== signature) {
+				card.dataset.signature = signature;
+				const line = (label, value) => el('div', { class: 'transfer-line' }, [el('span', { text: label }), el('b', { text: value })]);
+				card.replaceChildren(
+					el('div', { class: 'transfer-head' }, [icon('folder'), el('span', { text: T.transfer_mode }), el('small', { text: (transfer.speed ? transfer.speed + ' Mb/s · ' : '') + T.transfer_hint })]),
+					line(T.transfer_windows, `\\\\${transfer.ip}\\${transfer.name}`),
+					line(T.transfer_mac, `smb://${transfer.ip}/${transfer.name}`),
+					line(T.transfer_login, `${transfer.user} · ${transfer.password || T.share_box_password}`),
+				);
+			}
+		}
+
 		// Bluetooth pairing of the app: the code to type on the phone, a pill in the top bar while it is asked for
 		$('pair-pill').hidden = !data.pairing;
 		if (data.pairing) $('pair-pill-text').textContent = T.ble_pair_short + ' ' + data.pairing;

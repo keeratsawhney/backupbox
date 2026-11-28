@@ -406,6 +406,20 @@
 		return(null);
 	}
 
+	function touch_transfer_info() {
+		# file transfer mode: a network cable with an address and the network share of the box (Samba), else null
+		$ethernet	= touch_ethernet();
+		$share		= touch_share_info();
+		if (!$ethernet or !$share) {
+			return(null);
+		}
+		$ip	= trim((string)shell_exec('ip -4 -o addr show dev ' . escapeshellarg($ethernet['device']) . " 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1"));
+		if (!preg_match('/^\d+\.\d+\.\d+\.\d+$/', $ip)) {
+			return(null);
+		}
+		return(array('speed' => $ethernet['speed'], 'ip' => $ip, 'name' => $share['name'], 'user' => $share['user'], 'password' => $share['password']));
+	}
+
 	function touch_copying($constants) {
 		# names of the files being copied (written by lib_backup.progressmonitor while copying)
 		$file	= $constants['const_WEB_ROOT_LBB'] . '/tmp/backup-files.json';
@@ -1210,6 +1224,7 @@
 				'power'		=> touch_power($constants),
 				'background'	=> touch_background($constants),
 				'pairing'	=> touch_pairing($constants),
+				'transfer'	=> touch_transfer_info(),
 				'copying'	=> $running ? touch_copying($constants) : null,
 				'temp'		=> touch_cpu_temp(),
 				'time'		=> time(),

@@ -133,6 +133,7 @@
 		<header class="topbar">
 			<span class="brand"><img src="img/icons/favicon-180.png" alt="Your Wedding Saga"><span class="brand-name">Backup Box</span></span>
 			<span class="pill pair-pill" id="pair-pill" hidden><svg><use href="#i-bluetooth"/></svg><span id="pair-pill-text"></span></span>
+			<span class="pill transfer-pill" id="transfer-pill" hidden><svg><use href="#i-folder"/></svg><span id="transfer-pill-text"></span></span>
 			<span class="pill bg-pill" id="bg-pill" hidden><span class="dot"></span><span id="bg-pill-text"></span></span>
 			<button class="pill power-pill" id="power-pill" aria-expanded="false" aria-controls="power-note" hidden><svg><use href="#i-bolt"/></svg><span id="power-pill-text"></span></button>
 			<span class="pill" id="state-pill"><span class="dot"></span><span id="state-text">…</span></span>
@@ -170,6 +171,7 @@
 					<button class="btn btn-big" id="btn-check" hidden><svg><use href="#i-photos"/></svg><span class="btn-text" id="check-label"></span></button>
 					<button class="btn btn-danger btn-big" id="btn-stop" hidden><svg><use href="#i-stop"/></svg><span class="btn-text" id="stop-label"></span></button>
 				</div>
+				<div class="transfer-card" id="transfer-card" hidden></div>
 				<div class="storage-strip" id="storage-strip"></div>
 				<div class="home-recent" id="home-recent" hidden>
 					<div class="home-recent-head"><span id="home-recent-title"></span><button class="btn" id="home-recent-all"></button></div>
