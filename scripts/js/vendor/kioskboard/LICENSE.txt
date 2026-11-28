@@ -1,0 +1,5 @@
+KioskBoard 2.3.0
+https://github.com/furcan/KioskBoard
+License: MIT (c) Furkan MT
+
+Bundled here for the on-screen keyboard of the box's own screen (js/lbb-keyboard.js), so that it works offline.

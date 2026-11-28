@@ -143,7 +143,6 @@
 		<nav class="tabs" id="tabs">
 			<button class="tab" data-page="home"><svg><use href="#i-home"/></svg><span></span></button>
 			<button class="tab" data-page="backup"><svg><use href="#i-backup"/></svg><span></span></button>
-			<button class="tab" data-page="photos"><svg><use href="#i-photos"/></svg><span></span></button>
 			<button class="tab" data-page="log"><svg><use href="#i-log"/></svg><span></span></button>
 			<button class="tab" data-page="files"><svg><use href="#i-folder"/></svg><span></span></button>
 			<button class="tab" data-page="system"><svg><use href="#i-system"/></svg><span></span></button>
@@ -321,6 +320,7 @@
 		};
 	</script>
 	<script src="js/lbb-dragscroll.js"></script>
+	<?php include "sub-kiosk-keyboard.php"; ?>
 	<script src="js/lbb-touch.js"></script>
 </body>
 </html>

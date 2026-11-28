@@ -232,6 +232,8 @@
 	// ---------- navigation ----------
 
 	function showPage(page, push) {
+		// the Photos tab is gone: its links (check the files after a backup, all newest files) lead to the Files tab
+		if (page === 'photos') page = 'files';
 		if (!$('page-' + page)) page = 'home';
 		const changed = page !== state.page;
 		state.page = page;
@@ -705,13 +707,29 @@
 			video.src = item.file;
 			video.play().catch(() => {});
 		} else {
+			// the preview is made on the box when the file has none yet: that takes a moment for a big picture or a RAW file
 			img.hidden = !item.thumb;
+			$('viewer-caption').textContent = caption;
 			if (item.thumb) {
-				img.onerror = () => { img.hidden = true; };
+				const note = (text) => { $('viewer-caption').textContent = caption + '  ·  ' + text; };
+				const webImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((item.ext || '').toLowerCase());
+				let triedOriginal = false;
+				note(T.preview_loading);
+				img.onload = () => { $('viewer-caption').textContent = caption; };
+				img.onerror = () => {
+					// the preview could not be made: a picture the browser can show itself is shown as it is
+					if (webImage && item.url && !triedOriginal) {
+						triedOriginal = true;
+						img.src = item.url;
+						return;
+					}
+					img.hidden = true;
+					note(T.preview_failed);
+				};
 				img.src = item.thumb;
 			}
 		}
-		$('viewer-caption').textContent = caption;
+		if (item.video && item.file) $('viewer-caption').textContent = caption;
 		$('viewer').hidden = false;
 		if (state.viewerFiles) {
 			$('viewer-prev').disabled = index <= 0;
@@ -908,7 +926,8 @@
 					state.viewerFiles = media;
 					openViewer(media.indexOf(entry));
 				} else {
-					// other files: download
+					// other files: what it is, then download (the box's own screen can not save a file: it only shows the line)
+					toast(entry.name + '  ·  ' + formatBytes(entry.size) + '  ·  ' + formatDate(entry.date));
 					const link = el('a', { href: entry.url, download: entry.name });
 					document.body.append(link);
 					link.click();

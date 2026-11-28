@@ -1078,6 +1078,8 @@
     "files": "Archivos",
     "empty_folder": "Esta carpeta está vacía.",
     "files_more": "Mostrar más (quedan {n})",
+    "preview_loading": "Preparando la vista previa …",
+    "preview_failed": "No hay vista previa de este archivo.",
     "ble_pair_short": "Código Bluetooth",
     "update": "Actualizar",
     "update_checking": "Buscando actualizaciones …",
