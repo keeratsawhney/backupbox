@@ -1,0 +1,26 @@
+.kioskboard-wrapper,
+.kioskboard,
+.kioskboard-container {
+	z-index: 2147483647 !important;
+}
+
+.kioskboard {
+	font-family: sans-serif !important;
+}
+
+.kioskboard-row {
+	max-width: 100vw !important;
+}
+
+.kioskboard-key {
+	min-height: 42px !important;
+	font-size: 18px !important;
+}
+
+/* the box's own small screen: slimmer keys, so the field stays in view */
+@media (max-height: 520px) {
+	.kioskboard-key {
+		min-height: 30px !important;
+		font-size: 15px !important;
+	}
+}

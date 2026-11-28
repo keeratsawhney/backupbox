@@ -6,6 +6,10 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#77 On-screen keyboard that does not depend on the browser add-on; no Photos tab; the file preview says what it does**
+  - **Keyboard:** the box's own screen now loads the keyboard (KioskBoard, bundled in `js/vendor/kioskboard`, MIT) from the pages themselves, for the Wi-Fi password and every other text field, also the ones that appear later. It follows the settings (keyboard on/off, language) and does not need the browser add-on, which did not show up on some boxes. A field never gets two keyboards. Slimmer keys on a small screen.
+  - **No Photos tab:** the touch UI has Home, Backup, Log, Files, System. "Check the files" after a backup and the newest files on the home screen open the Files tab.
+  - **Preview of a file (Files tab):** while the box makes the preview of a big picture or RAW file the caption says so; if it can not be made a picture the browser can show is shown as it is, else "No preview available" (the viewer was empty before). Other files show their name, size and date.
 - **#75 The Bluetooth pairing code is a pill in the touch UI's status bar**: the 6-digit code for the Android app was only drawn on the OLED, so a box with a touchscreen and no OLED never showed it. The Bluetooth service now also leaves the code for the touch UI, which shows `Bluetooth code 048 213` in the top bar for as long as the phone asks for it (at most a minute).
 - **#73 Update button; the Files tab for folders of thousands of files**
   - **Update (Settings):** looks on GitHub for a newer version (needs internet; says so when the box is offline), then downloads and installs it as a task with a log window, like a copy or a deletion. The screen restarts at the end. The installed version is written to `VERSION` by `install-touch-ui.sh` (an installation from before this has no version: the button then offers the latest).

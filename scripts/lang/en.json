@@ -1078,6 +1078,8 @@
     "files": "Files",
     "empty_folder": "This folder is empty.",
     "files_more": "Show more ({n} left)",
+    "preview_loading": "Preparing the preview …",
+    "preview_failed": "No preview available for this file.",
     "ble_pair_short": "Bluetooth code",
     "update": "Update",
     "update_checking": "Checking for updates …",

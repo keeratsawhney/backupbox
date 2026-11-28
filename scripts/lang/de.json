@@ -1078,6 +1078,8 @@
     "files": "Dateien",
     "empty_folder": "Dieser Ordner ist leer.",
     "files_more": "Mehr anzeigen ({n} übrig)",
+    "preview_loading": "Vorschau wird erstellt …",
+    "preview_failed": "Für diese Datei ist keine Vorschau verfügbar.",
     "ble_pair_short": "Bluetooth-Code",
     "update": "Aktualisieren",
     "update_checking": "Suche nach Updates …",

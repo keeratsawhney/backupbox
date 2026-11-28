@@ -30,6 +30,7 @@
 // the box's own screen (the kiosk browser) scrolls by dragging in every page; no add-on needed for this
 if (in_array($_SERVER['REMOTE_ADDR'] ?? '', array('127.0.0.1', '::1'), true)) {
 	echo '<script src="js/lbb-dragscroll.js"></script>' . "\n";
+	include "sub-kiosk-keyboard.php";
 }
 ?>
 <link rel="icon" href="favicon.ico" type="image/x-icon"/>
