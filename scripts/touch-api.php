@@ -800,6 +800,59 @@
 		return($files);
 	}
 
+	function touch_file_url($action, $medium, $relative) {
+		# a file of a mounted drive, served by this API (the web server has no URL for /media)
+		return('touch-api.php?action=' . $action . '&medium=' . rawurlencode($medium) . '&path=' . rawurlencode($relative));
+	}
+
+	function touch_send_file($path, $type, $cache, $download = '') {
+		# a file with Range support (a video seeks), a download with its name
+		$size	= (int)filesize($path);
+		$start	= 0;
+		$end	= $size - 1;
+		while (ob_get_level()) {
+			ob_end_clean();
+		}
+		header('Content-Type: ' . $type);
+		header('Accept-Ranges: bytes');
+		header('Cache-Control: ' . $cache);
+		if ($download !== '') {
+			header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($download));
+		}
+		if (isset($_SERVER['HTTP_RANGE']) and preg_match('/^bytes=(\d*)-(\d*)$/', $_SERVER['HTTP_RANGE'], $range) and ($range[1] !== '' or $range[2] !== '')) {
+			if ($range[1] === '') {
+				$start	= max(0, $size - (int)$range[2]);
+			} else {
+				$start	= (int)$range[1];
+				$end	= $range[2] === '' ? $end : min($end, (int)$range[2]);
+			}
+			if ($start > $end or $start >= $size) {
+				http_response_code(416);
+				header('Content-Range: bytes */' . $size);
+				exit();
+			}
+			http_response_code(206);
+			header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+		}
+		header('Content-Length: ' . ($end - $start + 1));
+		$handle	= fopen($path, 'rb');
+		if ($handle) {
+			fseek($handle, $start);
+			$left	= $end - $start + 1;
+			while ($left > 0 and !feof($handle)) {
+				$chunk	= fread($handle, min(262144, $left));
+				if ($chunk === false or $chunk === '') {
+					break;
+				}
+				echo $chunk;
+				$left	-= strlen($chunk);
+				flush();
+			}
+			fclose($handle);
+		}
+		exit();
+	}
+
 	function touch_media_item($constants, $medium, $storage_path, $relative, $extra) {
 		$file	= $storage_path . '/' . $relative;
 		$name	= basename($relative);
@@ -812,16 +865,16 @@
 			'date'		=> '',
 			'rating'	=> 0,
 			'video'		=> touch_is_video($ext, $constants),
-			'url'		=> lbb_dashboard_url_path($file),
-			# thumbnail made during backup, else a preview made on demand
-			'thumb'		=> file_exists($tims) ? lbb_dashboard_url_path($tims) : 'touch-api.php?action=thumb&medium=' . rawurlencode($medium) . '&path=' . rawurlencode($relative),
+			'url'		=> touch_file_url('file', $medium, $relative),
+			# thumbnail made during backup (served as it is), else a preview made on demand
+			'thumb'		=> touch_file_url('thumb', $medium, $relative),
 		), $extra);
 
 		if ($item['video']) {
-			$item['file']	= lbb_dashboard_url_path($file);
+			$item['file']	= touch_file_url('file', $medium, $relative);
 			# GoPro low resolution copy (GH010001.MP4 -> GL010001.LRV), plays where the original codec (H.265) does not
 			$preview	= dirname($file) . '/' . substr_replace(pathinfo($file, PATHINFO_FILENAME), 'L', 1, 1) . '.LRV';
-			$item['preview']	= file_exists($preview) ? lbb_dashboard_url_path($preview) : null;
+			$item['preview']	= file_exists($preview) ? touch_file_url('file', $medium, (dirname($relative) === '.' ? '' : dirname($relative) . '/') . basename($preview)) : null;
 		}
 
 		return($item);
@@ -1243,7 +1296,7 @@
 					'path'	=> $relative,
 					'size'	=> @filesize($full),
 					'date'	=> date('Y-m-d H:i', (int)@filemtime($full)),
-					'url'	=> lbb_dashboard_url_path($full),
+					'url'	=> touch_file_url('file', $key, $relative),
 					'media'	=> $media,
 				));
 				if (!$media) {
@@ -1305,6 +1358,12 @@
 				touch_fail('not a media file', 404);
 			}
 
+			# the thumbnail made during the backup (tims/<name>.JPG): served as it is, nothing to make
+			$tims	= dirname($file) . '/tims/' . basename($file) . '.JPG';
+			if (empty($_GET['large']) and is_file($tims) and filesize($tims) > 0 and is_readable($tims)) {
+				touch_send_file($tims, 'image/jpeg', 'max-age=604800');
+			}
+
 			$stat	= stat($file);
 			$dir	= $constants['const_WEB_ROOT_LBB'] . '/tmp/touch-thumbs';
 			@mkdir($dir, 0755, true);
@@ -1351,6 +1410,19 @@
 			header('Content-Length: ' . filesize($thumb));
 			readfile($thumb);
 			exit();
+
+		case 'file':
+			# a file of a mounted drive: the picture or video as it is (the viewer), or as a download (dl=1)
+			$key	= isset($_GET['medium']) ? (string)$_GET['medium'] : '';
+			$root	= touch_medium_path($constants, $key);
+			$root	= $root === false ? false : realpath($root);
+			$file	= $root === false ? false : realpath($root . '/' . (isset($_GET['path']) ? (string)$_GET['path'] : ''));
+			if ($file === false or !str_starts_with($file, $root . '/') or !is_file($file) or !is_readable($file)) {
+				touch_fail('not found', 404);
+			}
+			$types	= array('jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', 'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'mov' => 'video/quicktime', 'mkv' => 'video/x-matroska', 'webm' => 'video/webm', 'lrv' => 'video/mp4');
+			$ext	= strtolower(pathinfo($file, PATHINFO_EXTENSION));
+			touch_send_file($file, !empty($_GET['dl']) ? 'application/octet-stream' : ($types[$ext] ?? 'application/octet-stream'), 'max-age=3600', !empty($_GET['dl']) ? basename($file) : '');
 
 		case 'log':
 			$lines	= isset($_GET['lines']) ? max(10, min(1000, (int)$_GET['lines'])) : 200;
