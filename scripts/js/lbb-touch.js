@@ -382,7 +382,7 @@
 			}
 		}
 
-		// battery (INA219): charge in the top bar, charging with a bolt; the details are in the System tab
+		// battery (INA231 / INA219): charge in the top bar, charging with a bolt; the details are in the System tab
 		showBattery(data.battery);
 
 		// Bluetooth pairing of the app: the code to type on the phone, a pill in the top bar while it is asked for
