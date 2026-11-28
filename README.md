@@ -254,6 +254,15 @@ The battery −, the converter − and the Pi GND must be **one common ground**.
 
 Check: `sudo i2cdetect -y 1` shows `40` (or your address), and `python3 /var/www/little-backup-box/lib_battery.py --once` prints a reading with the chip it found.
 
+**With a power bank module** (battery pack → module → USB-C → Pi): put the INA231 in the battery's plus line, **between the battery pack and the battery input of the power bank module**, not on the USB-C cable. There it measures the voltage of the battery (the charge) and the current in both directions: out of the battery while it powers the Pi, into the battery while the module charges it.
+
+```
+battery pack (+) ──► IN+ [INA231] IN− ──► B+ of the power bank module ──► USB-C ──► Pi
+battery pack (−) ─────────────────────► B− of the module ───── GND ──► GND of the INA231 and of the Pi (pin 6)
+```
+
+If the pack has a protection board (BMS), the INA231 goes between its pack output (P+) and the module. On the USB-C side the module only gives 5 V (or the PD voltage): nothing there tells the charge of the battery. The module should be able to **charge and power the Pi at the same time** (UPS function); simple power bank boards can drop out when the charger is plugged in. A Pi 5 wants a 5 A supply: if the module only offers 3 A at 5 V, the Pi limits the current of its USB ports (it says so at start); the touch UI shows the under-voltage pill if the supply sags.
+
 **Set the shunt resistor** (`"shunt_ohm"`, below) to what is printed on the module: **R010 = 0.01 Ω, R002 = 0.002 Ω, R100 = 0.1 Ω**. The default is 0.01 Ω for an INA231 / INA226 and 0.1 Ω for an INA219. The largest current it can read is 81.92 mV / shunt for an INA231 (8.2 A at 0.01 Ω; a Pi 5 with a drive and a screen needs about 3 A from a 2S battery), 320 mV / shunt for an INA219 (3.2 A at 0.1 Ω). The voltage is limited to 28 V (INA219: 26 V).
 
 Settings, all optional, in `/var/www/little-backup-box/data/battery.json`, for example `{"cells": 2, "capacity_mah": 6000, "shunt_ohm": 0.01}`: `cells` (1–4, default: from the voltage; a 3S and a 4S pack are not told apart around 12 V), `shunt_ohm`, `capacity_mah` (adds the time left), `invert_current` (default `true`: battery on IN+; `false` if it is on IN−), `internal_mohm`, `shutdown_percent` (switches the box off below this charge, default off).
