@@ -529,9 +529,9 @@
 		return (list || []).find((service) => service.id === id);
 	}
 
-	// ---------- project: client / crew / card ----------
-	// A backup goes to <client>/<crew>/<card> on the backup drive. The sheet offers the saved clients and crews or a new
-	// name (typed with the on-screen keyboard); the answer is {client, crew, card}, {} for "without" or null when closed.
+	// ---------- project: client / event / crew / card ----------
+	// A backup goes to <client>/<event>/<crew>/<card> on the backup drive. The sheet offers the saved ones or a new name
+	// (typed with the on-screen keyboard); the answer is {client, event, crew, card}, {} for "without" or null when closed.
 
 	let sheetOnClose = null;
 
@@ -540,7 +540,7 @@
 		if (!['usb', 'nvme', 'flow'].includes(targetKind)) return Promise.resolve({});
 		return new Promise((resolve) => {
 			const body = $('sheet-body');
-			const pick = { client: '', crew: '' };
+			const pick = { client: '', event: '', crew: '' };
 			let finished = false;
 			const finish = (value) => {
 				if (finished) return;
@@ -585,26 +585,56 @@
 				const list = el('div', { class: 'list' });
 				data.clients.forEach((name) => list.append(sheetButton('folder', name, 'btn-wide', async () => {
 					pick.client = name;
-					await stepCrew();
+					await stepEvent();
 				})));
 				body.replaceChildren(
 					sheetButton('plus', T.project_new_client, 'btn-primary btn-wide', async () => {
 						const name = await askName(T.project_client_name);
 						if (!name) return;
 						pick.client = (await api('project_create', { target: targetKind, client: name }, 'POST')).client;
-						await stepCrew();
+						await stepEvent();
 					}),
 					data.clients.length ? list : el('p', { class: 'sheet-note', text: T.project_none }),
 					sheetButton('right', T.project_skip, 'btn-wide', async () => finish({})),
 				);
 			}
 
-			async function stepCrew() {
-				show(T.project_choose_crew.replace('{client}', pick.client));
+			async function stepEvent() {
+				show(T.project_choose_event.replace('{client}', pick.client));
 				body.replaceChildren(el('p', { class: 'sheet-note', text: '…' }));
 				let data;
 				try {
 					data = await api('projects', { target: targetKind, client: pick.client });
+				} catch (e) {
+					fail(e);
+					return;
+				}
+				const list = el('div', { class: 'list' });
+				data.events.forEach((name) => list.append(sheetButton('folder', name, 'btn-wide', async () => {
+					pick.event = name;
+					await stepCrew();
+				})));
+				// a new event: the date of today is already in the field, the name is typed after it (or the date changed)
+				const today = new Date();
+				const stamp = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+				body.replaceChildren(
+					sheetButton('plus', T.project_new_event, 'btn-primary btn-wide', async () => {
+						const name = await confirmDialog(T.project_event_name, '', T.ok, 'btn-primary', stamp + ' ');
+						if (!name) return;
+						pick.event = (await api('project_create', { target: targetKind, client: pick.client, event: name }, 'POST')).event;
+						await stepCrew();
+					}),
+					data.events.length ? list : el('p', { class: 'sheet-note', text: T.project_event_none }),
+					sheetButton('left', T.back, '', async () => stepClient()),
+				);
+			}
+
+			async function stepCrew() {
+				show(T.project_choose_crew.replace('{client}', pick.client), pick.event);
+				body.replaceChildren(el('p', { class: 'sheet-note', text: '…' }));
+				let data;
+				try {
+					data = await api('projects', { target: targetKind, client: pick.client, event: pick.event });
 				} catch (e) {
 					fail(e);
 					return;
@@ -623,20 +653,20 @@
 					sheetButton('plus', T.project_new_crew, 'btn-primary btn-wide', async () => {
 						const name = await askName(T.project_crew_name);
 						if (!name) return;
-						pick.crew = (await api('project_create', { target: targetKind, client: pick.client, crew: name }, 'POST')).crew;
+						pick.crew = (await api('project_create', { target: targetKind, client: pick.client, event: pick.event, crew: name }, 'POST')).crew;
 						await stepCard([]);
 					}),
 					crews.length ? list : el('div'),
-					sheetButton('left', T.back, '', async () => stepClient()),
+					sheetButton('left', T.back, '', async () => stepEvent()),
 				);
 			}
 
 			async function stepCard(cards) {
-				show(T.project_choose_card.replace('{crew}', pick.crew), pick.client + ' / ' + pick.crew);
+				show(T.project_choose_card.replace('{crew}', pick.crew), pick.client + ' / ' + pick.event + ' / ' + pick.crew);
 				// Card 1, Card 2 ...: the next number is offered, a card already backed up can be continued
 				const numbers = cards.map((name) => Number((/^card (\d+)$/i.exec(name) || [])[1] || 0));
 				const next = 'Card ' + (Math.max(0, ...numbers) + 1);
-				const choose = (card) => finish({ client: pick.client, crew: pick.crew, card: card });
+				const choose = (card) => finish({ client: pick.client, event: pick.event, crew: pick.crew, card: card });
 				const list = el('div', { class: 'list' });
 				cards.forEach((name) => list.append(sheetButton('folder', T.project_card_again.replace('{name}', name), 'btn-wide', async () => choose(name))));
 				body.replaceChildren(
