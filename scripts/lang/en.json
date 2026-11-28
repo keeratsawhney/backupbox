@@ -1078,6 +1078,7 @@
     "files": "Files",
     "empty_folder": "This folder is empty.",
     "files_more": "Show more ({n} left)",
+    "ble_pair_short": "Bluetooth code",
     "update": "Update",
     "update_checking": "Checking for updates …",
     "update_offline": "The box has no internet connection. Connect it to a network with internet (Ethernet or Wi-Fi) and try again.",

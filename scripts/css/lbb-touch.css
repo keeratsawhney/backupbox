@@ -2058,3 +2058,33 @@ button.wifi-row:active {
 		height: 36px;
 	}
 }
+
+/* Bluetooth pairing code of the app: a pill in the top bar, large digits, as long as the phone asks for it */
+.pair-pill {
+	background: var(--accent);
+	color: var(--accent-text);
+	font-size: 15px;
+	font-weight: 800;
+	letter-spacing: .04em;
+	font-variant-numeric: tabular-nums;
+}
+
+.pair-pill svg {
+	width: 16px;
+	height: 16px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+}
+
+.pair-pill:not([hidden]) ~ .pill,
+.pair-pill:not([hidden]) ~ .power-pill {
+	margin-left: 0;
+}
+
+@media (max-width: 380px) {
+	.pair-pill:not([hidden]) ~ .clock,
+	.pair-pill:not([hidden]) ~ .temp {
+		display: none;
+	}
+}

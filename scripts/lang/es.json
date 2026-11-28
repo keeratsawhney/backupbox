@@ -1078,6 +1078,7 @@
     "files": "Archivos",
     "empty_folder": "Esta carpeta está vacía.",
     "files_more": "Mostrar más (quedan {n})",
+    "ble_pair_short": "Código Bluetooth",
     "update": "Actualizar",
     "update_checking": "Buscando actualizaciones …",
     "update_offline": "La caja no tiene conexión a internet. Conéctala a una red con internet (Ethernet o Wi-Fi) e inténtalo de nuevo.",

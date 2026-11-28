@@ -6,6 +6,7 @@ Every entry is a merged pull request; the pull request has the full description.
 ## 2026-10-25
 
 ### Android app, Bluetooth, OLED
+- **#75 The Bluetooth pairing code is a pill in the touch UI's status bar**: the 6-digit code for the Android app was only drawn on the OLED, so a box with a touchscreen and no OLED never showed it. The Bluetooth service now also leaves the code for the touch UI, which shows `Bluetooth code 048 213` in the top bar for as long as the phone asks for it (at most a minute).
 - **#73 Update button; the Files tab for folders of thousands of files**
   - **Update (Settings):** looks on GitHub for a newer version (needs internet; says so when the box is offline), then downloads and installs it as a task with a log window, like a copy or a deletion. The screen restarts at the end. The installed version is written to `VERSION` by `install-touch-ui.sh` (an installation from before this has no version: the button then offers the latest).
   - **Files, no more pressing "Show more":** the next 300 files load by themselves when the end of the list comes into view; the bar shows which files are on screen (`701–1000 / 3000`); two buttons jump to the first and to the last files of a folder.
